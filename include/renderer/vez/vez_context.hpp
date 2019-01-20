@@ -26,8 +26,6 @@ struct VezContext {
 
     VezSwapchain swapchain = VK_NULL_HANDLE;
 
-    std::map<PipelineHash, Pipeline> pipelines;
-
     struct PerFrame {
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
         std::vector<VkCommandBuffer> command_buffers;

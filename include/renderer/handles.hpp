@@ -3,9 +3,9 @@
 #define VK_NO_PROTOTYPES
 #include "VEZ.h"
 
-namespace goma {
+#include <vector>
 
-typedef std::vector<uint32_t> PipelineHash;
+namespace goma {
 
 struct Pipeline {
     VezPipeline vez = VK_NULL_HANDLE;

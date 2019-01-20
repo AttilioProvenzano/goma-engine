@@ -1,0 +1,6 @@
+﻿BasedOnStyle: Google
+AccessModifierOffset: '-2'
+IndentWidth: '4'
+Language: Cpp
+SortIncludes: false
+Standard: Cpp11

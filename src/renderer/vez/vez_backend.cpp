@@ -110,10 +110,10 @@ result<Pipeline> VezBackend::GetGraphicsPipeline(const char* vs_source,
     OUTCOME_TRY(fragment_shader,
                 GetFragmentShaderModule(device, fs_source, fs_entry_point));
 
-    PipelineHash hash = GetGraphicsPipelineHash(vertex_shader, fragment_shader);
-    auto result = pipeline_cache_.find(hash);
+    auto hash = GetGraphicsPipelineHash(vertex_shader, fragment_shader);
+    auto result = context_.pipeline_cache_.find(hash);
 
-    if (result != pipeline_cache_.end()) {
+    if (result != context_.pipeline_cache_.end()) {
         return result->second;
     } else {
         std::array<VezPipelineShaderStageCreateInfo, 2> shader_stages = {
@@ -127,26 +127,23 @@ result<Pipeline> VezBackend::GetGraphicsPipeline(const char* vs_source,
 
         VezPipeline pipeline = VK_NULL_HANDLE;
         VK_CHECK(vezCreateGraphicsPipeline(device, &pipeline_info, &pipeline));
-        pipeline_cache_[hash] = pipeline;
+        context_.pipeline_cache_[hash] = pipeline;
         return {pipeline};
     }
 }
 
 result<void> VezBackend::TeardownContext() {
-    for (auto pipeline : pipeline_cache_) {
+    for (auto pipeline : context_.pipeline_cache_) {
         vezDestroyPipeline(context_.device, pipeline.second);
     }
-    pipeline_cache_.clear();
 
-    for (auto shader : vertex_shader_cache_) {
+    for (auto shader : context_.vertex_shader_cache_) {
         vezDestroyShaderModule(context_.device, shader.second);
     }
-    vertex_shader_cache_.clear();
 
-    for (auto shader : fragment_shader_cache_) {
+    for (auto shader : context_.fragment_shader_cache_) {
         vezDestroyShaderModule(context_.device, shader.second);
     }
-    fragment_shader_cache_.clear();
 
     if (context_.swapchain) {
         vezDestroySwapchain(context_.device, context_.swapchain);
@@ -330,10 +327,10 @@ result<VezSwapchain> VezBackend::CreateSwapchain(VkDevice device,
 
 result<VkShaderModule> VezBackend::GetVertexShaderModule(
     VkDevice device, const char* source, const char* entry_point) {
-    ShaderHash hash = GetShaderHash(source, entry_point);
-    auto result = vertex_shader_cache_.find(hash);
+    auto hash = GetShaderHash(source, entry_point);
+    auto result = context_.vertex_shader_cache_.find(hash);
 
-    if (result != vertex_shader_cache_.end()) {
+    if (result != context_.vertex_shader_cache_.end()) {
         return result->second;
     } else {
         VezShaderModuleCreateInfo shader_info = {};
@@ -344,17 +341,17 @@ result<VkShaderModule> VezBackend::GetVertexShaderModule(
 
         VkShaderModule shader = VK_NULL_HANDLE;
         VK_CHECK(vezCreateShaderModule(device, &shader_info, &shader));
-        vertex_shader_cache_[hash] = shader;
+        context_.vertex_shader_cache_[hash] = shader;
         return shader;
     }
 }
 
 result<VkShaderModule> VezBackend::GetFragmentShaderModule(
     VkDevice device, const char* source, const char* entry_point) {
-    ShaderHash hash = GetShaderHash(source, entry_point);
-    auto result = fragment_shader_cache_.find(hash);
+    auto hash = GetShaderHash(source, entry_point);
+    auto result = context_.fragment_shader_cache_.find(hash);
 
-    if (result != fragment_shader_cache_.end()) {
+    if (result != context_.fragment_shader_cache_.end()) {
         return result->second;
     } else {
         VezShaderModuleCreateInfo shader_info = {};
@@ -365,17 +362,17 @@ result<VkShaderModule> VezBackend::GetFragmentShaderModule(
 
         VkShaderModule shader = VK_NULL_HANDLE;
         VK_CHECK(vezCreateShaderModule(device, &shader_info, &shader));
-        fragment_shader_cache_[hash] = shader;
+        context_.fragment_shader_cache_[hash] = shader;
         return shader;
     }
 }
 
-VezBackend::ShaderHash VezBackend::GetShaderHash(const char* source,
+VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,
                                                  const char* entry_point) {
     return {sdbm_hash(source), sdbm_hash(entry_point)};
 }
 
-VezBackend::PipelineHash VezBackend::GetGraphicsPipelineHash(
+VezContext::PipelineHash VezBackend::GetGraphicsPipelineHash(
     VkShaderModule vs, VkShaderModule fs) {
     return {vs, fs};
 }

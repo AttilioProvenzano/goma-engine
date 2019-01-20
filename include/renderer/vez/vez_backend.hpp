@@ -21,12 +21,6 @@ struct PhysicalDevice {
 
 class VezBackend : public Backend {
   public:
-    typedef std::vector<uint64_t> ShaderHash;
-    typedef std::map<ShaderHash, VkShaderModule> ShaderCache;
-
-    typedef std::vector<VkShaderModule> PipelineHash;
-    typedef std ::map<PipelineHash, VezPipeline> PipelineCache;
-
     VezBackend(Engine* engine = nullptr);
     virtual ~VezBackend() override;
 
@@ -54,12 +48,10 @@ class VezBackend : public Backend {
   private:
     VezContext context_;
 
-    ShaderCache vertex_shader_cache_;
-    ShaderCache fragment_shader_cache_;
-    PipelineCache pipeline_cache_;
-
-    ShaderHash GetShaderHash(const char* source, const char* entry_point);
-    PipelineHash GetGraphicsPipelineHash(VkShaderModule vs, VkShaderModule fs);
+    VezContext::ShaderHash GetShaderHash(const char* source,
+                                         const char* entry_point);
+    VezContext::PipelineHash GetGraphicsPipelineHash(VkShaderModule vs,
+                                                     VkShaderModule fs);
 };
 
 }  // namespace goma

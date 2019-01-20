@@ -18,6 +18,12 @@ struct VezContext {
     typedef std::vector<VkShaderModule> PipelineHash;
     typedef std ::map<PipelineHash, VezPipeline> PipelineCache;
 
+    typedef std::vector<uint64_t> BufferHash;
+    typedef std ::map<BufferHash, VkBuffer> BufferCache;
+
+	typedef std::vector<uint64_t> ImageHash;
+    typedef std::map<ImageHash, VulkanImage> ImageCache;
+
     VkInstance instance = VK_NULL_HANDLE;
     VkDebugReportCallbackEXT debug_callback = VK_NULL_HANDLE;
 
@@ -32,9 +38,11 @@ struct VezContext {
 
     VezSwapchain swapchain = VK_NULL_HANDLE;
 
-    ShaderCache vertex_shader_cache_;
-    ShaderCache fragment_shader_cache_;
-    PipelineCache pipeline_cache_;
+    ShaderCache vertex_shader_cache;
+    ShaderCache fragment_shader_cache;
+    PipelineCache pipeline_cache;
+    BufferCache buffer_cache;
+    ImageCache image_cache;
 
     struct PerFrame {
         VkFramebuffer framebuffer = VK_NULL_HANDLE;

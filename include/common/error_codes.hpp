@@ -14,6 +14,7 @@ enum class Error {
 	GenericVulkanError = 7,
 	GlfwError = 8,
 	GlfwWindowCreationFailed = 9,
+	NotFound = 10,
 };
 
 }
@@ -59,6 +60,8 @@ class GomaError_category : public std::error_category {
                 return "GLFW error";
             case goma::Error::GlfwWindowCreationFailed:
                 return "GLFW could not create a window";
+            case goma::Error::NotFound:
+                return "element not found";
             default:
                 return "unknown error";
         }

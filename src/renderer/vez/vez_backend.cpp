@@ -91,7 +91,7 @@ result<void> VezBackend::InitSurface(Platform* platform) {
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context_.physical_device, surface,
                                               &context_.capabilities);
 
-    OUTCOME_TRY(swapchain, CreateSwapchain(context_.device, surface));
+    OUTCOME_TRY(swapchain, CreateSwapchain(surface));
     context_.swapchain = swapchain;
 
     return outcome::success();
@@ -103,17 +103,17 @@ result<Pipeline> VezBackend::GetGraphicsPipeline(const char* vs_source,
                                                  const char* fs_entry_point) {
     assert(context_.device &&
            "Context must be initialized before creating a pipeline");
-
     VkDevice device = context_.device;
+
     OUTCOME_TRY(vertex_shader,
-                GetVertexShaderModule(device, vs_source, vs_entry_point));
+                GetVertexShaderModule(vs_source, vs_entry_point));
     OUTCOME_TRY(fragment_shader,
-                GetFragmentShaderModule(device, fs_source, fs_entry_point));
+                GetFragmentShaderModule(fs_source, fs_entry_point));
 
     auto hash = GetGraphicsPipelineHash(vertex_shader, fragment_shader);
-    auto result = context_.pipeline_cache_.find(hash);
+    auto result = context_.pipeline_cache.find(hash);
 
-    if (result != context_.pipeline_cache_.end()) {
+    if (result != context_.pipeline_cache.end()) {
         return result->second;
     } else {
         std::array<VezPipelineShaderStageCreateInfo, 2> shader_stages = {
@@ -127,21 +127,30 @@ result<Pipeline> VezBackend::GetGraphicsPipeline(const char* vs_source,
 
         VezPipeline pipeline = VK_NULL_HANDLE;
         VK_CHECK(vezCreateGraphicsPipeline(device, &pipeline_info, &pipeline));
-        context_.pipeline_cache_[hash] = pipeline;
+        context_.pipeline_cache[hash] = pipeline;
         return {pipeline};
     }
 }
 
 result<void> VezBackend::TeardownContext() {
-    for (auto pipeline : context_.pipeline_cache_) {
+    for (auto image : context_.image_cache) {
+        vezDestroyImageView(context_.device, image.second.image_view);
+        vezDestroyImage(context_.device, image.second.image);
+    }
+
+    for (auto buffer : context_.buffer_cache) {
+        vezDestroyBuffer(context_.device, buffer.second);
+	}
+
+    for (auto pipeline : context_.pipeline_cache) {
         vezDestroyPipeline(context_.device, pipeline.second);
     }
 
-    for (auto shader : context_.vertex_shader_cache_) {
+    for (auto shader : context_.vertex_shader_cache) {
         vezDestroyShaderModule(context_.device, shader.second);
     }
 
-    for (auto shader : context_.fragment_shader_cache_) {
+    for (auto shader : context_.fragment_shader_cache) {
         vezDestroyShaderModule(context_.device, shader.second);
     }
 
@@ -312,8 +321,11 @@ result<VkDevice> VezBackend::CreateDevice(VkPhysicalDevice physical_device) {
     return device;
 }
 
-result<VezSwapchain> VezBackend::CreateSwapchain(VkDevice device,
-                                                 VkSurfaceKHR surface) {
+result<VezSwapchain> VezBackend::CreateSwapchain(VkSurfaceKHR surface) {
+    assert(context_.device &&
+           "Context must be initialized before creating a swapchain");
+    VkDevice device = context_.device;
+
     VezSwapchainCreateInfo swapchain_info = {};
     swapchain_info.surface = surface;
     swapchain_info.tripleBuffer = VK_TRUE;
@@ -326,11 +338,15 @@ result<VezSwapchain> VezBackend::CreateSwapchain(VkDevice device,
 }
 
 result<VkShaderModule> VezBackend::GetVertexShaderModule(
-    VkDevice device, const char* source, const char* entry_point) {
-    auto hash = GetShaderHash(source, entry_point);
-    auto result = context_.vertex_shader_cache_.find(hash);
+    const char* source, const char* entry_point) {
+    assert(context_.device &&
+           "Context must be initialized before creating a shader");
+    VkDevice device = context_.device;
 
-    if (result != context_.vertex_shader_cache_.end()) {
+    auto hash = GetShaderHash(source, entry_point);
+    auto result = context_.vertex_shader_cache.find(hash);
+
+    if (result != context_.vertex_shader_cache.end()) {
         return result->second;
     } else {
         VezShaderModuleCreateInfo shader_info = {};
@@ -341,17 +357,21 @@ result<VkShaderModule> VezBackend::GetVertexShaderModule(
 
         VkShaderModule shader = VK_NULL_HANDLE;
         VK_CHECK(vezCreateShaderModule(device, &shader_info, &shader));
-        context_.vertex_shader_cache_[hash] = shader;
+        context_.vertex_shader_cache[hash] = shader;
         return shader;
     }
 }
 
 result<VkShaderModule> VezBackend::GetFragmentShaderModule(
-    VkDevice device, const char* source, const char* entry_point) {
-    auto hash = GetShaderHash(source, entry_point);
-    auto result = context_.fragment_shader_cache_.find(hash);
+    const char* source, const char* entry_point) {
+    assert(context_.device &&
+           "Context must be initialized before creating a shader");
+    VkDevice device = context_.device;
 
-    if (result != context_.fragment_shader_cache_.end()) {
+    auto hash = GetShaderHash(source, entry_point);
+    auto result = context_.fragment_shader_cache.find(hash);
+
+    if (result != context_.fragment_shader_cache.end()) {
         return result->second;
     } else {
         VezShaderModuleCreateInfo shader_info = {};
@@ -362,9 +382,137 @@ result<VkShaderModule> VezBackend::GetFragmentShaderModule(
 
         VkShaderModule shader = VK_NULL_HANDLE;
         VK_CHECK(vezCreateShaderModule(device, &shader_info, &shader));
-        context_.fragment_shader_cache_[hash] = shader;
+        context_.fragment_shader_cache[hash] = shader;
         return shader;
     }
+}
+
+result<VkBuffer> VezBackend::CreateBuffer(VezContext::BufferHash hash,
+                                          VkDeviceSize size,
+                                          VezMemoryFlagsBits storage,
+                                          VkBufferUsageFlags usage,
+                                          void* initial_contents) {
+    assert(context_.device &&
+           "Context must be initialized before creating a buffer");
+    VkDevice device = context_.device;
+
+    auto result = context_.buffer_cache.find(hash);
+    if (result != context_.buffer_cache.end()) {
+        vezDestroyBuffer(device, result->second);
+    }
+
+    VezBufferCreateInfo buffer_info = {};
+    buffer_info.size = size;
+    buffer_info.usage = usage;
+
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VK_CHECK(vezCreateBuffer(device, storage, &buffer_info, &buffer));
+
+    if (initial_contents) {
+        if (storage != VEZ_MEMORY_GPU_ONLY) {
+            void* buffer_memory;
+            VK_CHECK(vezMapBuffer(device, buffer, 0, size, &buffer_memory));
+            memcpy(buffer_memory, initial_contents, size);
+            vezUnmapBuffer(device, buffer);
+
+            VezMappedBufferRange range = {};
+            range.buffer = buffer;
+            range.offset = 0;
+            range.size = size;
+            VK_CHECK(vezFlushMappedBufferRanges(device, 1, &range));
+        } else {
+            // GPU-only buffer can't be mapped, so we use V-EZ's utility
+            // function to submit data
+            VK_CHECK(
+                vezBufferSubData(device, buffer, 0, size, initial_contents));
+        }
+    }
+
+    context_.buffer_cache[hash] = buffer;
+    return buffer;
+}
+
+result<VkBuffer> VezBackend::GetBuffer(VezContext::BufferHash hash) {
+    auto result = context_.buffer_cache.find(hash);
+    if (result != context_.buffer_cache.end()) {
+        return result->second;
+    }
+
+    return Error::NotFound;
+}
+
+result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
+
+                                            VezImageCreateInfo image_info,
+                                            void* initial_contents) {
+    assert(context_.device &&
+           "Context must be initialized before creating an image");
+    VkDevice device = context_.device;
+
+    auto result = context_.image_cache.find(hash);
+    if (result != context_.image_cache.end()) {
+        vezDestroyImageView(device, result->second.image_view);
+        vezDestroyImage(device, result->second.image);
+    }
+
+    VkImage image = VK_NULL_HANDLE;
+    VK_CHECK(vezCreateImage(device, VEZ_MEMORY_GPU_ONLY, &image_info, &image));
+
+    VezImageSubresourceRange range = {};
+    range.layerCount = image_info.arrayLayers;
+    range.levelCount = image_info.mipLevels;
+
+    VezImageViewCreateInfo image_view_info = {};
+    image_view_info.components = {
+        VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+        VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
+    image_view_info.format = image_info.format;
+    image_view_info.image = image;
+    image_view_info.subresourceRange = range;
+    image_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+
+    VkImageView image_view;
+    VK_CHECK(vezCreateImageView(device, &image_view_info, &image_view));
+
+    if (initial_contents) {
+        VezImageSubresourceLayers layers = {};
+        layers.baseArrayLayer = 0;
+        layers.layerCount = image_info.arrayLayers;
+        layers.mipLevel = 0;
+
+        VezImageSubDataInfo sub_data_info = {};
+        sub_data_info.dataRowLength = image_info.extent.width;
+        sub_data_info.dataImageHeight = image_info.extent.height;
+        sub_data_info.imageExtent = image_info.extent;
+        sub_data_info.imageOffset = {0, 0, 0};
+        sub_data_info.imageSubresource = layers;
+
+        vezImageSubData(device, image, &sub_data_info, initial_contents);
+    }
+
+    VulkanImage vulkan_image = {image, image_view};
+    context_.image_cache[hash] = vulkan_image;
+    return vulkan_image;
+}
+
+result<VezFramebuffer> VezBackend::CreateFramebuffer(VkExtent2D extent) {
+    assert(context_.device &&
+           "Context must be initialized before creating a framebuffer");
+    VkDevice device = context_.device;
+
+    // TODO create images as attachments
+    std::vector<VkImageView> attachments;
+
+    VezFramebufferCreateInfo fb_info = {};
+    fb_info.width = extent.width;
+    fb_info.height = extent.height;
+    fb_info.layers = 1;
+    fb_info.attachmentCount = static_cast<uint32_t>(attachments.size());
+    fb_info.pAttachments = attachments.data();
+
+    VezFramebuffer framebuffer = VK_NULL_HANDLE;
+    vezCreateFramebuffer(device, &fb_info, &framebuffer);
+    return framebuffer;
 }
 
 VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,

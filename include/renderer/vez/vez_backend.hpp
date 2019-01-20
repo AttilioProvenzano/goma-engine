@@ -37,13 +37,20 @@ class VezBackend : public Backend {
     result<VkDebugReportCallbackEXT> CreateDebugCallback(VkInstance instance);
     result<PhysicalDevice> CreatePhysicalDevice(VkInstance instance);
     result<VkDevice> CreateDevice(VkPhysicalDevice physical_device);
-    result<VezSwapchain> CreateSwapchain(VkDevice device, VkSurfaceKHR surface);
-    result<VkShaderModule> GetVertexShaderModule(VkDevice device,
-                                                 const char* source,
+    result<VezSwapchain> CreateSwapchain(VkSurfaceKHR surface);
+    result<VkShaderModule> GetVertexShaderModule(const char* source,
                                                  const char* entry_point);
-    result<VkShaderModule> GetFragmentShaderModule(VkDevice device,
-                                                   const char* source,
+    result<VkShaderModule> GetFragmentShaderModule(const char* source,
                                                    const char* entry_point);
+    result<VkBuffer> CreateBuffer(VezContext::BufferHash hash,
+                                  VkDeviceSize size, VezMemoryFlagsBits storage,
+                                  VkBufferUsageFlags usage,
+                                  void* initial_contents = nullptr);
+    result<VkBuffer> GetBuffer(VezContext::BufferHash hash);
+    result<VezFramebuffer> CreateFramebuffer(VkExtent2D extent);
+    result<VulkanImage> CreateImage(VezContext::ImageHash hash,
+                                    VezImageCreateInfo image_info,
+                                    void* initial_contents = nullptr);
 
   private:
     VezContext context_;

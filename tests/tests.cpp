@@ -104,19 +104,19 @@ void main() {
         << create_pipeline_result.error().message();
 }
 
-TEST_F(VezBackendTest, CanCreateImage) {
-    VezImageCreateInfo image_info = {};
-    image_info.extent = {800, 600, 1};
-    image_info.format = VK_FORMAT_R8G8B8A8_UNORM;
-    image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.arrayLayers = 1;
-    image_info.mipLevels = 1;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    image_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+TEST_F(VezBackendTest, CanCreateTexture) {
+    TextureDesc texture_desc = {800, 600};
 
-    auto create_image_result = vez.CreateImage({0}, image_info);
-    ASSERT_TRUE(create_image_result) << create_image_result.error().message();
+    auto create_texture_result = vez.CreateTexture("texture", texture_desc);
+    ASSERT_TRUE(create_texture_result)
+        << create_texture_result.error().message();
+}
+
+TEST_F(VezBackendTest, CanCreateFramebuffer) {
+    FramebufferDesc fb_desc = {800, 600};
+
+    auto create_fb_result = vez.CreateFramebuffer(0, "fb", fb_desc);
+    ASSERT_TRUE(create_fb_result) << create_fb_result.error().message();
 }
 
 }  // namespace

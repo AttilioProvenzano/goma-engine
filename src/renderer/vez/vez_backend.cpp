@@ -132,15 +132,164 @@ result<Pipeline> VezBackend::GetGraphicsPipeline(const char* vs_source,
     }
 }
 
+result<Image> VezBackend::CreateTexture(const char* name,
+                                        TextureDesc texture_desc,
+                                        void* initial_contents) {
+    auto hash = GetImageHash(name);
+    auto result = context_.texture_cache.find(hash);
+    if (result != context_.texture_cache.end()) {
+        vezDestroyImageView(context_.device, result->second.image_view);
+        vezDestroyImage(context_.device, result->second.image);
+    }
+
+    VkFormat format;
+    switch (texture_desc.format) {
+        case Format::UnsignedNormRGBA:
+            format = VK_FORMAT_R8G8B8A8_UNORM;
+            break;
+        default:
+            format = VK_FORMAT_R8G8B8A8_UNORM;
+            break;
+    }
+
+    VezImageCreateInfo image_info = {};
+    image_info.extent = {texture_desc.width, texture_desc.height, 1};
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.arrayLayers = texture_desc.array_layers;
+    image_info.mipLevels = texture_desc.mip_levels;
+    image_info.format = format;
+    image_info.samples =
+        static_cast<VkSampleCountFlagBits>(texture_desc.samples);
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage =
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+    if (texture_desc.mip_levels > 1) {
+        // We need TRANSFER_SRC to generate mipmaps
+        image_info.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    }
+
+    OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info, initial_contents));
+    context_.texture_cache[hash] = vulkan_image;
+    return {vulkan_image};
+}
+
+result<Image> VezBackend::GetTexture(const char* name) {
+    auto hash = GetImageHash(name);
+    auto result = context_.texture_cache.find(hash);
+    if (result != context_.texture_cache.end()) {
+        return {result->second};
+    }
+
+    return Error::NotFound;
+}
+
+result<Framebuffer> VezBackend::CreateFramebuffer(uint32_t frame_index,
+                                                  const char* name,
+                                                  FramebufferDesc fb_desc) {
+    assert(context_.device &&
+           "Context must be initialized before creating a framebuffer");
+    VkDevice device = context_.device;
+
+    auto hash = GetFramebufferHash(frame_index, name);
+    auto result = context_.framebuffer_cache.find(hash);
+    if (result != context_.framebuffer_cache.end()) {
+        vezDestroyFramebuffer(context_.device, result->second);
+    }
+
+    std::vector<VkImageView> attachments;
+    for (auto& image_desc : fb_desc.color_images) {
+        VkFormat format;
+        switch (image_desc.format) {
+            case Format::UnsignedNormRGBA:
+                format = VK_FORMAT_R8G8B8A8_UNORM;
+                break;
+            default:
+                format = VK_FORMAT_R8G8B8A8_UNORM;
+                break;
+        }
+
+        VezImageCreateInfo image_info = {};
+        image_info.extent = {fb_desc.width, fb_desc.height, 1};
+        image_info.imageType = VK_IMAGE_TYPE_2D;
+        image_info.arrayLayers = 1;
+        image_info.mipLevels = 1;
+        image_info.format = format;
+        image_info.samples =
+            static_cast<VkSampleCountFlagBits>(image_desc.samples);
+        image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        image_info.usage =
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+        OUTCOME_TRY(
+            image, CreateFramebufferImage(GetImageHash(image_desc.name.c_str()),
+                                          image_info));
+        attachments.push_back(image.image_view);
+    }
+
+    if (fb_desc.depth_image.depth_type != DepthImageType::None) {
+        VkFormat format;
+        switch (fb_desc.depth_image.depth_type) {
+            case DepthImageType::Depth:
+                format = VK_FORMAT_D32_SFLOAT;
+                break;
+            case DepthImageType::DepthStencil:
+                format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+                break;
+            default:
+                format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+                break;
+        }
+
+        VezImageCreateInfo image_info = {};
+        image_info.extent = {fb_desc.width, fb_desc.height, 1};
+        image_info.imageType = VK_IMAGE_TYPE_2D;
+        image_info.arrayLayers = 1;
+        image_info.mipLevels = 1;
+        image_info.format = format;
+        image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+        image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        image_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                           VK_IMAGE_USAGE_SAMPLED_BIT;
+
+        OUTCOME_TRY(image, CreateFramebufferImage(
+                               GetImageHash(fb_desc.depth_image.name.c_str()),
+                               image_info));
+        attachments.push_back(image.image_view);
+    }
+
+    VezFramebufferCreateInfo fb_info = {};
+    fb_info.width = fb_desc.width;
+    fb_info.height = fb_desc.height;
+    fb_info.layers = 1;
+    fb_info.attachmentCount = static_cast<uint32_t>(attachments.size());
+    fb_info.pAttachments = attachments.data();
+
+    VezFramebuffer framebuffer = VK_NULL_HANDLE;
+    VK_CHECK(vezCreateFramebuffer(device, &fb_info, &framebuffer));
+    context_.framebuffer_cache[hash] = framebuffer;
+    return {framebuffer};
+}
+
 result<void> VezBackend::TeardownContext() {
-    for (auto image : context_.image_cache) {
+    for (auto framebuffer : context_.framebuffer_cache) {
+        vezDestroyFramebuffer(context_.device, framebuffer.second);
+    }
+
+    for (auto image : context_.texture_cache) {
+        vezDestroyImageView(context_.device, image.second.image_view);
+        vezDestroyImage(context_.device, image.second.image);
+    }
+
+    for (auto image : context_.fb_image_cache) {
         vezDestroyImageView(context_.device, image.second.image_view);
         vezDestroyImage(context_.device, image.second.image);
     }
 
     for (auto buffer : context_.buffer_cache) {
         vezDestroyBuffer(context_.device, buffer.second);
-	}
+    }
 
     for (auto pipeline : context_.pipeline_cache) {
         vezDestroyPipeline(context_.device, pipeline.second);
@@ -441,19 +590,35 @@ result<VkBuffer> VezBackend::GetBuffer(VezContext::BufferHash hash) {
     return Error::NotFound;
 }
 
-result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
+result<VulkanImage> VezBackend::CreateFramebufferImage(
+    VezContext::ImageHash hash, VezImageCreateInfo image_info) {
+    auto result = context_.fb_image_cache.find(hash);
+    if (result != context_.fb_image_cache.end()) {
+        vezDestroyImageView(context_.device, result->second.image_view);
+        vezDestroyImage(context_.device, result->second.image);
+    }
 
+    OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
+    context_.fb_image_cache[hash] = vulkan_image;
+    return vulkan_image;
+}
+
+result<VulkanImage> VezBackend::GetFramebufferImage(
+    VezContext::ImageHash hash) {
+    auto result = context_.fb_image_cache.find(hash);
+    if (result != context_.fb_image_cache.end()) {
+        return result->second;
+    }
+
+    return Error::NotFound;
+}
+
+result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
                                             VezImageCreateInfo image_info,
                                             void* initial_contents) {
     assert(context_.device &&
            "Context must be initialized before creating an image");
     VkDevice device = context_.device;
-
-    auto result = context_.image_cache.find(hash);
-    if (result != context_.image_cache.end()) {
-        vezDestroyImageView(device, result->second.image_view);
-        vezDestroyImage(device, result->second.image);
-    }
 
     VkImage image = VK_NULL_HANDLE;
     VK_CHECK(vezCreateImage(device, VEZ_MEMORY_GPU_ONLY, &image_info, &image));
@@ -491,28 +656,7 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
     }
 
     VulkanImage vulkan_image = {image, image_view};
-    context_.image_cache[hash] = vulkan_image;
     return vulkan_image;
-}
-
-result<VezFramebuffer> VezBackend::CreateFramebuffer(VkExtent2D extent) {
-    assert(context_.device &&
-           "Context must be initialized before creating a framebuffer");
-    VkDevice device = context_.device;
-
-    // TODO create images as attachments
-    std::vector<VkImageView> attachments;
-
-    VezFramebufferCreateInfo fb_info = {};
-    fb_info.width = extent.width;
-    fb_info.height = extent.height;
-    fb_info.layers = 1;
-    fb_info.attachmentCount = static_cast<uint32_t>(attachments.size());
-    fb_info.pAttachments = attachments.data();
-
-    VezFramebuffer framebuffer = VK_NULL_HANDLE;
-    vezCreateFramebuffer(device, &fb_info, &framebuffer);
-    return framebuffer;
 }
 
 VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,
@@ -523,6 +667,15 @@ VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,
 VezContext::PipelineHash VezBackend::GetGraphicsPipelineHash(
     VkShaderModule vs, VkShaderModule fs) {
     return {vs, fs};
+}
+
+VezContext::ImageHash VezBackend::GetImageHash(const char* name) {
+    return {sdbm_hash(name)};
+}
+
+VezContext::FramebufferHash VezBackend::GetFramebufferHash(uint32_t frame_index,
+                                                           const char* name) {
+    return {frame_index, sdbm_hash(name)};
 }
 
 }  // namespace goma

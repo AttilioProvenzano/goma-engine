@@ -31,6 +31,14 @@ class VezBackend : public Backend {
         const char* vs_entry_point = "main",
         const char* fs_entry_point = "main") override;
 
+    virtual result<Image> CreateTexture(
+        const char* name, TextureDesc texture_desc,
+        void* initial_contents = nullptr) override;
+    virtual result<Image> GetTexture(const char* name) override;
+    virtual result<Framebuffer> CreateFramebuffer(
+        uint32_t frame_index, const char* name,
+        FramebufferDesc fb_desc) override;
+
     virtual result<void> TeardownContext() override;
 
     result<VkInstance> CreateInstance();
@@ -47,18 +55,24 @@ class VezBackend : public Backend {
                                   VkBufferUsageFlags usage,
                                   void* initial_contents = nullptr);
     result<VkBuffer> GetBuffer(VezContext::BufferHash hash);
-    result<VezFramebuffer> CreateFramebuffer(VkExtent2D extent);
-    result<VulkanImage> CreateImage(VezContext::ImageHash hash,
-                                    VezImageCreateInfo image_info,
-                                    void* initial_contents = nullptr);
+    result<VulkanImage> CreateFramebufferImage(VezContext::ImageHash hash,
+                                               VezImageCreateInfo image_info);
+    result<VulkanImage> GetFramebufferImage(VezContext::ImageHash hash);
 
   private:
     VezContext context_;
+
+    result<VulkanImage> CreateImage(VezContext::ImageHash hash,
+                                    VezImageCreateInfo image_info,
+                                    void* initial_contents = nullptr);
 
     VezContext::ShaderHash GetShaderHash(const char* source,
                                          const char* entry_point);
     VezContext::PipelineHash GetGraphicsPipelineHash(VkShaderModule vs,
                                                      VkShaderModule fs);
+    VezContext::ImageHash GetImageHash(const char* name);
+    VezContext::FramebufferHash GetFramebufferHash(uint32_t frame_index,
+                                                   const char* name);
 };
 
 }  // namespace goma

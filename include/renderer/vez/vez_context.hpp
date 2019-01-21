@@ -24,6 +24,9 @@ struct VezContext {
 	typedef std::vector<uint64_t> ImageHash;
     typedef std::map<ImageHash, VulkanImage> ImageCache;
 
+	typedef std::vector<uint64_t> FramebufferHash;
+    typedef std::map<FramebufferHash, VezFramebuffer> FramebufferCache;
+
     VkInstance instance = VK_NULL_HANDLE;
     VkDebugReportCallbackEXT debug_callback = VK_NULL_HANDLE;
 
@@ -42,10 +45,11 @@ struct VezContext {
     ShaderCache fragment_shader_cache;
     PipelineCache pipeline_cache;
     BufferCache buffer_cache;
-    ImageCache image_cache;
+    ImageCache fb_image_cache;
+    ImageCache texture_cache;
+    FramebufferCache framebuffer_cache;
 
     struct PerFrame {
-        VkFramebuffer framebuffer = VK_NULL_HANDLE;
         std::vector<VkCommandBuffer> command_buffers;
     };
     std::vector<PerFrame> per_frame;

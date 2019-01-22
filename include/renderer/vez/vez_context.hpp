@@ -51,8 +51,10 @@ struct VezContext {
 
     struct PerFrame {
         std::vector<VkCommandBuffer> command_buffers;
+        std::vector<bool> command_buffer_active;
     };
     std::vector<PerFrame> per_frame;
+    size_t current_frame = 0;
 };
 
 }  // namespace goma

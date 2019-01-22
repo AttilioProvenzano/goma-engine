@@ -24,6 +24,18 @@ struct Framebuffer {
     Framebuffer(VezFramebuffer vez_) : vez(vez_) {}
 };
 
+struct Pipeline {
+    const VezPipeline vez = VK_NULL_HANDLE;
+
+    Pipeline(VezPipeline vez_) : vez(vez_) {}
+};
+
+struct Buffer {
+    const VkBuffer vez = VK_NULL_HANDLE;
+
+    Buffer(VkBuffer vez_) : vez(vez_) {}
+};
+
 enum class Format {
     Undefined,
     UnsignedNormRGBA,
@@ -75,23 +87,27 @@ struct FramebufferDepthImageDesc {
 struct FramebufferDesc {
     uint32_t width;
     uint32_t height;
-    std::vector<FramebufferColorImageDesc> color_images;
-    FramebufferDepthImageDesc depth_image;
-
-    FramebufferDesc(uint32_t width_, uint32_t height_,
-                    const std::vector<FramebufferColorImageDesc>&
-                        color_images_ = {{"color"}},
-                    FramebufferDepthImageDesc depth_image_ = {"depth"})
-        : width(width_),
-          height(height_),
-          color_images(color_images_),
-          depth_image(depth_image_) {}
+    std::vector<FramebufferColorImageDesc> color_images = {{"color"}};
+    FramebufferDepthImageDesc depth_image = {"depth"};
 };
 
-struct Pipeline {
-    const VezPipeline vez = VK_NULL_HANDLE;
+struct ColorAttachmentDesc {
+    bool clear = true;
+    bool store = true;
+    std::array<float, 4> clear_color = {0.1, 0.1, 0.1, 1};
+};
 
-    Pipeline(VezPipeline vez_) : vez(vez_) {}
+struct DepthAttachmentDesc {
+    bool active = true;
+    bool clear = true;
+    bool store = false;
+    float clear_depth = 0.0f;
+    uint32_t clear_stencil = 0;
+};
+
+struct RenderPassDesc {
+    std::vector<ColorAttachmentDesc> color_attachments = {{}};
+    DepthAttachmentDesc depth_attachment = {};
 };
 
 }  // namespace goma

@@ -32,6 +32,17 @@ class Backend {
                                                   const char* name,
                                                   FramebufferDesc fb_desc) = 0;
 
+    virtual result<void> SetupFrames(uint32_t frames) = 0;
+    virtual result<uint32_t> StartFrame(uint32_t threads = 1) = 0;
+    virtual result<void> StartRenderPass(Framebuffer fb,
+                                         RenderPassDesc rp_desc) = 0;
+    virtual result<void> BindTextures(const std::vector<Image>& images) = 0;
+    virtual result<void> BindVertexBuffers(
+        const std::vector<Buffer>& vertex_buffers) = 0;
+    virtual result<void> BindIndexBuffer(Buffer index_buffer) = 0;
+    virtual result<void> Render() = 0;
+    virtual result<void> FinishFrame() = 0;
+
     virtual result<void> TeardownContext() = 0;
 
   protected:

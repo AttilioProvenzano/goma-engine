@@ -272,7 +272,115 @@ result<Framebuffer> VezBackend::CreateFramebuffer(uint32_t frame_index,
     return {framebuffer};
 }
 
+result<void> VezBackend::SetupFrames(uint32_t frames) {
+    if (frames > context_.per_frame.size()) {
+        context_.per_frame.resize(frames);
+    }
+    return outcome::success();
+}
+
+result<uint32_t> VezBackend::StartFrame(uint32_t threads) {
+    assert(context_.device &&
+           "Context must be initialized before starting a frame");
+    VkDevice device = context_.device;
+
+    if (threads == 0) {
+        threads = 1;
+    }
+
+    auto& per_frame = context_.per_frame[context_.current_frame];
+    auto command_buffer_count = per_frame.command_buffers.size();
+    if (threads > command_buffer_count) {
+        VkQueue graphics_queue = VK_NULL_HANDLE;
+        vezGetDeviceGraphicsQueue(device, 0, &graphics_queue);
+
+        VezCommandBufferAllocateInfo cmd_info = {};
+        cmd_info.commandBufferCount = threads - command_buffer_count;
+        cmd_info.queue = graphics_queue;
+
+        per_frame.command_buffers.resize(threads);
+        VK_CHECK(vezAllocateCommandBuffers(
+            context_.device, &cmd_info,
+            &per_frame.command_buffers[command_buffer_count]));
+    }
+
+    return context_.current_frame;
+}
+
+result<void> VezBackend::StartRenderPass(Framebuffer fb,
+                                         RenderPassDesc rp_desc) {
+    assert(context_.device &&
+           "Context must be initialized before starting a render pass");
+    VkDevice device = context_.device;
+
+    OUTCOME_TRY(GetActiveCommandBuffer());
+
+    size_t total_attachments = rp_desc.depth_attachment.active
+                                   ? rp_desc.color_attachments.size() + 1
+                                   : rp_desc.color_attachments.size();
+
+    std::vector<VezAttachmentInfo> attach_infos;
+    attach_infos.reserve(total_attachments);
+
+    for (auto attachment : rp_desc.color_attachments) {
+        attach_infos.push_back(
+            {attachment.clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
+                              : VK_ATTACHMENT_LOAD_OP_LOAD,
+             attachment.store ? VK_ATTACHMENT_STORE_OP_STORE
+                              : VK_ATTACHMENT_STORE_OP_DONT_CARE,
+             {attachment.clear_color[0], attachment.clear_color[1],
+              attachment.clear_color[2], attachment.clear_color[3]}});
+    }
+
+    if (rp_desc.depth_attachment.active) {
+        attach_infos.push_back(
+            {rp_desc.depth_attachment.clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
+                                            : VK_ATTACHMENT_LOAD_OP_LOAD,
+             rp_desc.depth_attachment.store ? VK_ATTACHMENT_STORE_OP_STORE
+                                            : VK_ATTACHMENT_STORE_OP_DONT_CARE,
+             {rp_desc.depth_attachment.clear_depth,
+              rp_desc.depth_attachment.clear_stencil}});
+    }
+
+    VezRenderPassBeginInfo rp_info = {};
+    rp_info.framebuffer = fb.vez;
+    rp_info.attachmentCount = static_cast<uint32_t>(attach_infos.size());
+    rp_info.pAttachments = attach_infos.data();
+
+    vezCmdBeginRenderPass(&rp_info);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindTextures(const std::vector<Image>& images) {
+    return outcome::success();
+}
+result<void> VezBackend::BindVertexBuffers(
+    const std::vector<Buffer>& vertex_buffers) {
+    return outcome::success();
+}
+result<void> VezBackend::BindIndexBuffer(Buffer index_buffer) {
+    return outcome::success();
+}
+result<void> VezBackend::Render() { return outcome::success(); }
+
+result<void> VezBackend::FinishFrame() {
+    context_.current_frame =
+        (context_.current_frame + 1) % context_.per_frame.size();
+    return outcome::success();
+};
+
 result<void> VezBackend::TeardownContext() {
+    if (context_.device) {
+        vezDeviceWaitIdle(context_.device);
+    }
+
+    for (auto& per_frame : context_.per_frame) {
+        vezFreeCommandBuffers(
+            context_.device,
+            static_cast<uint32_t>(per_frame.command_buffers.size()),
+            per_frame.command_buffers.data());
+    }
+
     for (auto framebuffer : context_.framebuffer_cache) {
         vezDestroyFramebuffer(context_.device, framebuffer.second);
     }
@@ -657,6 +765,19 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
 
     VulkanImage vulkan_image = {image, image_view};
     return vulkan_image;
+}
+
+result<void> VezBackend::GetActiveCommandBuffer(uint32_t thread = 0) {
+    auto& per_frame = context_.per_frame[context_.current_frame];
+
+    if (!per_frame.command_buffer_active[thread]) {
+        VK_CHECK(
+            vezBeginCommandBuffer(per_frame.command_buffers[thread],
+                                  VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT));
+        per_frame.command_buffer_active[thread] = true;
+    }
+
+    return outcome::success();
 }
 
 VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,

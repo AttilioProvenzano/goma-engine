@@ -10,49 +10,48 @@ namespace {
 
 TEST(SceneTest, CanCreateScene) {
     Scene s;
-    ASSERT_EQ(s.GetRootNode()->id, NodeIndex(0, 1));
-    ASSERT_EQ(s.GetRootNode()->parent_id, NodeIndex(0, 0));
-    ASSERT_EQ(s.GetRootNode()->transform, Transform());
+    ASSERT_EQ(s.GetRootNode(), NodeIndex(0, 1));
 }
 
 TEST(SceneTest, CanCreateNodes) {
     Scene s;
 
-    auto node = s.CreateNode(s.GetRootNode());
-    ASSERT_EQ(node->id, NodeIndex(1, 1));
-    ASSERT_EQ(node->parent_id, s.GetRootNode()->id);
+    auto node = s.CreateNode(s.GetRootNode()).value();
+    ASSERT_EQ(node, NodeIndex(1, 1));
+    ASSERT_EQ(s.GetParent(node).value(), s.GetRootNode());
+    ASSERT_EQ(*s.GetChildren(node).value(), std::set<NodeIndex>{});
 
-    auto child_node = s.CreateNode(node);
-    ASSERT_EQ(child_node->id, NodeIndex(2, 1));
-    ASSERT_EQ(child_node->parent_id, NodeIndex(1, 1));
+    auto child_node = s.CreateNode(node).value();
+    ASSERT_EQ(child_node, NodeIndex(2, 1));
+    ASSERT_EQ(s.GetParent(child_node).value(), NodeIndex(1, 1));
 }
 
 TEST(SceneTest, CanDeleteNodes) {
     Scene s;
 
-    auto node = s.CreateNode(s.GetRootNode());
-    ASSERT_EQ(node->id, NodeIndex(1, 1));
-    ASSERT_EQ(node->parent_id, s.GetRootNode()->id);
+    auto node = s.CreateNode(s.GetRootNode()).value();
+    ASSERT_EQ(*s.GetChildren(s.GetRootNode()).value(),
+              std::set<NodeIndex>{node});
 
-    s.DeleteNode(node->id);
-    ASSERT_EQ(node->id, NodeIndex(1, 0));
+    s.DeleteNode(node);
+
+    ASSERT_EQ(*s.GetChildren(s.GetRootNode()).value(), std::set<NodeIndex>{});
+    ASSERT_FALSE(s.GetParent(node));
 }
 
 TEST(SceneTest, CanDeleteAndRecreateNodes) {
     Scene s;
 
-    auto node = s.CreateNode(s.GetRootNode());
-    node = s.CreateNode(node->id);
-    ASSERT_EQ(node->id, NodeIndex(2, 1));
-    ASSERT_EQ(node->parent_id, NodeIndex(1, 1));
+    auto node = s.CreateNode(s.GetRootNode()).value();
+    auto child_node = s.CreateNode(node).value();
+    s.DeleteNode(node);
 
-    s.DeleteNode(NodeIndex(1, 1));
-    EXPECT_EQ(node->parent_id, s.GetRootNode()->id)
-        << "parent_id was not updated when parent node was deleted";
+    EXPECT_EQ(s.GetParent(child_node).value(), s.GetRootNode())
+        << "Child node was not updated when parent node was deleted";
 
-    node = s.CreateNode(s.GetRootNode());
-    ASSERT_EQ(node->id, NodeIndex(1, 2));
-    ASSERT_EQ(node->parent_id, s.GetRootNode()->id);
+    auto new_node = s.CreateNode(s.GetRootNode()).value();
+    ASSERT_EQ(new_node, NodeIndex(1, 2)) << "New generation not set properly";
+    ASSERT_EQ(s.GetParent(new_node).value(), s.GetRootNode());
 }
 
 class VezBackendTest : public ::testing::Test {

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string>
 #include <system_error>
 
@@ -5,18 +7,20 @@ namespace goma {
 
 enum class Error {
     Success = 0,
-	OutOfCPUMemory = 1,
-	OutOfGPUMemory = 2,
-	DeviceLost = 3,
-	VulkanLayerNotPresent = 4,
+    OutOfCPUMemory = 1,
+    OutOfGPUMemory = 2,
+    DeviceLost = 3,
+    VulkanLayerNotPresent = 4,
     VulkanExtensionNotPresent = 5,
-	VulkanInitializationFailed = 6,
-	GenericVulkanError = 7,
-	GlfwError = 8,
-	GlfwWindowCreationFailed = 9,
-	NotFound = 10,
+    VulkanInitializationFailed = 6,
+    GenericVulkanError = 7,
+    GlfwError = 8,
+    GlfwWindowCreationFailed = 9,
+    NotFound = 10,
+    InvalidNode = 11,
+    InvalidParentNode = 12,
+    RootNodeCannotBeDeleted = 13,
 };
-
 }
 
 namespace std {
@@ -62,6 +66,12 @@ class GomaError_category : public std::error_category {
                 return "GLFW could not create a window";
             case goma::Error::NotFound:
                 return "element not found";
+            case goma::Error::InvalidNode:
+                return "node is invalid";
+            case goma::Error::InvalidParentNode:
+                return "parent node is invalid";
+            case goma::Error::RootNodeCannotBeDeleted:
+                return "root node cannot be deleted";
             default:
                 return "unknown error";
         }

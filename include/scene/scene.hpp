@@ -1,9 +1,18 @@
 #pragma once
 
+#include "common/error_codes.hpp"
+
 #include <queue>
 #include <vector>
+#include <set>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+
+#include <outcome.hpp>
+namespace outcome = OUTCOME_V2_NAMESPACE;
+using outcome::result;
+#include <vector>
 
 namespace goma {
 
@@ -16,6 +25,10 @@ struct GenIndex {
     bool operator==(const GenIndex& other) const {
         return (memcmp(this, &other, sizeof(this)) == 0);
     }
+
+	bool operator<(const GenIndex& other) const {
+        return (memcmp(this, &other, sizeof(this)) < 0);
+	}
 
     friend std::ostream& operator<<(std::ostream& o, const goma::GenIndex& id);
 };
@@ -41,17 +54,21 @@ struct Transform {
 
 struct Node {
     NodeIndex id;
-    NodeIndex parent_id;  // root node has parent_id {0, 0}
+    NodeIndex parent;  // root node has parent {0, 0}
+    std::set<NodeIndex> children;
+
     Transform transform;
 
     Node(const NodeIndex& id_ = NodeIndex(),
-         const NodeIndex& parent_id_ = NodeIndex(),
+         const NodeIndex& parent_ = NodeIndex(),
          const Transform& transform_ = Transform())
-        : id(id_), parent_id(parent_id_), transform(transform_) {}
+        : id(id_), parent(parent_), transform(transform_) {}
 
     bool operator==(const Node& other) const {
         return (memcmp(this, &other, sizeof(this)) == 0);
     }
+
+    bool valid() const { return id.gen > 0; }
 
     friend std::ostream& operator<<(std::ostream& o, const goma::Node& n);
 };
@@ -73,14 +90,14 @@ class Scene {
   public:
     Scene();
 
-    Node* CreateNode(const Node* parent,
-                     const Transform& transform = Transform());
-    Node* CreateNode(const NodeIndex parent_id,
-                     const Transform& transform = Transform());
+    result<NodeIndex> CreateNode(const NodeIndex parent,
+                                 const Transform& transform = Transform());
+    NodeIndex GetRootNode() { return nodes_[0].id; }
+    result<void> DeleteNode(NodeIndex id);
 
-    Node* GetRootNode() { return &nodes_[0]; }
-    Node* GetNode(NodeIndex id);
-    void DeleteNode(NodeIndex id);
+    result<NodeIndex> GetParent(NodeIndex id);
+    result<const std::set<NodeIndex>*> GetChildren(NodeIndex id);
+    result<Transform*> GetTransform(NodeIndex id);
 
     Attachment* CreateAttachment(const Node* node);
     Attachment* CreateAttachment(const NodeIndex node_id);
@@ -91,6 +108,8 @@ class Scene {
 
     std::vector<Attachment> attachments_;
     std::queue<size_t> recycled_attachments_;
+
+    bool ValidateNode(NodeIndex id);
 };
 
 }  // namespace goma

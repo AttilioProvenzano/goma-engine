@@ -20,71 +20,90 @@ std::ostream& operator<<(std::ostream& o, const goma::Transform& t) {
 }
 
 std::ostream& operator<<(std::ostream& o, const goma::Node& n) {
-    o << "Node(id: " << n.id << ", parent: " << n.parent_id << ")";
+    o << "Node(id: " << n.id << ", parent: " << n.parent << ")";
     return o;
 }
 
 Scene::Scene() { nodes_.emplace_back(NodeIndex{0}, NodeIndex{0, 0}); }
 
-// TODO convert to result<NodeIndex>, as pointer might be invalid after realloc
-Node* Scene::CreateNode(const Node* parent, const Transform& transform) {
-    if (parent) {
-        return CreateNode(parent->id, transform);
+result<NodeIndex> Scene::CreateNode(const NodeIndex parent,
+                                    const Transform& transform) {
+    if (!ValidateNode(parent)) {
+        return Error::InvalidParentNode;
     }
-    return nullptr;
-}
 
-Node* Scene::CreateNode(const NodeIndex parent_id, const Transform& transform) {
+    NodeIndex ret_id;
     if (!recycled_nodes_.empty()) {
         size_t index = recycled_nodes_.front();
         recycled_nodes_.pop();
 
         // The last valid generation was stored in id.id
         // when the node was deleted
-        Node* node = &nodes_[index];
-        node->id = {index, node->id.id + 1};
-        node->parent_id = parent_id;
-        node->transform = transform;
-        return node;
+        size_t new_gen = nodes_[index].id.id + 1;
+
+        nodes_[index] = {{index, new_gen}, parent, transform};
+        ret_id = {index, new_gen};
     } else {
         size_t id = nodes_.size();
-        nodes_.emplace_back(NodeIndex{id}, parent_id, transform);
-        return &nodes_.back();
+        nodes_.emplace_back(NodeIndex{id}, parent, transform);
+        ret_id = {id};
     }
+
+    nodes_[parent.id].children.insert(ret_id);
+    return ret_id;
 }
 
-Node* Scene::GetNode(NodeIndex id) {
-    if (id.id < nodes_.size()) {
-        Node* node = &nodes_[id.id];
-        if (node->id.gen == id.gen) {
-            return node;
-        }
+result<NodeIndex> Scene::GetParent(NodeIndex id) {
+    if (!ValidateNode(id)) {
+        return Error::InvalidNode;
     }
-    return nullptr;
+    return nodes_[id.id].parent;
 }
 
-void Scene::DeleteNode(NodeIndex id) {
+result<const std::set<NodeIndex>*> Scene::GetChildren(NodeIndex id) {
+    if (!ValidateNode(id)) {
+        return Error::InvalidNode;
+    }
+    return &nodes_[id.id].children;
+}
+
+result<Transform*> Scene::GetTransform(NodeIndex id) {
+    if (!ValidateNode(id)) {
+        return Error::InvalidNode;
+    }
+    return &nodes_[id.id].transform;
+}
+
+result<void> Scene::DeleteNode(NodeIndex id) {
     // Root node cannot be deleted
-    if (id.id > 0 && id.id < nodes_.size()) {
-        Node* node = &nodes_[id.id];
-        if (node->id.gen == id.gen) {
-            // Fix parent for any child node(s)
-            for (auto& child_node : nodes_) {
-                if (child_node.parent_id == id) {
-                    child_node.parent_id = node->parent_id;
-                }
-            }
+    if (id.id == 0) {
+        return Error::RootNodeCannotBeDeleted;
+    }
 
-            // We add the node's index to the recycled nodes
-            recycled_nodes_.push(id.id);
+    // Validate id
+    if (!ValidateNode(id)) {
+        return Error::InvalidNode;
+    }
 
-            // We set generation to 0 to mark the node as
-            // invalid and store the last valid generation into the node's id
-            // (which is unused while the node is invalid)
-            node->id.id = node->id.gen;
-            node->id.gen = 0;
+    // Fix parent for any child node(s)
+    auto new_parent = nodes_[id.id].parent;
+    nodes_[new_parent.id].children.erase(id);
+    for (auto& child_node : nodes_) {
+        if (child_node.parent == id) {
+            child_node.parent = new_parent;
+            nodes_[new_parent.id].children.insert(child_node.id);
         }
     }
+
+    // We add the node's index to the recycled nodes
+    recycled_nodes_.push(id.id);
+
+    // We set generation to 0 to mark the node as
+    // invalid and store the last valid generation into the node's id
+    // (which is unused while the node is invalid)
+    nodes_[id.id] = {{nodes_[id.id].id.gen, 0}};
+
+    return outcome::success();
 }
 
 Attachment* Scene::CreateAttachment(const Node* node) {
@@ -98,6 +117,11 @@ Attachment* Scene::CreateAttachment(const NodeIndex node_id) {
     size_t id = attachments_.size();
     attachments_.emplace_back(AttachmentIndex{id}, node_id);
     return &attachments_.back();
+}
+
+bool Scene::ValidateNode(NodeIndex id) {
+    return id.gen != 0 && id.id < nodes_.size() &&
+           nodes_[id.id].id.gen == id.gen;
 }
 
 }  // namespace goma

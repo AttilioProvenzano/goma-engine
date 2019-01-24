@@ -40,6 +40,7 @@ struct VezContext {
     VkSurfaceCapabilitiesKHR capabilities = {};
 
     VezSwapchain swapchain = VK_NULL_HANDLE;
+    VkSurfaceFormatKHR swapchain_format = {};
 
     ShaderCache vertex_shader_cache;
     ShaderCache fragment_shader_cache;

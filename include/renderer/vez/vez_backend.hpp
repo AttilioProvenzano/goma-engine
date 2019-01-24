@@ -89,6 +89,7 @@ class VezBackend : public Backend {
                                     VezImageCreateInfo image_info,
                                     void* initial_contents = nullptr);
     result<void> GetActiveCommandBuffer(uint32_t thread = 0);
+    VkFormat GetVkFormat(Format format);
 
     VezContext::ShaderHash GetShaderHash(const char* source,
                                          const char* entry_point);

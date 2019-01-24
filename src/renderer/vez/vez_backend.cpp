@@ -142,15 +142,7 @@ result<Image> VezBackend::CreateTexture(const char* name,
         vezDestroyImage(context_.device, result->second.image);
     }
 
-    VkFormat format;
-    switch (texture_desc.format) {
-        case Format::UnsignedNormRGBA:
-            format = VK_FORMAT_R8G8B8A8_UNORM;
-            break;
-        default:
-            format = VK_FORMAT_R8G8B8A8_UNORM;
-            break;
-    }
+    VkFormat format = GetVkFormat(texture_desc.format);
 
     VezImageCreateInfo image_info = {};
     image_info.extent = {texture_desc.width, texture_desc.height, 1};
@@ -199,15 +191,7 @@ result<Framebuffer> VezBackend::CreateFramebuffer(uint32_t frame_index,
 
     std::vector<VkImageView> attachments;
     for (auto& image_desc : fb_desc.color_images) {
-        VkFormat format;
-        switch (image_desc.format) {
-            case Format::UnsignedNormRGBA:
-                format = VK_FORMAT_R8G8B8A8_UNORM;
-                break;
-            default:
-                format = VK_FORMAT_R8G8B8A8_UNORM;
-                break;
-        }
+        VkFormat format = GetVkFormat(image_desc.format);
 
         VezImageCreateInfo image_info = {};
         image_info.extent = {fb_desc.width, fb_desc.height, 1};
@@ -361,7 +345,15 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
 
 result<void> VezBackend::BindTextures(const std::vector<Image>& images,
                                       uint32_t first_binding) {
-    VkSampler default_sampler = VK_NULL_HANDLE;  // TODO sampler!
+    VezSamplerCreateInfo sampler_info = {};
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.anisotropyEnable = VK_FALSE;
+
+    VkSampler default_sampler =
+        VK_NULL_HANDLE;  // TODO do sampler properly, mipmaps!
+    vezCreateSampler(context_.device, &sampler_info, &default_sampler);
     for (const auto& image : images) {
         vezCmdBindImageView(image.vez.image_view, default_sampler, 0,
                             first_binding, 0);
@@ -695,6 +687,7 @@ result<VezSwapchain> VezBackend::CreateSwapchain(VkSurfaceKHR surface) {
 
     VezSwapchain swapchain = VK_NULL_HANDLE;
     VK_CHECK(vezCreateSwapchain(device, &swapchain_info, &swapchain));
+    vezGetSwapchainSurfaceFormat(swapchain, &context_.swapchain_format);
     return swapchain;
 }
 
@@ -858,8 +851,6 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
         layers.mipLevel = 0;
 
         VezImageSubDataInfo sub_data_info = {};
-        sub_data_info.dataRowLength = image_info.extent.width;
-        sub_data_info.dataImageHeight = image_info.extent.height;
         sub_data_info.imageExtent = image_info.extent;
         sub_data_info.imageOffset = {0, 0, 0};
         sub_data_info.imageSubresource = layers;
@@ -891,6 +882,21 @@ result<void> VezBackend::GetActiveCommandBuffer(uint32_t thread) {
     }
 
     return outcome::success();
+}
+
+VkFormat VezBackend::GetVkFormat(Format format) {
+    switch (format) {
+        case Format::UnsignedNormRGBA:
+            return VK_FORMAT_R8G8B8A8_UNORM;
+        case Format::UnsignedNormBGRA:
+            return VK_FORMAT_B8G8R8A8_UNORM;
+        case Format::SwapchainFormat:
+        case Format::Undefined:
+        default:
+            // We default to the swapchain format even
+            // if the format is undefined
+            return context_.swapchain_format.format;
+    }
 }
 
 VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,

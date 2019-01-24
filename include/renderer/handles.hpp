@@ -11,6 +11,7 @@ namespace goma {
 struct VulkanImage {
     VkImage image = VK_NULL_HANDLE;
     VkImageView image_view = VK_NULL_HANDLE;
+    VkSampler sampler = VK_NULL_HANDLE;
 };
 
 struct Image {
@@ -39,57 +40,57 @@ struct Buffer {
 
 enum class Format {
     Undefined,
+    SwapchainFormat,
     UnsignedNormRGBA,
+    UnsignedNormBGRA,
+};
+
+enum class FilterType { Nearest, Linear };
+
+enum class AddressingMode { Repeat, MirroredRepeat, ClampToEdge };
+
+struct FilterDesc {
+    FilterType filter_type = FilterType::Nearest;
+    FilterType mipmap_mode = FilterType::Nearest;
+
+    uint32_t min_lod = 0;
+    uint32_t max_lod = 0;
+    uint32_t lod_bias = 0;
+
+    AddressingMode addressing_mode = AddressingMode::Repeat;
+    uint32_t anisotropy = 0;
 };
 
 struct TextureDesc {
     uint32_t width;
     uint32_t height;
-    Format format;
-    uint32_t mip_levels;
-    uint32_t array_layers;
-    uint32_t samples;
+    Format format = Format::UnsignedNormRGBA;
 
-    TextureDesc(uint32_t width_ = 0, uint32_t height_ = 0,
-                Format format_ = Format::UnsignedNormRGBA,
-                uint32_t mip_levels_ = 1, uint32_t array_layers_ = 1,
-                uint32_t samples_ = 1)
-        : width(width_),
-          height(height_),
-          format(format_),
-          mip_levels(mip_levels_),
-          array_layers(array_layers_),
-          samples(samples_) {}
+	uint32_t mip_levels = 1;
+    uint32_t array_layers = 1;
+    uint32_t samples = 1;
+
+	FilterDesc filter = {};
 };
 
 struct FramebufferColorImageDesc {
-    std::string name;
-    Format format;
-    uint32_t samples;
-
-    FramebufferColorImageDesc(std::string name_,
-                              Format format_ = Format::UnsignedNormRGBA,
-                              uint32_t samples_ = 1)
-        : name(std::move(name_)), format(format_), samples(samples_) {}
+    std::string name = "color";
+    Format format = Format::SwapchainFormat;
+    uint32_t samples = 1;
 };
 
 enum class DepthImageType { None, Depth, DepthStencil };
 
 struct FramebufferDepthImageDesc {
-    std::string name;
-    DepthImageType depth_type;
-
-    FramebufferDepthImageDesc(
-        std::string name_,
-        DepthImageType depth_type_ = DepthImageType::DepthStencil)
-        : name(std::move(name_)), depth_type(depth_type_) {}
+    std::string name = "depth";
+    DepthImageType depth_type = DepthImageType::DepthStencil;
 };
 
 struct FramebufferDesc {
     uint32_t width;
     uint32_t height;
-    std::vector<FramebufferColorImageDesc> color_images = {{"color"}};
-    FramebufferDepthImageDesc depth_image = {"depth"};
+    std::vector<FramebufferColorImageDesc> color_images = {{}};
+    FramebufferDepthImageDesc depth_image = {};
 };
 
 struct ColorAttachmentDesc {

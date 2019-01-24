@@ -65,61 +65,6 @@ class VezBackendTest : public ::testing::Test {
     }
 };
 
-/*
-TEST_F(VezBackendTest, CanInitializeContext) {}
-
-TEST_F(VezBackendTest, CanInitializeWin32Surface) {
-    Win32Platform platform;
-    platform.InitWindow();
-
-    auto init_surface_result = vez.InitSurface(&platform);
-    ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
-}
-
-TEST_F(VezBackendTest, CanCreatePipeline) {
-    static const char* vertex_shader_glsl = R"(
-#version 450
-
-layout(location = 0) in vec3 inPosition;
-
-void main() {
-    gl_Position = vec4(gl_InstanceIndex * 0.1 * inPosition, 1.0);
-}
-)";
-
-    static const char* fragment_shader_glsl = R"(
-#version 450
-#extension GL_ARB_separate_shader_objects : enable
-
-layout(location = 0) out vec4 outColor;
-
-void main() {
-    outColor = vec4(1.0, 1.0, 1.0, 1.0);
-}
-)";
-
-    auto create_pipeline_result =
-        vez.GetGraphicsPipeline(vertex_shader_glsl, fragment_shader_glsl);
-    ASSERT_TRUE(create_pipeline_result)
-        << create_pipeline_result.error().message();
-}
-
-TEST_F(VezBackendTest, CanCreateTexture) {
-    TextureDesc texture_desc = {800, 600};
-
-    auto create_texture_result = vez.CreateTexture("texture", texture_desc);
-    ASSERT_TRUE(create_texture_result)
-        << create_texture_result.error().message();
-}
-
-TEST_F(VezBackendTest, CanCreateFramebuffer) {
-    FramebufferDesc fb_desc = {800, 600};
-
-    auto create_fb_result = vez.CreateFramebuffer(0, "fb", fb_desc);
-    ASSERT_TRUE(create_fb_result) << create_fb_result.error().message();
-}
-*/
-
 TEST_F(VezBackendTest, RenderTriangle) {
     Win32Platform platform;
     platform.InitWindow();
@@ -127,14 +72,24 @@ TEST_F(VezBackendTest, RenderTriangle) {
     auto init_surface_result = vez.InitSurface(&platform);
     ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
 
+    TextureDesc texture_desc = {512, 512};
+    std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {255, 0, 0, 255});
+    auto create_texture_result = vez.CreateTexture("texture", texture_desc, pixels.data());
+
+    ASSERT_TRUE(create_texture_result)
+        << create_texture_result.error().message();
+
     static const char* vertex_shader_glsl = R"(
 #version 450
 
-// layout(location = 0) in vec3 inPosition;
-vec3 inPosition[3] = {{1.0, 0.0, 0.0}, {0.0, -1.0, 0.0}, {0.0, 1.0, 0.0}};
+layout(location = 0) out vec2 outUVs;
+
+vec3 positions[3] = {{1.0, 0.0, 0.0}, {0.0, -1.0, 0.0}, {0.0, 1.0, 0.0}};
+vec2 uvs[3] = {{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}};
 
 void main() {
-    gl_Position = vec4(inPosition[gl_VertexIndex], 1.0);
+    gl_Position = vec4(positions[gl_VertexIndex], 1.0);
+    outUVs = uvs[gl_VertexIndex];
 }
 )";
 
@@ -142,10 +97,13 @@ void main() {
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+layout(set = 0, binding = 0) uniform sampler2D mainTexture;
+
+layout(location = 0) in vec2 inUVs;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    outColor = vec4(1.0, 1.0, 1.0, 1.0);
+    outColor = texture(mainTexture, inUVs);
 }
 )";
 
@@ -162,6 +120,7 @@ void main() {
     vez.StartFrame();
     vez.StartRenderPass(create_fb_result.value(), {});
     vez.BindGraphicsPipeline(create_pipeline_result.value());
+    vez.BindTextures({create_texture_result.value()});
     vez.Draw(3);
     vez.FinishFrame("color");
 

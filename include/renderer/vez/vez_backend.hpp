@@ -40,16 +40,27 @@ class VezBackend : public Backend {
         FramebufferDesc fb_desc) override;
 
     virtual result<void> SetupFrames(uint32_t frames) override;
-    virtual result<uint32_t> StartFrame(uint32_t threads = 1) override;
+    virtual result<size_t> StartFrame(uint32_t threads = 1) override;
     virtual result<void> StartRenderPass(Framebuffer fb,
                                          RenderPassDesc rp_desc) override;
-    virtual result<void> BindTextures(
-        const std::vector<Image>& images) override;
+    virtual result<void> BindTextures(const std::vector<Image>& images,
+                                      uint32_t first_binding = 0) override;
     virtual result<void> BindVertexBuffers(
-        const std::vector<Buffer>& vertex_buffers) override;
-    virtual result<void> BindIndexBuffer(Buffer index_buffer) override;
-    virtual result<void> Render() override;
-    virtual result<void> FinishFrame() override;
+        const std::vector<Buffer>& vertex_buffers, uint32_t first_binding = 0,
+        std::vector<size_t> offsets = {}) override;
+    virtual result<void> BindIndexBuffer(Buffer index_buffer, size_t offset = 0,
+                                         bool short_indices = false) override;
+    virtual result<void> BindGraphicsPipeline(Pipeline pipeline) override;
+    virtual result<void> Draw(uint32_t vertex_count,
+                              uint32_t instance_count = 1,
+                              uint32_t first_vertex = 0,
+                              uint32_t first_instance = 0) override;
+    virtual result<void> DrawIndexed(uint32_t index_count,
+                                     uint32_t instance_count = 1,
+                                     uint32_t first_index = 0,
+                                     uint32_t vertex_offset = 0,
+                                     uint32_t first_instance = 0) override;
+    virtual result<void> FinishFrame(std::string present_image_name) override;
 
     virtual result<void> TeardownContext() override;
 
@@ -77,7 +88,7 @@ class VezBackend : public Backend {
     result<VulkanImage> CreateImage(VezContext::ImageHash hash,
                                     VezImageCreateInfo image_info,
                                     void* initial_contents = nullptr);
-	result<void> GetActiveCommandBuffer(uint32_t thread = 0);
+    result<void> GetActiveCommandBuffer(uint32_t thread = 0);
 
     VezContext::ShaderHash GetShaderHash(const char* source,
                                          const char* entry_point);

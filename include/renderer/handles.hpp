@@ -3,6 +3,7 @@
 #define VK_NO_PROTOTYPES
 #include "VEZ.h"
 
+#include <array>
 #include <vector>
 
 namespace goma {
@@ -94,7 +95,7 @@ struct FramebufferDesc {
 struct ColorAttachmentDesc {
     bool clear = true;
     bool store = true;
-    std::array<float, 4> clear_color = {0.1, 0.1, 0.1, 1};
+    std::array<float, 4> clear_color = {0.1f, 0.1f, 0.1f, 1.0f};
 };
 
 struct DepthAttachmentDesc {

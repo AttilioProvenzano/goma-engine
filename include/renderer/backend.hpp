@@ -33,15 +33,27 @@ class Backend {
                                                   FramebufferDesc fb_desc) = 0;
 
     virtual result<void> SetupFrames(uint32_t frames) = 0;
-    virtual result<uint32_t> StartFrame(uint32_t threads = 1) = 0;
+    virtual result<size_t> StartFrame(uint32_t threads = 1) = 0;
     virtual result<void> StartRenderPass(Framebuffer fb,
                                          RenderPassDesc rp_desc) = 0;
-    virtual result<void> BindTextures(const std::vector<Image>& images) = 0;
+    virtual result<void> BindTextures(const std::vector<Image>& images,
+                                      uint32_t first_binding = 0) = 0;
     virtual result<void> BindVertexBuffers(
-        const std::vector<Buffer>& vertex_buffers) = 0;
-    virtual result<void> BindIndexBuffer(Buffer index_buffer) = 0;
-    virtual result<void> Render() = 0;
-    virtual result<void> FinishFrame() = 0;
+        const std::vector<Buffer>& vertex_buffers, uint32_t first_binding = 0,
+        std::vector<size_t> offsets = {}) = 0;
+    virtual result<void> BindIndexBuffer(Buffer index_buffer, size_t offset = 0,
+                                         bool short_indices = false) = 0;
+    virtual result<void> BindGraphicsPipeline(Pipeline pipeline) = 0;
+    virtual result<void> Draw(uint32_t vertex_count,
+                              uint32_t instance_count = 1,
+                              uint32_t first_vertex = 0,
+                              uint32_t first_instance = 0) = 0;
+    virtual result<void> DrawIndexed(uint32_t index_count,
+                                     uint32_t instance_count = 1,
+                                     uint32_t first_index = 0,
+                                     uint32_t vertex_offset = 0,
+                                     uint32_t first_instance = 0) = 0;
+    virtual result<void> FinishFrame(std::string present_image_name) = 0;
 
     virtual result<void> TeardownContext() = 0;
 

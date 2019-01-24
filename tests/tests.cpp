@@ -65,6 +65,7 @@ class VezBackendTest : public ::testing::Test {
     }
 };
 
+/*
 TEST_F(VezBackendTest, CanInitializeContext) {}
 
 TEST_F(VezBackendTest, CanInitializeWin32Surface) {
@@ -116,6 +117,55 @@ TEST_F(VezBackendTest, CanCreateFramebuffer) {
 
     auto create_fb_result = vez.CreateFramebuffer(0, "fb", fb_desc);
     ASSERT_TRUE(create_fb_result) << create_fb_result.error().message();
+}
+*/
+
+TEST_F(VezBackendTest, RenderTriangle) {
+    Win32Platform platform;
+    platform.InitWindow();
+
+    auto init_surface_result = vez.InitSurface(&platform);
+    ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
+
+    static const char* vertex_shader_glsl = R"(
+#version 450
+
+// layout(location = 0) in vec3 inPosition;
+vec3 inPosition[3] = {{1.0, 0.0, 0.0}, {0.0, -1.0, 0.0}, {0.0, 1.0, 0.0}};
+
+void main() {
+    gl_Position = vec4(inPosition[gl_VertexIndex], 1.0);
+}
+)";
+
+    static const char* fragment_shader_glsl = R"(
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = vec4(1.0, 1.0, 1.0, 1.0);
+}
+)";
+
+    auto create_pipeline_result =
+        vez.GetGraphicsPipeline(vertex_shader_glsl, fragment_shader_glsl);
+    ASSERT_TRUE(create_pipeline_result)
+        << create_pipeline_result.error().message();
+
+    FramebufferDesc fb_desc = {800, 600};
+    auto create_fb_result = vez.CreateFramebuffer(0, "fb", fb_desc);
+
+    vez.SetupFrames(
+        1);  // TODO crashes if we don't call SetupFrames before StartFrames
+    vez.StartFrame();
+    vez.StartRenderPass(create_fb_result.value(), {});
+    vez.BindGraphicsPipeline(create_pipeline_result.value());
+    vez.Draw(3);
+    vez.FinishFrame("color");
+
+    system("Pause");
 }
 
 }  // namespace

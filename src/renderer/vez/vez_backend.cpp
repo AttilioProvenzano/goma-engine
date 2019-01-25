@@ -135,7 +135,7 @@ result<Pipeline> VezBackend::GetGraphicsPipeline(const char* vs_source,
 result<Image> VezBackend::CreateTexture(const char* name,
                                         TextureDesc texture_desc,
                                         void* initial_contents) {
-    auto hash = GetImageHash(name);
+    auto hash = GetTextureHash(name);
     auto result = context_.texture_cache.find(hash);
     if (result != context_.texture_cache.end()) {
         vezDestroyImageView(context_.device, result->second.image_view);
@@ -170,7 +170,7 @@ result<Image> VezBackend::CreateTexture(const char* name,
 }
 
 result<Image> VezBackend::GetTexture(const char* name) {
-    auto hash = GetImageHash(name);
+    auto hash = GetTextureHash(name);
     auto result = context_.texture_cache.find(hash);
     if (result != context_.texture_cache.end()) {
         return {result->second};
@@ -179,7 +179,7 @@ result<Image> VezBackend::GetTexture(const char* name) {
     return Error::NotFound;
 }
 
-result<Framebuffer> VezBackend::CreateFramebuffer(uint32_t frame_index,
+result<Framebuffer> VezBackend::CreateFramebuffer(size_t frame_index,
                                                   const char* name,
                                                   FramebufferDesc fb_desc) {
     assert(context_.device &&
@@ -194,15 +194,16 @@ result<Framebuffer> VezBackend::CreateFramebuffer(uint32_t frame_index,
 
     std::vector<VkImageView> attachments;
     for (auto& image_desc : fb_desc.color_images) {
-        OUTCOME_TRY(image, CreateFramebufferImage(image_desc, fb_desc.width,
-                                                  fb_desc.height));
+        OUTCOME_TRY(image,
+                    CreateFramebufferImage(frame_index, image_desc,
+                                           fb_desc.width, fb_desc.height));
         attachments.push_back(image.image_view);
     }
 
     if (fb_desc.depth_image.depth_type != DepthImageType::None) {
         OUTCOME_TRY(image,
-                    CreateFramebufferImage(fb_desc.depth_image, fb_desc.width,
-                                           fb_desc.height));
+                    CreateFramebufferImage(frame_index, fb_desc.depth_image,
+                                           fb_desc.width, fb_desc.height));
         attachments.push_back(image.image_view);
     }
 
@@ -230,6 +231,11 @@ result<size_t> VezBackend::StartFrame(uint32_t threads) {
     assert(context_.device &&
            "Context must be initialized before starting a frame");
     VkDevice device = context_.device;
+
+    if (context_.per_frame.empty()) {
+        // Set up triple buffering by default
+        SetupFrames(3);
+    }
 
     if (threads == 0) {
         threads = 1;
@@ -266,7 +272,13 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
            "Context must be initialized before starting a render pass");
     VkDevice device = context_.device;
 
+    // Ensure there is a valid command buffer for the current thread
     OUTCOME_TRY(GetActiveCommandBuffer());
+
+    if (rp_in_progress_) {
+        vezCmdEndRenderPass();
+    };
+    rp_in_progress_ = false;
 
     size_t total_attachments = rp_desc.depth_attachment.active
                                    ? rp_desc.color_attachments.size() + 1
@@ -303,6 +315,7 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
     rp_info.pAttachments = attach_infos.data();
 
     vezCmdBeginRenderPass(&rp_info);
+    rp_in_progress_ = true;
     return outcome::success();
 }
 
@@ -376,42 +389,53 @@ result<void> VezBackend::DrawIndexed(uint32_t index_count,
     return outcome::success();
 }
 
-result<void> VezBackend::FinishFrame(std::string present_image_name) {
+result<void> VezBackend::FinishFrame() {
     VkDevice device = context_.device;
 
     VkQueue graphics_queue = VK_NULL_HANDLE;
     vezGetDeviceGraphicsQueue(device, 0, &graphics_queue);
 
-    // TODO end the render pass!
-    // TODO which command buffers to submit?
-    auto& per_frame = context_.per_frame[context_.current_frame];
-    VkSemaphore wait_semaphore = VK_NULL_HANDLE;
+    if (rp_in_progress_) {
+        vezCmdEndRenderPass();
+    }
+    rp_in_progress_ = false;
 
-    // TODO move into a function, will be called per frame?
-    vezCmdEndRenderPass();
     vezEndCommandBuffer();
 
+    auto& per_frame = context_.per_frame[context_.current_frame];
+
+    // Submit the command buffer for the current thread
     VezSubmitInfo submit_info = {};
-    submit_info.commandBufferCount =
-        static_cast<uint32_t>(per_frame.command_buffers.size());
-    submit_info.pCommandBuffers = per_frame.command_buffers.data();
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &per_frame.command_buffers[thread_id_];
     submit_info.signalSemaphoreCount = 1;
-    submit_info.pSignalSemaphores = &wait_semaphore;
+    submit_info.pSignalSemaphores = &per_frame.submission_semaphore;
 
     VkFence fence = VK_NULL_HANDLE;
     VK_CHECK(vezQueueSubmit(graphics_queue, 1, &submit_info, &fence));
+    return outcome::success();
+}
+
+result<void> VezBackend::PresentImage(const char* present_image_name) {
+    VkDevice device = context_.device;
 
     // TODO image hash doesn't consider frame index!
-    OUTCOME_TRY(fb_image, GetFramebufferImage("color"));
+    OUTCOME_TRY(fb_image, GetFramebufferImage(context_.current_frame,
+                                              present_image_name));
     VkImage present_image = fb_image.image;
 
     VkPipelineStageFlags wait_dst =
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkResult res;
 
+    VkQueue graphics_queue = VK_NULL_HANDLE;
+    vezGetDeviceGraphicsQueue(device, 0, &graphics_queue);
+
+    auto& per_frame = context_.per_frame[context_.current_frame];
+
     VezPresentInfo present_info = {};
     present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = &wait_semaphore;
+    present_info.pWaitSemaphores = &per_frame.submission_semaphore;
     present_info.pWaitDstStageMask = &wait_dst;
     present_info.swapchainCount = 1;
     present_info.pSwapchains = &context_.swapchain;
@@ -761,9 +785,9 @@ result<VkBuffer> VezBackend::GetBuffer(VezContext::BufferHash hash) {
 }
 
 result<VulkanImage> VezBackend::CreateFramebufferImage(
-    const FramebufferColorImageDesc& image_desc, uint32_t width,
-    uint32_t height) {
-    auto hash = GetImageHash(image_desc.name.c_str());
+    size_t frame_index, const FramebufferColorImageDesc& image_desc,
+    uint32_t width, uint32_t height) {
+    auto hash = GetFramebufferImageHash(frame_index, image_desc.name.c_str());
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         vezDestroyImageView(context_.device, result->second.image_view);
@@ -790,9 +814,9 @@ result<VulkanImage> VezBackend::CreateFramebufferImage(
 }
 
 result<VulkanImage> VezBackend::CreateFramebufferImage(
-    const FramebufferDepthImageDesc& image_desc, uint32_t width,
-    uint32_t height) {
-    auto hash = GetImageHash(image_desc.name.c_str());
+    size_t frame_index, const FramebufferDepthImageDesc& image_desc,
+    uint32_t width, uint32_t height) {
+    auto hash = GetFramebufferImageHash(frame_index, image_desc.name.c_str());
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         vezDestroyImageView(context_.device, result->second.image_view);
@@ -828,8 +852,9 @@ result<VulkanImage> VezBackend::CreateFramebufferImage(
     return vulkan_image;
 }
 
-result<VulkanImage> VezBackend::GetFramebufferImage(const char* name) {
-    auto hash = GetImageHash(name);
+result<VulkanImage> VezBackend::GetFramebufferImage(size_t frame_index,
+                                                    const char* name) {
+    auto hash = GetFramebufferImageHash(frame_index, name);
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         return result->second;
@@ -997,11 +1022,16 @@ VezContext::PipelineHash VezBackend::GetGraphicsPipelineHash(
     return {vs, fs};
 }
 
-VezContext::ImageHash VezBackend::GetImageHash(const char* name) {
+VezContext::ImageHash VezBackend::GetTextureHash(const char* name) {
     return {sdbm_hash(name)};
 }
 
-VezContext::FramebufferHash VezBackend::GetFramebufferHash(uint32_t frame_index,
+VezContext::ImageHash VezBackend::GetFramebufferImageHash(size_t frame_index,
+                                                          const char* name) {
+    return {frame_index, sdbm_hash(name)};
+}
+
+VezContext::FramebufferHash VezBackend::GetFramebufferHash(size_t frame_index,
                                                            const char* name) {
     return {frame_index, sdbm_hash(name)};
 }

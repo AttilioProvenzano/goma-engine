@@ -21,13 +21,13 @@ struct VezContext {
     typedef std::vector<uint64_t> BufferHash;
     typedef std ::map<BufferHash, VkBuffer> BufferCache;
 
-	typedef std::vector<uint64_t> ImageHash;
+    typedef std::vector<uint64_t> ImageHash;
     typedef std::map<ImageHash, VulkanImage> ImageCache;
 
-	typedef std::vector<uint64_t> SamplerHash;
+    typedef std::vector<uint64_t> SamplerHash;
     typedef std::map<SamplerHash, VkSampler> SamplerCache;
 
-	typedef std::vector<uint64_t> FramebufferHash;
+    typedef std::vector<uint64_t> FramebufferHash;
     typedef std::map<FramebufferHash, VezFramebuffer> FramebufferCache;
 
     VkInstance instance = VK_NULL_HANDLE;
@@ -57,6 +57,9 @@ struct VezContext {
     struct PerFrame {
         std::vector<VkCommandBuffer> command_buffers;
         std::vector<bool> command_buffer_active;
+
+        VkSemaphore submission_semaphore = VK_NULL_HANDLE;
+        VkFence presentation_fence = VK_NULL_HANDLE;
     };
     std::vector<PerFrame> per_frame;
     size_t current_frame = 0;

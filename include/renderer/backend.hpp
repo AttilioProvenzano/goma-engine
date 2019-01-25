@@ -28,7 +28,7 @@ class Backend {
                                         TextureDesc texture_desc,
                                         void* initial_contents = nullptr) = 0;
     virtual result<Image> GetTexture(const char* name) = 0;
-    virtual result<Framebuffer> CreateFramebuffer(uint32_t frame_index,
+    virtual result<Framebuffer> CreateFramebuffer(size_t frame_index,
                                                   const char* name,
                                                   FramebufferDesc fb_desc) = 0;
 
@@ -54,7 +54,9 @@ class Backend {
                                      uint32_t first_index = 0,
                                      uint32_t vertex_offset = 0,
                                      uint32_t first_instance = 0) = 0;
-    virtual result<void> FinishFrame(std::string present_image_name) = 0;
+    virtual result<void> FinishFrame() = 0;
+    virtual result<void> PresentImage(
+        const char* present_image_name = "color") = 0;
 
     virtual result<void> TeardownContext() = 0;
 

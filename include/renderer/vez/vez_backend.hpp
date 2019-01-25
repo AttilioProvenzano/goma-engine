@@ -36,8 +36,7 @@ class VezBackend : public Backend {
         void* initial_contents = nullptr) override;
     virtual result<Image> GetTexture(const char* name) override;
     virtual result<Framebuffer> CreateFramebuffer(
-        uint32_t frame_index, const char* name,
-        FramebufferDesc fb_desc) override;
+        size_t frame_index, const char* name, FramebufferDesc fb_desc) override;
 
     virtual result<void> SetupFrames(uint32_t frames) override;
     virtual result<size_t> StartFrame(uint32_t threads = 1) override;
@@ -61,7 +60,9 @@ class VezBackend : public Backend {
                                      uint32_t first_index = 0,
                                      uint32_t vertex_offset = 0,
                                      uint32_t first_instance = 0) override;
-    virtual result<void> FinishFrame(std::string present_image_name) override;
+    virtual result<void> FinishFrame() override;
+    virtual result<void> PresentImage(
+        const char* present_image_name = "color") override;
 
     virtual result<void> TeardownContext() override;
 
@@ -80,14 +81,19 @@ class VezBackend : public Backend {
                                   void* initial_contents = nullptr);
     result<VkBuffer> GetBuffer(VezContext::BufferHash hash);
     result<VulkanImage> CreateFramebufferImage(
-        const FramebufferColorImageDesc& desc, uint32_t width, uint32_t height);
+        size_t frame_index, const FramebufferColorImageDesc& desc,
+        uint32_t width, uint32_t height);
     result<VulkanImage> CreateFramebufferImage(
-        const FramebufferDepthImageDesc& desc, uint32_t width, uint32_t height);
-    result<VulkanImage> GetFramebufferImage(const char* name);
+        size_t frame_index, const FramebufferDepthImageDesc& desc,
+        uint32_t width, uint32_t height);
+    result<VulkanImage> GetFramebufferImage(size_t frame_index,
+                                            const char* name);
     result<VkSampler> GetSampler(const SamplerDesc& sampler_desc);
 
   private:
     VezContext context_;
+    bool rp_in_progress_ = false;
+    uint32_t thread_id_ = 0;
 
     result<VulkanImage> CreateImage(VezContext::ImageHash hash,
                                     VezImageCreateInfo image_info,
@@ -99,8 +105,10 @@ class VezBackend : public Backend {
                                          const char* entry_point);
     VezContext::PipelineHash GetGraphicsPipelineHash(VkShaderModule vs,
                                                      VkShaderModule fs);
-    VezContext::ImageHash GetImageHash(const char* name);
-    VezContext::FramebufferHash GetFramebufferHash(uint32_t frame_index,
+    VezContext::ImageHash GetFramebufferImageHash(size_t frame_index,
+                                                  const char* name);
+    VezContext::ImageHash GetTextureHash(const char* name);
+    VezContext::FramebufferHash GetFramebufferHash(size_t frame_index,
                                                    const char* name);
     VezContext::SamplerHash GetSamplerHash(const SamplerDesc& sampler_desc);
 };

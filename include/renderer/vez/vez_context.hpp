@@ -24,6 +24,9 @@ struct VezContext {
 	typedef std::vector<uint64_t> ImageHash;
     typedef std::map<ImageHash, VulkanImage> ImageCache;
 
+	typedef std::vector<uint64_t> SamplerHash;
+    typedef std::map<SamplerHash, VkSampler> SamplerCache;
+
 	typedef std::vector<uint64_t> FramebufferHash;
     typedef std::map<FramebufferHash, VezFramebuffer> FramebufferCache;
 
@@ -48,6 +51,7 @@ struct VezContext {
     BufferCache buffer_cache;
     ImageCache fb_image_cache;
     ImageCache texture_cache;
+    SamplerCache sampler_cache;
     FramebufferCache framebuffer_cache;
 
     struct PerFrame {

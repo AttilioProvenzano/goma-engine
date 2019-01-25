@@ -43,8 +43,9 @@ class VezBackend : public Backend {
     virtual result<size_t> StartFrame(uint32_t threads = 1) override;
     virtual result<void> StartRenderPass(Framebuffer fb,
                                          RenderPassDesc rp_desc) override;
-    virtual result<void> BindTextures(const std::vector<Image>& images,
-                                      uint32_t first_binding = 0) override;
+    virtual result<void> BindTextures(
+        const std::vector<Image>& images, uint32_t first_binding = 0,
+        const SamplerDesc* sampler_override = nullptr) override;
     virtual result<void> BindVertexBuffers(
         const std::vector<Buffer>& vertex_buffers, uint32_t first_binding = 0,
         std::vector<size_t> offsets = {}) override;
@@ -78,9 +79,12 @@ class VezBackend : public Backend {
                                   VkBufferUsageFlags usage,
                                   void* initial_contents = nullptr);
     result<VkBuffer> GetBuffer(VezContext::BufferHash hash);
-    result<VulkanImage> CreateFramebufferImage(VezContext::ImageHash hash,
-                                               VezImageCreateInfo image_info);
-    result<VulkanImage> GetFramebufferImage(VezContext::ImageHash hash);
+    result<VulkanImage> CreateFramebufferImage(
+        const FramebufferColorImageDesc& desc, uint32_t width, uint32_t height);
+    result<VulkanImage> CreateFramebufferImage(
+        const FramebufferDepthImageDesc& desc, uint32_t width, uint32_t height);
+    result<VulkanImage> GetFramebufferImage(const char* name);
+    result<VkSampler> GetSampler(const SamplerDesc& sampler_desc);
 
   private:
     VezContext context_;
@@ -98,6 +102,7 @@ class VezBackend : public Backend {
     VezContext::ImageHash GetImageHash(const char* name);
     VezContext::FramebufferHash GetFramebufferHash(uint32_t frame_index,
                                                    const char* name);
+    VezContext::SamplerHash GetSamplerHash(const SamplerDesc& sampler_desc);
 };
 
 }  // namespace goma

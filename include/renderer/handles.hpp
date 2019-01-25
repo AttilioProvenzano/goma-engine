@@ -49,16 +49,16 @@ enum class FilterType { Nearest, Linear };
 
 enum class AddressingMode { Repeat, MirroredRepeat, ClampToEdge };
 
-struct FilterDesc {
+struct SamplerDesc {
     FilterType filter_type = FilterType::Nearest;
     FilterType mipmap_mode = FilterType::Nearest;
 
-    uint32_t min_lod = 0;
-    uint32_t max_lod = 0;
-    uint32_t lod_bias = 0;
+    float min_lod = 0.0f;
+    float max_lod = 1.0f;
+    float lod_bias = 0.0f;
 
     AddressingMode addressing_mode = AddressingMode::Repeat;
-    uint32_t anisotropy = 0;
+    float anisotropy = 0.0f;
 };
 
 struct TextureDesc {
@@ -66,17 +66,19 @@ struct TextureDesc {
     uint32_t height;
     Format format = Format::UnsignedNormRGBA;
 
-	uint32_t mip_levels = 1;
+    uint32_t mip_levels = 1;
     uint32_t array_layers = 1;
     uint32_t samples = 1;
 
-	FilterDesc filter = {};
+    SamplerDesc sampler = {};
 };
 
 struct FramebufferColorImageDesc {
     std::string name = "color";
     Format format = Format::SwapchainFormat;
     uint32_t samples = 1;
+
+    SamplerDesc sampler = {};
 };
 
 enum class DepthImageType { None, Depth, DepthStencil };

@@ -162,6 +162,9 @@ result<Image> VezBackend::CreateTexture(const char* name,
     }
 
     OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info, initial_contents));
+    OUTCOME_TRY(sampler, GetSampler(texture_desc.sampler));
+    vulkan_image.sampler = sampler;
+
     context_.texture_cache[hash] = vulkan_image;
     return {vulkan_image};
 }
@@ -191,55 +194,15 @@ result<Framebuffer> VezBackend::CreateFramebuffer(uint32_t frame_index,
 
     std::vector<VkImageView> attachments;
     for (auto& image_desc : fb_desc.color_images) {
-        VkFormat format = GetVkFormat(image_desc.format);
-
-        VezImageCreateInfo image_info = {};
-        image_info.extent = {fb_desc.width, fb_desc.height, 1};
-        image_info.imageType = VK_IMAGE_TYPE_2D;
-        image_info.arrayLayers = 1;
-        image_info.mipLevels = 1;
-        image_info.format = format;
-        image_info.samples =
-            static_cast<VkSampleCountFlagBits>(image_desc.samples);
-        image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-        image_info.usage =
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-
-        OUTCOME_TRY(
-            image, CreateFramebufferImage(GetImageHash(image_desc.name.c_str()),
-                                          image_info));
+        OUTCOME_TRY(image, CreateFramebufferImage(image_desc, fb_desc.width,
+                                                  fb_desc.height));
         attachments.push_back(image.image_view);
     }
 
     if (fb_desc.depth_image.depth_type != DepthImageType::None) {
-        VkFormat format;
-        switch (fb_desc.depth_image.depth_type) {
-            case DepthImageType::Depth:
-                format = VK_FORMAT_D32_SFLOAT;
-                break;
-            case DepthImageType::DepthStencil:
-                format = VK_FORMAT_D32_SFLOAT_S8_UINT;
-                break;
-            default:
-                format = VK_FORMAT_D32_SFLOAT_S8_UINT;
-                break;
-        }
-
-        VezImageCreateInfo image_info = {};
-        image_info.extent = {fb_desc.width, fb_desc.height, 1};
-        image_info.imageType = VK_IMAGE_TYPE_2D;
-        image_info.arrayLayers = 1;
-        image_info.mipLevels = 1;
-        image_info.format = format;
-        image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-        image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-        image_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                           VK_IMAGE_USAGE_SAMPLED_BIT;
-
-        OUTCOME_TRY(image, CreateFramebufferImage(
-                               GetImageHash(fb_desc.depth_image.name.c_str()),
-                               image_info));
+        OUTCOME_TRY(image,
+                    CreateFramebufferImage(fb_desc.depth_image, fb_desc.width,
+                                           fb_desc.height));
         attachments.push_back(image.image_view);
     }
 
@@ -344,19 +307,18 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
 }
 
 result<void> VezBackend::BindTextures(const std::vector<Image>& images,
-                                      uint32_t first_binding) {
-    VezSamplerCreateInfo sampler_info = {};
-    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.anisotropyEnable = VK_FALSE;
+                                      uint32_t first_binding,
+                                      const SamplerDesc* sampler_override) {
+    VkSampler sampler_ovr = VK_NULL_HANDLE;
+    if (sampler_override != nullptr) {
+        OUTCOME_TRY(s, GetSampler(*sampler_override));
+        sampler_ovr = s;
+    }
 
-    VkSampler default_sampler =
-        VK_NULL_HANDLE;  // TODO do sampler properly, mipmaps!
-    vezCreateSampler(context_.device, &sampler_info, &default_sampler);
     for (const auto& image : images) {
-        vezCmdBindImageView(image.vez.image_view, default_sampler, 0,
-                            first_binding, 0);
+        vezCmdBindImageView(image.vez.image_view,
+                            sampler_override ? sampler_ovr : image.vez.sampler,
+                            0, first_binding, 0);
     }
     return outcome::success();
 }
@@ -440,8 +402,7 @@ result<void> VezBackend::FinishFrame(std::string present_image_name) {
     VK_CHECK(vezQueueSubmit(graphics_queue, 1, &submit_info, &fence));
 
     // TODO image hash doesn't consider frame index!
-    auto present_image_hash = GetImageHash("color");
-    OUTCOME_TRY(fb_image, GetFramebufferImage(present_image_hash));
+    OUTCOME_TRY(fb_image, GetFramebufferImage("color"));
     VkImage present_image = fb_image.image;
 
     VkPipelineStageFlags wait_dst =
@@ -489,6 +450,10 @@ result<void> VezBackend::TeardownContext() {
     for (auto image : context_.fb_image_cache) {
         vezDestroyImageView(context_.device, image.second.image_view);
         vezDestroyImage(context_.device, image.second.image);
+    }
+
+    for (auto sampler : context_.sampler_cache) {
+        vezDestroySampler(context_.device, sampler.second);
     }
 
     for (auto buffer : context_.buffer_cache) {
@@ -796,26 +761,149 @@ result<VkBuffer> VezBackend::GetBuffer(VezContext::BufferHash hash) {
 }
 
 result<VulkanImage> VezBackend::CreateFramebufferImage(
-    VezContext::ImageHash hash, VezImageCreateInfo image_info) {
+    const FramebufferColorImageDesc& image_desc, uint32_t width,
+    uint32_t height) {
+    auto hash = GetImageHash(image_desc.name.c_str());
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         vezDestroyImageView(context_.device, result->second.image_view);
         vezDestroyImage(context_.device, result->second.image);
     }
 
+    VkFormat format = GetVkFormat(image_desc.format);
+
+    VezImageCreateInfo image_info = {};
+    image_info.extent = {width, height, 1};
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.arrayLayers = 1;
+    image_info.mipLevels = 1;
+    image_info.format = format;
+    image_info.samples = static_cast<VkSampleCountFlagBits>(image_desc.samples);
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
     OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
     context_.fb_image_cache[hash] = vulkan_image;
     return vulkan_image;
 }
 
-result<VulkanImage> VezBackend::GetFramebufferImage(
-    VezContext::ImageHash hash) {
+result<VulkanImage> VezBackend::CreateFramebufferImage(
+    const FramebufferDepthImageDesc& image_desc, uint32_t width,
+    uint32_t height) {
+    auto hash = GetImageHash(image_desc.name.c_str());
+    auto result = context_.fb_image_cache.find(hash);
+    if (result != context_.fb_image_cache.end()) {
+        vezDestroyImageView(context_.device, result->second.image_view);
+        vezDestroyImage(context_.device, result->second.image);
+    }
+
+    VkFormat format;
+    switch (image_desc.depth_type) {
+        case DepthImageType::Depth:
+            format = VK_FORMAT_D32_SFLOAT;
+            break;
+        case DepthImageType::DepthStencil:
+            format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+            break;
+        default:
+            format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+            break;
+    }
+
+    VezImageCreateInfo image_info = {};
+    image_info.extent = {width, height, 1};
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.arrayLayers = 1;
+    image_info.mipLevels = 1;
+    image_info.format = format;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                       VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
+    context_.fb_image_cache[hash] = vulkan_image;
+    return vulkan_image;
+}
+
+result<VulkanImage> VezBackend::GetFramebufferImage(const char* name) {
+    auto hash = GetImageHash(name);
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         return result->second;
     }
 
     return Error::NotFound;
+}
+
+result<VkSampler> VezBackend::GetSampler(const SamplerDesc& sampler_desc) {
+    auto hash = GetSamplerHash(sampler_desc);
+    auto result = context_.sampler_cache.find(hash);
+
+    if (result != context_.sampler_cache.end()) {
+        return result->second;
+    } else {
+        VezSamplerCreateInfo sampler_info = {};
+
+        VkSamplerAddressMode address_mode = {};
+        switch (sampler_desc.addressing_mode) {
+            case AddressingMode::Repeat:
+                address_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                break;
+            case AddressingMode::MirroredRepeat:
+                address_mode = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+                break;
+            case AddressingMode::ClampToEdge:
+                address_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                break;
+            default:
+                address_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                break;
+        }
+
+        VkSamplerMipmapMode mipmap_mode = {};
+        switch (sampler_desc.mipmap_mode) {
+            case FilterType::Linear:
+                mipmap_mode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+                break;
+            case FilterType::Nearest:
+            default:
+                mipmap_mode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+                break;
+        }
+
+        VkFilter filter = {};
+        switch (sampler_desc.filter_type) {
+            case FilterType::Linear:
+                filter = VK_FILTER_LINEAR;
+                break;
+            case FilterType::Nearest:
+            default:
+                filter = VK_FILTER_NEAREST;
+                break;
+        }
+
+        sampler_info.addressModeU = address_mode;
+        sampler_info.addressModeV = address_mode;
+        sampler_info.addressModeW = address_mode;
+        if (sampler_desc.anisotropy > 0) {
+            sampler_info.anisotropyEnable = VK_TRUE;
+            sampler_info.maxAnisotropy = sampler_desc.anisotropy;
+        }
+        sampler_info.minLod = sampler_desc.min_lod;
+        sampler_info.maxLod = sampler_desc.max_lod;
+        sampler_info.mipLodBias = sampler_desc.lod_bias;
+        sampler_info.mipmapMode = mipmap_mode;
+        sampler_info.minFilter = filter;
+        sampler_info.magFilter = filter;
+
+        VkSampler sampler = VK_NULL_HANDLE;
+        vezCreateSampler(context_.device, &sampler_info, &sampler);
+        context_.sampler_cache[hash] = sampler;
+        return sampler;
+    }
 }
 
 result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
@@ -916,6 +1004,34 @@ VezContext::ImageHash VezBackend::GetImageHash(const char* name) {
 VezContext::FramebufferHash VezBackend::GetFramebufferHash(uint32_t frame_index,
                                                            const char* name) {
     return {frame_index, sdbm_hash(name)};
+}
+
+VezContext::SamplerHash VezBackend::GetSamplerHash(
+    const SamplerDesc& sampler_desc) {
+    struct SamplerHashBitField {
+        float min_lod;
+        float max_lod;
+        float lod_bias;
+        float anisotropy;
+        FilterType filter_type : 4;
+        FilterType mipmap_mode : 4;
+        AddressingMode addressing_mode : 4;
+    };
+
+    SamplerHashBitField bit_field = {
+        sampler_desc.min_lod,
+        sampler_desc.max_lod,
+        sampler_desc.lod_bias,
+        sampler_desc.anisotropy,
+        static_cast<int>(sampler_desc.filter_type),
+        static_cast<int>(sampler_desc.mipmap_mode),
+        static_cast<int>(sampler_desc.addressing_mode),
+    };
+
+    std::vector<uint64_t> hash(3);
+    memcpy(hash.data(), &bit_field, sizeof(bit_field));
+
+    return std::move(hash);
 }
 
 }  // namespace goma

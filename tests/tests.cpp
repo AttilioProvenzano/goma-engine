@@ -74,8 +74,8 @@ TEST_F(VezBackendTest, RenderTriangle) {
 
     TextureDesc texture_desc = {512, 512};
     std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {255, 0, 0, 255});
-    auto create_texture_result = vez.CreateTexture("texture", texture_desc, pixels.data());
-
+    auto create_texture_result =
+        vez.CreateTexture("texture", texture_desc, pixels.data());
     ASSERT_TRUE(create_texture_result)
         << create_texture_result.error().message();
 
@@ -122,9 +122,8 @@ void main() {
     vez.BindGraphicsPipeline(create_pipeline_result.value());
     vez.BindTextures({create_texture_result.value()});
     vez.Draw(3);
-    vez.FinishFrame("color");
-
-    system("Pause");
+    vez.FinishFrame();
+    vez.PresentImage("color");
 }
 
 }  // namespace

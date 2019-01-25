@@ -89,7 +89,8 @@ struct FramebufferDepthImageDesc {
 struct FramebufferDesc {
     uint32_t width;
     uint32_t height;
-    std::vector<FramebufferColorImageDesc> color_images = {{}};
+    std::vector<FramebufferColorImageDesc> color_images = {
+        FramebufferColorImageDesc()};
     FramebufferDepthImageDesc depth_image = {};
 };
 

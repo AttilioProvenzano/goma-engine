@@ -17,6 +17,7 @@ if(NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
 endif()
 
 add_compile_definitions(VK_USE_PLATFORM_WIN32_KHR)
+add_compile_definitions(NOMINMAX)
 
 set(PUBLIC_HEADERS
 	include/engine.hpp

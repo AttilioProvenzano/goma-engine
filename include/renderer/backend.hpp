@@ -37,6 +37,10 @@ class Backend {
         const char* name, uint64_t size, bool gpu_stored = true,
         void* initial_contents = nullptr) = 0;
     virtual result<Buffer> GetVertexBuffer(const char* name) = 0;
+    virtual result<Buffer> CreateIndexBuffer(
+        const char* name, uint64_t size, bool gpu_stored = true,
+        void* initial_contents = nullptr) = 0;
+    virtual result<Buffer> GetIndexBuffer(const char* name) = 0;
 
     virtual result<void> SetupFrames(uint32_t frames) = 0;
     virtual result<size_t> StartFrame(uint32_t threads = 1) = 0;

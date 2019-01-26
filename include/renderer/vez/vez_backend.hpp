@@ -43,6 +43,10 @@ class VezBackend : public Backend {
         const char* name, uint64_t size, bool gpu_stored = true,
         void* initial_contents = nullptr) override;
     virtual result<Buffer> GetVertexBuffer(const char* name) override;
+    virtual result<Buffer> CreateIndexBuffer(
+        const char* name, uint64_t size, bool gpu_stored = true,
+        void* initial_contents = nullptr) override;
+    virtual result<Buffer> GetIndexBuffer(const char* name) override;
 
     virtual result<void> SetupFrames(uint32_t frames) override;
     virtual result<size_t> StartFrame(uint32_t threads = 1) override;

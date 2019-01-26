@@ -282,6 +282,29 @@ result<Buffer> VezBackend::GetVertexBuffer(const char* name) {
     return Error::NotFound;
 }
 
+result<Buffer> VezBackend::CreateIndexBuffer(const char* name, uint64_t size,
+                                             bool gpu_stored,
+                                             void* initial_contents) {
+    auto hash = GetBufferHash(name);
+    OUTCOME_TRY(buffer, CreateBuffer(hash, static_cast<VkDeviceSize>(size),
+                                     gpu_stored ? VEZ_MEMORY_GPU_ONLY
+                                                : VEZ_MEMORY_CPU_TO_GPU,
+                                     VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                                         VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                     initial_contents));
+    return {buffer};
+}
+
+result<Buffer> VezBackend::GetIndexBuffer(const char* name) {
+    auto hash = GetBufferHash(name);
+    auto result = context_.buffer_cache.find(hash);
+    if (result != context_.buffer_cache.end()) {
+        return {result->second};
+    }
+
+    return Error::NotFound;
+}
+
 result<void> VezBackend::SetupFrames(uint32_t frames) {
     if (frames > context_.per_frame.size()) {
         context_.per_frame.resize(frames);

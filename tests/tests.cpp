@@ -72,6 +72,28 @@ TEST_F(VezBackendTest, RenderTriangle) {
     auto init_surface_result = vez.InitSurface(&platform);
     ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
 
+    std::vector<glm::vec3> positions = {
+        {0.5f, 0.0f, 0.0f}, {0.0f, -0.5f, 0.0f}, {0.0f, 0.5f, 0.0f}};
+
+    auto create_pos_buffer_result = vez.CreateVertexBuffer(
+        "triangle_pos", positions.size() * sizeof(positions[0]), true,
+        positions.data());
+    ASSERT_TRUE(create_pos_buffer_result)
+        << create_pos_buffer_result.error().message();
+
+    std::vector<glm::vec2> uvs = {{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}};
+
+    auto create_uv_buffer_result = vez.CreateVertexBuffer(
+        "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
+    ASSERT_TRUE(create_uv_buffer_result)
+        << create_uv_buffer_result.error().message();
+
+    auto vertex_input_format_result = vez.GetVertexInputFormat(
+        {{{0, sizeof(glm::vec3)}, {1, sizeof(glm::vec2)}},
+         {{0, 0, Format::SFloatRGB32, 0}, {1, 1, Format::SFloatRG32, 0}}});
+    ASSERT_TRUE(vertex_input_format_result)
+        << vertex_input_format_result.error().message();
+
     TextureDesc texture_desc = {512, 512};
     std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {255, 0, 0, 255});
     auto create_texture_result =
@@ -82,14 +104,14 @@ TEST_F(VezBackendTest, RenderTriangle) {
     static const char* vertex_shader_glsl = R"(
 #version 450
 
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inUVs;
+
 layout(location = 0) out vec2 outUVs;
 
-vec3 positions[3] = {{1.0, 0.0, 0.0}, {0.0, -1.0, 0.0}, {0.0, 1.0, 0.0}};
-vec2 uvs[3] = {{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}};
-
 void main() {
-    gl_Position = vec4(positions[gl_VertexIndex], 1.0);
-    outUVs = uvs[gl_VertexIndex];
+    gl_Position = vec4(inPosition, 1.0);
+    outUVs = inUVs;
 }
 )";
 
@@ -120,10 +142,15 @@ void main() {
     vez.StartFrame();
     vez.StartRenderPass(create_fb_result.value(), {});
     vez.BindGraphicsPipeline(create_pipeline_result.value());
+    vez.BindVertexInputFormat(vertex_input_format_result.value());
+    vez.BindVertexBuffers(
+        {create_pos_buffer_result.value(), create_uv_buffer_result.value()});
     vez.BindTextures({create_texture_result.value()});
     vez.Draw(3);
     vez.FinishFrame();
     vez.PresentImage("color");
+
+    system("pause");
 }
 
 }  // namespace

@@ -30,6 +30,8 @@ class VezBackend : public Backend {
         const char* vs_source, const char* fs_source,
         const char* vs_entry_point = "main",
         const char* fs_entry_point = "main") override;
+    virtual result<VertexInputFormat> GetVertexInputFormat(
+        const VertexInputFormatDesc& desc) override;
 
     virtual result<Image> CreateTexture(
         const char* name, TextureDesc texture_desc,
@@ -37,6 +39,10 @@ class VezBackend : public Backend {
     virtual result<Image> GetTexture(const char* name) override;
     virtual result<Framebuffer> CreateFramebuffer(
         size_t frame_index, const char* name, FramebufferDesc fb_desc) override;
+    virtual result<Buffer> CreateVertexBuffer(
+        const char* name, uint64_t size, bool gpu_stored = true,
+        void* initial_contents = nullptr) override;
+    virtual result<Buffer> GetVertexBuffer(const char* name) override;
 
     virtual result<void> SetupFrames(uint32_t frames) override;
     virtual result<size_t> StartFrame(uint32_t threads = 1) override;
@@ -51,7 +57,9 @@ class VezBackend : public Backend {
     virtual result<void> BindIndexBuffer(Buffer index_buffer, size_t offset = 0,
                                          bool short_indices = false) override;
     virtual result<void> BindGraphicsPipeline(Pipeline pipeline) override;
-    virtual result<void> Draw(uint32_t vertex_count,
+    virtual result<void> BindVertexInputFormat(
+        VertexInputFormat vertex_input_format) override;
+	virtual result<void> Draw(uint32_t vertex_count,
                               uint32_t instance_count = 1,
                               uint32_t first_vertex = 0,
                               uint32_t first_instance = 0) override;
@@ -101,10 +109,13 @@ class VezBackend : public Backend {
     result<void> GetActiveCommandBuffer(uint32_t thread = 0);
     VkFormat GetVkFormat(Format format);
 
+    VezContext::BufferHash GetBufferHash(const char* name);
     VezContext::ShaderHash GetShaderHash(const char* source,
                                          const char* entry_point);
     VezContext::PipelineHash GetGraphicsPipelineHash(VkShaderModule vs,
                                                      VkShaderModule fs);
+    VezContext::VertexInputFormatHash GetVertexInputFormatHash(
+        const VertexInputFormatDesc& desc);
     VezContext::ImageHash GetFramebufferImageHash(size_t frame_index,
                                                   const char* name);
     VezContext::ImageHash GetTextureHash(const char* name);

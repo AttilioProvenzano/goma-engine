@@ -38,11 +38,20 @@ struct Buffer {
     Buffer(VkBuffer vez_) : vez(vez_) {}
 };
 
+struct VertexInputFormat {
+    const VezVertexInputFormat vez = VK_NULL_HANDLE;
+
+    VertexInputFormat(VezVertexInputFormat vez_) : vez(vez_) {}
+};
+
 enum class Format {
     Undefined,
     SwapchainFormat,
-    UnsignedNormRGBA,
-    UnsignedNormBGRA,
+    UNormRGBA8,
+    UNormBGRA8,
+    SFloatRGB32,
+    SFloatRG32,
+    SFloatR32,
 };
 
 enum class FilterType { Nearest, Linear };
@@ -64,7 +73,7 @@ struct SamplerDesc {
 struct TextureDesc {
     uint32_t width;
     uint32_t height;
-    Format format = Format::UnsignedNormRGBA;
+    Format format = Format::UNormRGBA8;
 
     uint32_t mip_levels = 1;
     uint32_t array_layers = 1;
@@ -113,6 +122,24 @@ struct DepthAttachmentDesc {
 struct RenderPassDesc {
     std::vector<ColorAttachmentDesc> color_attachments = {{}};
     DepthAttachmentDesc depth_attachment = {};
+};
+
+struct VertexInputBindingDesc {
+    uint32_t binding;
+    uint32_t stride;
+    bool per_instance = false;
+};
+
+struct VertexInputAttributeDesc {
+    uint32_t location;
+    uint32_t binding;
+    Format format;
+    uint32_t offset;
+};
+
+struct VertexInputFormatDesc {
+    std::vector<VertexInputBindingDesc> bindings;
+    std::vector<VertexInputAttributeDesc> attributes;
 };
 
 }  // namespace goma

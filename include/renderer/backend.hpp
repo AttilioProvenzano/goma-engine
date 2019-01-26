@@ -23,6 +23,8 @@ class Backend {
         const char* vs_source, const char* fs_source,
         const char* vs_entry_point = "main",
         const char* fs_entry_point = "main") = 0;
+    virtual result<VertexInputFormat> GetVertexInputFormat(
+        const VertexInputFormatDesc& desc) = 0;
 
     virtual result<Image> CreateTexture(const char* name,
                                         TextureDesc texture_desc,
@@ -31,6 +33,10 @@ class Backend {
     virtual result<Framebuffer> CreateFramebuffer(size_t frame_index,
                                                   const char* name,
                                                   FramebufferDesc fb_desc) = 0;
+    virtual result<Buffer> CreateVertexBuffer(
+        const char* name, uint64_t size, bool gpu_stored = true,
+        void* initial_contents = nullptr) = 0;
+    virtual result<Buffer> GetVertexBuffer(const char* name) = 0;
 
     virtual result<void> SetupFrames(uint32_t frames) = 0;
     virtual result<size_t> StartFrame(uint32_t threads = 1) = 0;
@@ -44,6 +50,8 @@ class Backend {
         std::vector<size_t> offsets = {}) = 0;
     virtual result<void> BindIndexBuffer(Buffer index_buffer, size_t offset = 0,
                                          bool short_indices = false) = 0;
+    virtual result<void> BindVertexInputFormat(
+        VertexInputFormat vertex_input_format) = 0;
     virtual result<void> BindGraphicsPipeline(Pipeline pipeline) = 0;
     virtual result<void> Draw(uint32_t vertex_count,
                               uint32_t instance_count = 1,

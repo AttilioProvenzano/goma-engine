@@ -132,6 +132,45 @@ result<Pipeline> VezBackend::GetGraphicsPipeline(const char* vs_source,
     }
 }
 
+result<VertexInputFormat> VezBackend::GetVertexInputFormat(
+    const VertexInputFormatDesc& desc) {
+    assert(context_.device && "Context must be initialized");
+    VkDevice device = context_.device;
+
+    auto hash = GetVertexInputFormatHash(desc);
+
+    auto result = context_.vertex_input_format_cache.find(hash);
+    if (result != context_.vertex_input_format_cache.end()) {
+        return {result->second};
+    }
+
+    std::vector<VkVertexInputBindingDescription> bindings;
+    for (const auto& b : desc.bindings) {
+        bindings.push_back({b.binding, b.stride,
+                            b.per_instance ? VK_VERTEX_INPUT_RATE_INSTANCE
+                                           : VK_VERTEX_INPUT_RATE_VERTEX});
+    }
+
+    std::vector<VkVertexInputAttributeDescription> attributes;
+    for (const auto& a : desc.attributes) {
+        attributes.push_back(
+            {a.location, a.binding, GetVkFormat(a.format), a.offset});
+    }
+
+    VezVertexInputFormatCreateInfo input_info = {};
+    input_info.vertexBindingDescriptionCount =
+        static_cast<uint32_t>(bindings.size());
+    input_info.pVertexBindingDescriptions = bindings.data();
+    input_info.vertexAttributeDescriptionCount =
+        static_cast<uint32_t>(attributes.size());
+    input_info.pVertexAttributeDescriptions = attributes.data();
+
+    VezVertexInputFormat input_format;
+    vezCreateVertexInputFormat(device, &input_info, &input_format);
+    context_.vertex_input_format_cache[hash] = input_format;
+    return {input_format};
+};
+
 result<Image> VezBackend::CreateTexture(const char* name,
                                         TextureDesc texture_desc,
                                         void* initial_contents) {
@@ -218,6 +257,29 @@ result<Framebuffer> VezBackend::CreateFramebuffer(size_t frame_index,
     VK_CHECK(vezCreateFramebuffer(device, &fb_info, &framebuffer));
     context_.framebuffer_cache[hash] = framebuffer;
     return {framebuffer};
+}
+
+result<Buffer> VezBackend::CreateVertexBuffer(const char* name, uint64_t size,
+                                              bool gpu_stored,
+                                              void* initial_contents) {
+    auto hash = GetBufferHash(name);
+    OUTCOME_TRY(buffer, CreateBuffer(hash, static_cast<VkDeviceSize>(size),
+                                     gpu_stored ? VEZ_MEMORY_GPU_ONLY
+                                                : VEZ_MEMORY_CPU_TO_GPU,
+                                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                                         VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                     initial_contents));
+    return {buffer};
+}
+
+result<Buffer> VezBackend::GetVertexBuffer(const char* name) {
+    auto hash = GetBufferHash(name);
+    auto result = context_.buffer_cache.find(hash);
+    if (result != context_.buffer_cache.end()) {
+        return {result->second};
+    }
+
+    return Error::NotFound;
 }
 
 result<void> VezBackend::SetupFrames(uint32_t frames) {
@@ -371,7 +433,13 @@ result<void> VezBackend::BindIndexBuffer(Buffer index_buffer, size_t offset,
 result<void> VezBackend::BindGraphicsPipeline(Pipeline pipeline) {
     vezCmdBindPipeline(pipeline.vez);
     return outcome::success();
-};
+}
+
+result<void> VezBackend::BindVertexInputFormat(
+    VertexInputFormat vertex_input_format) {
+    vezCmdSetVertexInputFormat(vertex_input_format.vez);
+    return outcome::success();
+}
 
 result<void> VezBackend::Draw(uint32_t vertex_count, uint32_t instance_count,
                               uint32_t first_vertex, uint32_t first_instance) {
@@ -419,7 +487,6 @@ result<void> VezBackend::FinishFrame() {
 result<void> VezBackend::PresentImage(const char* present_image_name) {
     VkDevice device = context_.device;
 
-    // TODO image hash doesn't consider frame index!
     OUTCOME_TRY(fb_image, GetFramebufferImage(context_.current_frame,
                                               present_image_name));
     VkImage present_image = fb_image.image;
@@ -999,10 +1066,16 @@ result<void> VezBackend::GetActiveCommandBuffer(uint32_t thread) {
 
 VkFormat VezBackend::GetVkFormat(Format format) {
     switch (format) {
-        case Format::UnsignedNormRGBA:
+        case Format::UNormRGBA8:
             return VK_FORMAT_R8G8B8A8_UNORM;
-        case Format::UnsignedNormBGRA:
+        case Format::UNormBGRA8:
             return VK_FORMAT_B8G8R8A8_UNORM;
+        case Format::SFloatRGB32:
+            return VK_FORMAT_R32G32B32_SFLOAT;
+        case Format::SFloatRG32:
+            return VK_FORMAT_R32G32_SFLOAT;
+        case Format::SFloatR32:
+            return VK_FORMAT_R32_SFLOAT;
         case Format::SwapchainFormat:
         case Format::Undefined:
         default:
@@ -1010,6 +1083,10 @@ VkFormat VezBackend::GetVkFormat(Format format) {
             // if the format is undefined
             return context_.swapchain_format.format;
     }
+}
+
+VezContext::BufferHash VezBackend::GetBufferHash(const char* name) {
+    return {sdbm_hash(name)};
 }
 
 VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,
@@ -1020,6 +1097,48 @@ VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,
 VezContext::PipelineHash VezBackend::GetGraphicsPipelineHash(
     VkShaderModule vs, VkShaderModule fs) {
     return {vs, fs};
+}
+
+VezContext::VertexInputFormatHash VezBackend::GetVertexInputFormatHash(
+    const VertexInputFormatDesc& desc) {
+    VezContext::VertexInputFormatHash hash;
+
+    union BindingAttributeBitField {
+		struct {
+            uint32_t b_binding : 8;
+            uint32_t b_stride : 16;
+            bool b_per_instance : 1;
+            uint32_t a_location : 8;
+            uint32_t a_binding : 8;
+            uint32_t a_offset : 16;
+            Format a_format : 7;
+		};
+
+		uint64_t int_repr;
+    };
+
+    size_t max_size = std::max(desc.bindings.size(), desc.attributes.size());
+    for (size_t i = 0; i < max_size; i++) {
+        BindingAttributeBitField bit_field;
+        if (i < desc.bindings.size()) {
+            const auto& binding = desc.bindings[i];
+            bit_field.b_binding = binding.binding;
+            bit_field.b_stride = binding.stride;
+            bit_field.b_per_instance = binding.per_instance;
+        }
+
+        if (i < desc.attributes.size()) {
+            const auto& attribute = desc.attributes[i];
+            bit_field.a_location = attribute.location;
+            bit_field.a_binding = attribute.binding;
+            bit_field.a_offset = attribute.offset;
+            bit_field.a_format = attribute.format;
+        }
+
+        hash.push_back(bit_field.int_repr);
+    }
+
+    return hash;
 }
 
 VezContext::ImageHash VezBackend::GetTextureHash(const char* name) {

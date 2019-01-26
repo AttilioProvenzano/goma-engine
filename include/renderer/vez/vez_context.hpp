@@ -16,10 +16,14 @@ struct VezContext {
     typedef std::map<ShaderHash, VkShaderModule> ShaderCache;
 
     typedef std::vector<VkShaderModule> PipelineHash;
-    typedef std ::map<PipelineHash, VezPipeline> PipelineCache;
+    typedef std::map<PipelineHash, VezPipeline> PipelineCache;
+
+    typedef std::vector<uint64_t> VertexInputFormatHash;
+    typedef std::map<VertexInputFormatHash, VezVertexInputFormat>
+        VertexInputFormatCache;
 
     typedef std::vector<uint64_t> BufferHash;
-    typedef std ::map<BufferHash, VkBuffer> BufferCache;
+    typedef std::map<BufferHash, VkBuffer> BufferCache;
 
     typedef std::vector<uint64_t> ImageHash;
     typedef std::map<ImageHash, VulkanImage> ImageCache;
@@ -48,6 +52,7 @@ struct VezContext {
     ShaderCache vertex_shader_cache;
     ShaderCache fragment_shader_cache;
     PipelineCache pipeline_cache;
+    VertexInputFormatCache vertex_input_format_cache;
     BufferCache buffer_cache;
     ImageCache fb_image_cache;
     ImageCache texture_cache;

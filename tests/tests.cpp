@@ -65,15 +65,17 @@ class VezBackendTest : public ::testing::Test {
     }
 };
 
-TEST_F(VezBackendTest, RenderTriangle) {
+TEST_F(VezBackendTest, RenderQuad) {
     Win32Platform platform;
     platform.InitWindow();
 
     auto init_surface_result = vez.InitSurface(&platform);
     ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
 
-    std::vector<glm::vec3> positions = {
-        {0.5f, 0.0f, 0.0f}, {0.0f, -0.5f, 0.0f}, {0.0f, 0.5f, 0.0f}};
+    std::vector<glm::vec3> positions = {{-0.5f, -0.5f, 0.0f},
+                                        {0.5f, -0.5f, 0.0f},
+                                        {-0.5f, 0.5f, 0.0f},
+                                        {0.5f, 0.5f, 0.0f}};
 
     auto create_pos_buffer_result = vez.CreateVertexBuffer(
         "triangle_pos", positions.size() * sizeof(positions[0]), true,
@@ -81,12 +83,21 @@ TEST_F(VezBackendTest, RenderTriangle) {
     ASSERT_TRUE(create_pos_buffer_result)
         << create_pos_buffer_result.error().message();
 
-    std::vector<glm::vec2> uvs = {{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}};
+    std::vector<glm::vec2> uvs = {
+        {0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
 
     auto create_uv_buffer_result = vez.CreateVertexBuffer(
         "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
     ASSERT_TRUE(create_uv_buffer_result)
         << create_uv_buffer_result.error().message();
+
+    std::vector<uint32_t> indices = {0, 1, 3, 0, 3, 2};
+
+    auto create_index_buffer_result = vez.CreateIndexBuffer(
+        "triangle_indices", indices.size() * sizeof(indices[0]), true,
+        indices.data());
+    ASSERT_TRUE(create_index_buffer_result)
+        << create_index_buffer_result.error().message();
 
     auto vertex_input_format_result = vez.GetVertexInputFormat(
         {{{0, sizeof(glm::vec3)}, {1, sizeof(glm::vec2)}},
@@ -95,7 +106,14 @@ TEST_F(VezBackendTest, RenderTriangle) {
         << vertex_input_format_result.error().message();
 
     TextureDesc texture_desc = {512, 512};
-    std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {255, 0, 0, 255});
+    std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {0, 0, 0, 255});
+    for (uint32_t y = 0; y < 512; y++) {
+        for (uint32_t x = 0; x < 512; x++) {
+            pixels[512 * y + x][0] = x / 2;
+            pixels[512 * y + x][1] = y / 2;
+        }
+    }
+
     auto create_texture_result =
         vez.CreateTexture("texture", texture_desc, pixels.data());
     ASSERT_TRUE(create_texture_result)
@@ -145,8 +163,9 @@ void main() {
     vez.BindVertexInputFormat(vertex_input_format_result.value());
     vez.BindVertexBuffers(
         {create_pos_buffer_result.value(), create_uv_buffer_result.value()});
+    vez.BindIndexBuffer(create_index_buffer_result.value());
     vez.BindTextures({create_texture_result.value()});
-    vez.Draw(3);
+    vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
     vez.FinishFrame();
     vez.PresentImage("color");
 

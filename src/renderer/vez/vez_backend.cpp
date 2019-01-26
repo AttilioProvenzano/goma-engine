@@ -529,6 +529,10 @@ result<void> VezBackend::TeardownContext() {
             per_frame.command_buffers.data());
     }
 
+    for (auto& vertex_input : context_.vertex_input_format_cache) {
+        vezDestroyVertexInputFormat(context_.device, vertex_input.second);
+    }
+
     for (auto framebuffer : context_.framebuffer_cache) {
         vezDestroyFramebuffer(context_.device, framebuffer.second);
     }
@@ -1104,7 +1108,7 @@ VezContext::VertexInputFormatHash VezBackend::GetVertexInputFormatHash(
     VezContext::VertexInputFormatHash hash;
 
     union BindingAttributeBitField {
-		struct {
+        struct {
             uint32_t b_binding : 8;
             uint32_t b_stride : 16;
             bool b_per_instance : 1;
@@ -1112,9 +1116,9 @@ VezContext::VertexInputFormatHash VezBackend::GetVertexInputFormatHash(
             uint32_t a_binding : 8;
             uint32_t a_offset : 16;
             Format a_format : 7;
-		};
+        };
 
-		uint64_t int_repr;
+        uint64_t int_repr;
     };
 
     size_t max_size = std::max(desc.bindings.size(), desc.attributes.size());

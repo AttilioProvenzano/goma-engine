@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 
 #include "scene/scene.hpp"
+#include "scene/assimp_loader.hpp"
 #include "renderer/vez/vez_backend.hpp"
 #include "platform/win32_platform.hpp"
 
@@ -170,6 +171,21 @@ void main() {
     vez.PresentImage("color");
 
     system("pause");
+}
+
+TEST(AssimpLoaderTest, CanLoadAScene) {
+    AssimpLoader loader;
+    auto result = loader.ReadSceneFromFile("");
+    ASSERT_TRUE(result) << result.error().message();
+
+    // Extract the future from the result wrapper
+    auto& scene_future = result.value();
+
+    // Wait for the future to be ready and get the scene pointer
+    auto scene = scene_future.get();
+    auto children = scene->GetChildren(scene->GetRootNode());
+    ASSERT_TRUE(children);
+    ASSERT_EQ(children.value()->size(), 1);
 }
 
 }  // namespace

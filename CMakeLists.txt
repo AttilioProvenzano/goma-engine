@@ -28,6 +28,8 @@ set(PUBLIC_HEADERS
 	include/renderer/vez/vez_backend.hpp
 	include/renderer/vez/vez_context.hpp
 	include/scene/scene.hpp
+	include/scene/scene_loader.hpp
+	include/scene/assimp_loader.hpp
 	include/platform/platform.hpp
 	include/platform/win32_platform.hpp
 )
@@ -36,6 +38,7 @@ set(SOURCES
 	src/renderer/renderer.cpp
 	src/renderer/vez/vez_backend.cpp
 	src/scene/scene.cpp
+	src/scene/assimp_loader.cpp
 	src/platform/win32_platform.cpp
 )
 

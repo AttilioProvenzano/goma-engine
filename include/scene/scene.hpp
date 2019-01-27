@@ -26,9 +26,9 @@ struct GenIndex {
         return (memcmp(this, &other, sizeof(this)) == 0);
     }
 
-	bool operator<(const GenIndex& other) const {
+    bool operator<(const GenIndex& other) const {
         return (memcmp(this, &other, sizeof(this)) < 0);
-	}
+    }
 
     friend std::ostream& operator<<(std::ostream& o, const goma::GenIndex& id);
 };

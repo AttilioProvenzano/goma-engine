@@ -178,11 +178,10 @@ TEST(AssimpLoaderTest, CanLoadAScene) {
     auto result = loader.ReadSceneFromFile("");
     ASSERT_TRUE(result) << result.error().message();
 
-    // Extract the future from the result wrapper
-    auto& scene_future = result.value();
+    // Extract the unique_ptr from the result wrapper
+    auto scene = std::move(result.value());
 
     // Wait for the future to be ready and get the scene pointer
-    auto scene = scene_future.get();
     auto children = scene->GetChildren(scene->GetRootNode());
     ASSERT_TRUE(children);
     ASSERT_EQ(children.value()->size(), 1);

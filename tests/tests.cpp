@@ -20,7 +20,7 @@ TEST(SceneTest, CanCreateNodes) {
     auto node = s.CreateNode(s.GetRootNode()).value();
     ASSERT_EQ(node, NodeIndex(1, 1));
     ASSERT_EQ(s.GetParent(node).value(), s.GetRootNode());
-    ASSERT_EQ(*s.GetChildren(node).value(), std::set<NodeIndex>{});
+    ASSERT_EQ(s.GetChildren(node).value(), std::set<NodeIndex>{});
 
     auto child_node = s.CreateNode(node).value();
     ASSERT_EQ(child_node, NodeIndex(2, 1));
@@ -31,12 +31,12 @@ TEST(SceneTest, CanDeleteNodes) {
     Scene s;
 
     auto node = s.CreateNode(s.GetRootNode()).value();
-    ASSERT_EQ(*s.GetChildren(s.GetRootNode()).value(),
+    ASSERT_EQ(s.GetChildren(s.GetRootNode()).value(),
               std::set<NodeIndex>{node});
 
     s.DeleteNode(node);
 
-    ASSERT_EQ(*s.GetChildren(s.GetRootNode()).value(), std::set<NodeIndex>{});
+    ASSERT_EQ(s.GetChildren(s.GetRootNode()).value(), std::set<NodeIndex>{});
     ASSERT_FALSE(s.GetParent(node));
 }
 
@@ -53,6 +53,25 @@ TEST(SceneTest, CanDeleteAndRecreateNodes) {
     auto new_node = s.CreateNode(s.GetRootNode()).value();
     ASSERT_EQ(new_node, NodeIndex(1, 2)) << "New generation not set properly";
     ASSERT_EQ(s.GetParent(new_node).value(), s.GetRootNode());
+}
+
+TEST(SceneTest, CanCreateATexture) {
+    Scene s;
+    s.texture_manager().CreateAttachment(s.GetRootNode());
+}
+
+TEST(AssimpLoaderTest, CanLoadAScene) {
+    AssimpLoader loader;
+    auto result = loader.ReadSceneFromFile("");
+    ASSERT_TRUE(result) << result.error().message();
+
+    // Extract the unique_ptr from the result wrapper
+    auto scene = std::move(result.value());
+
+    // Wait for the future to be ready and get the scene pointer
+    auto children = scene->GetChildren(scene->GetRootNode());
+    ASSERT_TRUE(children);
+    ASSERT_EQ(children.value().size(), 1);
 }
 
 class VezBackendTest : public ::testing::Test {
@@ -171,20 +190,6 @@ void main() {
     vez.PresentImage("color");
 
     system("pause");
-}
-
-TEST(AssimpLoaderTest, CanLoadAScene) {
-    AssimpLoader loader;
-    auto result = loader.ReadSceneFromFile("");
-    ASSERT_TRUE(result) << result.error().message();
-
-    // Extract the unique_ptr from the result wrapper
-    auto scene = std::move(result.value());
-
-    // Wait for the future to be ready and get the scene pointer
-    auto children = scene->GetChildren(scene->GetRootNode());
-    ASSERT_TRUE(children);
-    ASSERT_EQ(children.value()->size(), 1);
 }
 
 }  // namespace

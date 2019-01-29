@@ -60,11 +60,11 @@ result<NodeIndex> Scene::GetParent(NodeIndex id) {
     return nodes_[id.id].parent;
 }
 
-result<const std::set<NodeIndex>*> Scene::GetChildren(NodeIndex id) {
+result<std::set<NodeIndex>> Scene::GetChildren(NodeIndex id) {
     if (!ValidateNode(id)) {
         return Error::InvalidNode;
     }
-    return &nodes_[id.id].children;
+    return nodes_[id.id].children;
 }
 
 result<Transform*> Scene::GetTransform(NodeIndex id) {
@@ -101,22 +101,9 @@ result<void> Scene::DeleteNode(NodeIndex id) {
     // We set generation to 0 to mark the node as
     // invalid and store the last valid generation into the node's id
     // (which is unused while the node is invalid)
-    nodes_[id.id] = {{nodes_[id.id].id.gen, 0}};
+    nodes_[id.id].id = {nodes_[id.id].id.gen, 0};
 
     return outcome::success();
-}
-
-Attachment* Scene::CreateAttachment(const Node* node) {
-    if (node) {
-        return CreateAttachment(node->id);
-    }
-    return nullptr;
-}
-
-Attachment* Scene::CreateAttachment(const NodeIndex node_id) {
-    size_t id = attachments_.size();
-    attachments_.emplace_back(AttachmentIndex{id}, node_id);
-    return &attachments_.back();
 }
 
 bool Scene::ValidateNode(NodeIndex id) {

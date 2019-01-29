@@ -1,9 +1,11 @@
 #include "scene/scene.hpp"
 
+#include "common/error_codes.hpp"
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/string_cast.hpp>
 
-#include <iostream>
+#include <ostream>
 
 namespace goma {
 

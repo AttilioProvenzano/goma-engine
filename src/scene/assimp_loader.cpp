@@ -1,4 +1,6 @@
-#include "scene/assimp_loader.hpp"
+#include "scene/loaders/assimp_loader.hpp"
+
+#include "common/error_codes.hpp"
 
 #include "assimp/Importer.hpp"
 

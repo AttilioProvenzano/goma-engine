@@ -1,9 +1,13 @@
 #include "gtest/gtest.h"
 
 #include "scene/scene.hpp"
-#include "scene/assimp_loader.hpp"
+#include "scene/loaders/assimp_loader.hpp"
+#include "scene/attachments/texture.hpp"
 #include "renderer/vez/vez_backend.hpp"
 #include "platform/win32_platform.hpp"
+
+#include <chrono>
+#include <thread>
 
 using namespace goma;
 
@@ -57,7 +61,8 @@ TEST(SceneTest, CanDeleteAndRecreateNodes) {
 
 TEST(SceneTest, CanCreateATexture) {
     Scene s;
-    s.texture_manager().CreateAttachment(s.GetRootNode());
+    auto manager = s.GetAttachmentManager<Texture>();
+    manager->CreateAttachment(s.GetRootNode(), {});
 }
 
 TEST(AssimpLoaderTest, CanLoadAScene) {
@@ -189,7 +194,7 @@ void main() {
     vez.FinishFrame();
     vez.PresentImage("color");
 
-    system("pause");
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
 }  // namespace
@@ -197,6 +202,5 @@ void main() {
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     int ret = RUN_ALL_TESTS();
-    system("pause");
     return ret;
 }

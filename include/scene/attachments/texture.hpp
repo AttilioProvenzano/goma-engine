@@ -4,6 +4,7 @@ namespace goma {
 
 struct Texture {
     Texture(){};
+    ~Texture(){};
 };
 
 }  // namespace goma

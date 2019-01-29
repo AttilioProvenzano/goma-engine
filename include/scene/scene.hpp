@@ -81,12 +81,8 @@ struct Attachment {
     NodeIndex node_id;
     T data = {};
 
-    Attachment(AttachmentIndex<T> id_, NodeIndex node_id_, const T& data_ = T())
-        : id(id_), node_id(node_id_), data(data_) {}
-
-    Attachment(AttachmentIndex<T> id_, NodeIndex node_id_,
-               const T&& data_ = T())
-        : id(id_), node_id(node_id_), data(std::move(data_)) {}
+    Attachment(AttachmentIndex<T> id_, NodeIndex node_id_, T&& data_ = T())
+        : id(id_), node_id(node_id_), data(std::forward<T>(data_)) {}
 
     bool operator==(const Attachment<T>& other) const {
         return (this->id == other.id);
@@ -97,7 +93,7 @@ template <typename T>
 class AttachmentManager {
   public:
     result<AttachmentIndex<T>> CreateAttachment(const NodeIndex node_id,
-                                                const T&& data = T()) {
+                                                T&& data = T()) {
         if (!node_id.valid()) {
             return Error::InvalidNode;
         }
@@ -111,12 +107,13 @@ class AttachmentManager {
             // when the attachment was deleted
             size_t new_gen = attachments_[index].id.id + 1;
 
-            attachments_[index] = {{index, new_gen}, node_id, std::move(data)};
+            attachments_[index] = {
+                {index, new_gen}, node_id, std::forward<T>(data)};
             ret_id = {index, new_gen};
         } else {
             size_t id = attachments_.size();
             attachments_.emplace_back(AttachmentIndex<T>{id}, node_id,
-                                      std::move(data));
+                                      std::forward<T>(data));
             ret_id = {id};
         }
         return ret_id;

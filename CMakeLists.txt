@@ -28,6 +28,7 @@ set(PUBLIC_HEADERS
 	include/renderer/vez/vez_backend.hpp
 	include/renderer/vez/vez_context.hpp
 	include/scene/scene.hpp
+	include/scene/attachments.hpp
 	include/scene/scene_loader.hpp
 	include/scene/assimp_loader.hpp
 	include/platform/platform.hpp

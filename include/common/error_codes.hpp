@@ -20,6 +20,7 @@ enum class Error {
     InvalidNode = 11,
     InvalidParentNode = 12,
     RootNodeCannotBeDeleted = 13,
+    SceneImportFailed = 14,
 };
 }
 
@@ -72,6 +73,8 @@ class GomaError_category : public std::error_category {
                 return "parent node is invalid";
             case goma::Error::RootNodeCannotBeDeleted:
                 return "root node cannot be deleted";
+            case goma::Error::SceneImportFailed:
+                return "scene could not be imported";
             default:
                 return "unknown error";
         }

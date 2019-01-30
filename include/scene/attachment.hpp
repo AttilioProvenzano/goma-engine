@@ -35,10 +35,6 @@ class AttachmentManager : public AttachmentManagerBase {
   public:
     result<AttachmentIndex<T>> CreateAttachment(const NodeIndex node_id,
                                                 T&& data = T()) {
-        if (!node_id.valid()) {
-            return Error::InvalidNode;
-        }
-
         AttachmentIndex<T> ret_id;
         if (!recycled_attachments_.empty()) {
             size_t index = recycled_attachments_.front();
@@ -59,6 +55,10 @@ class AttachmentManager : public AttachmentManagerBase {
         }
         return ret_id;
     };
+
+    result<AttachmentIndex<T>> CreateAttachment(T&& data = T()) {
+        return CreateAttachment({0, 0}, std::forward<T>(data));
+    }
 
   private:
     std::vector<Attachment<T>> attachments_;

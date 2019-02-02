@@ -21,7 +21,9 @@ enum class Error {
     InvalidParentNode = 12,
     RootNodeCannotBeDeleted = 13,
     SceneImportFailed = 14,
+    DecompressionFailed = 15,
 };
+
 }
 
 namespace std {
@@ -75,6 +77,8 @@ class GomaError_category : public std::error_category {
                 return "root node cannot be deleted";
             case goma::Error::SceneImportFailed:
                 return "scene could not be imported";
+            case goma::Error::DecompressionFailed:
+                return "decompression failed";
             default:
                 return "unknown error";
         }

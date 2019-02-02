@@ -2,6 +2,8 @@
 
 #include "engine.hpp"
 
+#include "Core/ShaderModule.h"  // from V-EZ
+
 #include <array>
 
 #define VK_CHECK(fn)                                      \
@@ -793,7 +795,17 @@ result<VkShaderModule> VezBackend::GetVertexShaderModule(
         shader_info.pEntryPoint = entry_point;
 
         VkShaderModule shader = VK_NULL_HANDLE;
-        VK_CHECK(vezCreateShaderModule(device, &shader_info, &shader));
+        auto shader_compilation_result =
+            vezCreateShaderModule(device, &shader_info, &shader);
+
+        if (shader_compilation_result == VK_ERROR_INITIALIZATION_FAILED) {
+            // The info log is stored in the V-EZ shader object
+            auto vez_shader = reinterpret_cast<vez::ShaderModule*>(shader);
+            LOGE("Vertex shader compilation failed:\n%s",
+                 vez_shader->GetInfoLog().c_str());
+        }
+        VK_CHECK(shader_compilation_result);
+
         context_.vertex_shader_cache[hash] = shader;
         return shader;
     }
@@ -818,7 +830,17 @@ result<VkShaderModule> VezBackend::GetFragmentShaderModule(
         shader_info.pEntryPoint = entry_point;
 
         VkShaderModule shader = VK_NULL_HANDLE;
-        VK_CHECK(vezCreateShaderModule(device, &shader_info, &shader));
+        auto shader_compilation_result =
+            vezCreateShaderModule(device, &shader_info, &shader);
+
+        if (shader_compilation_result == VK_ERROR_INITIALIZATION_FAILED) {
+            // The info log is stored in the V-EZ shader object
+            auto vez_shader = reinterpret_cast<vez::ShaderModule*>(shader);
+            LOGE("Fragment shader compilation failed:\n%s",
+                 vez_shader->GetInfoLog().c_str());
+        }
+        VK_CHECK(shader_compilation_result);
+
         context_.fragment_shader_cache[hash] = shader;
         return shader;
     }

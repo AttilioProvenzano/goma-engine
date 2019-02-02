@@ -22,6 +22,7 @@ enum class Error {
     RootNodeCannotBeDeleted = 13,
     SceneImportFailed = 14,
     DecompressionFailed = 15,
+    LoadingFailed = 16,
 };
 
 }
@@ -79,6 +80,8 @@ class GomaError_category : public std::error_category {
                 return "scene could not be imported";
             case goma::Error::DecompressionFailed:
                 return "decompression failed";
+            case goma::Error::LoadingFailed:
+                return "loading failed";
             default:
                 return "unknown error";
         }

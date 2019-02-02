@@ -219,7 +219,7 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
                  error.message().c_str());
 
             stbi_image_free(image_data);
-            return Error::NotFound;  // TODO fix
+            return Error::LoadingFailed;
         }
     }
 

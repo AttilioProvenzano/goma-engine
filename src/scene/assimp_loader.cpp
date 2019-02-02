@@ -1,6 +1,5 @@
 #include "scene/loaders/assimp_loader.hpp"
 
-#include "scene/attachments/texture.hpp"
 #include "scene/attachments/material.hpp"
 #include "common/error_codes.hpp"
 
@@ -35,7 +34,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ReadSceneFromFile(
 }
 
 result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
-    const aiScene *ai_scene, std::string base_path) {
+    const aiScene *ai_scene, const std::string &base_path) {
     std::unique_ptr<Scene> scene = std::make_unique<Scene>();
 
     // Convert embedded textures (if any)
@@ -72,12 +71,9 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                     if (texture.has_value()) {
                         scene->texture_map()[path] = texture.value();
                     } else {
-                        LOGW(
-                            "Loading texture \"%s\" failed with error: %s",
-                            path.c_str());  //, TODO compiler errors with
-                                            // texture (also
-                                            // texture.has_value())
-                                            // texture.error().message().c_str());
+                        const auto &error = texture.error();
+                        LOGW("Loading texture \"%s\" failed with error: %s",
+                             path.c_str(), error.message().c_str());
                     }
                 } else {
                     std::vector<uint8_t> data;
@@ -94,10 +90,9 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                     if (texture.has_value()) {
                         scene->texture_map()[path] = texture.value();
                     } else {
-                        LOGW(
-                            "Loading texture \"%s\" failed with error: %s",
-                            path.c_str());  //,
-                                            // texture.error().message().c_str());
+                        const auto &error = texture.error();
+                        LOGW("Loading texture \"%s\" failed with error: %s",
+                             path.c_str(), error.message().c_str());
                     }
                 }
 
@@ -118,8 +113,9 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 if (texture.has_value()) {
                     scene->texture_map()[path] = texture.value();
                 } else {
+                    const auto &error = texture.error();
                     LOGW("Loading texture \"%s\" failed with error: %s",
-                         path.c_str());  //, texture.error().message().c_str());
+                         path.c_str(), error.message().c_str());
                 }
             }
         }
@@ -130,7 +126,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
             aiMaterial *ai_material = ai_scene->mMaterials[i];
             Material material{ai_material->GetName().C_Str()};
 
-            const std::vector<std::pair<aiTextureType, TextureType>>
+            static const std::vector<std::pair<aiTextureType, TextureType>>
                 texture_types{
                     {aiTextureType_DIFFUSE, TextureType::Diffuse},
                     {aiTextureType_SPECULAR, TextureType::Specular},
@@ -145,98 +141,106 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                     {aiTextureType_REFLECTION, TextureType::Reflection},
                     {aiTextureType_UNKNOWN, TextureType::MetallicRoughness}};
 
-            const std::map<aiTextureMapMode, TextureWrappingMode>
-                texture_wrap_modes{
-                    {aiTextureMapMode_Wrap, TextureWrappingMode::Repeat},
-                    {aiTextureMapMode_Clamp, TextureWrappingMode::ClampToEdge},
-                    {aiTextureMapMode_Mirror,
-                     TextureWrappingMode::MirroredRepeat},
-                    {aiTextureMapMode_Decal, TextureWrappingMode::Decal}};
-
             for (const auto &texture_type : texture_types) {
-                for (size_t j = 0;
+                for (uint32_t j = 0;
                      j < ai_material->GetTextureCount(texture_type.first);
                      j++) {
-                    aiString path;
-                    aiTextureMapping mapping;
-                    unsigned int uvindex;
-                    float blend;
-                    aiTextureOp op;
-                    aiTextureMapMode mapmode[3];
-                    ai_material->GetTexture(texture_type.first, j, &path,
-                                            &mapping, &uvindex, &blend, &op,
-                                            mapmode);
+                    auto tex_binding = LoadMaterialTexture(
+                        scene.get(), ai_material, base_path, texture_type, j);
 
-                    if (path.length == 0) {
-                        LOGW("No path specified for texture, skipping.");
-                        continue;
+                    if (tex_binding.has_value()) {
+                        material.textures[texture_type.second].push_back(
+                            std::move(tex_binding.value()));
                     }
-
-                    AttachmentIndex<Texture> texture_index;
-                    auto result = scene->texture_map().find(path.C_Str());
-                    if (result != scene->texture_map().end()) {
-                        texture_index = result->second;
-                    } else {
-                        int width, height, n;
-                        auto full_path = base_path + path.C_Str();
-                        auto image_data = stbi_load(full_path.c_str(), &width,
-                                                    &height, &n, 4);
-
-                        if (!image_data) {
-                            LOGW(
-                                "Decompressing \"%s\" failed with error: "
-                                "%s",
-                                full_path.c_str(), stbi_failure_reason());
-                            continue;
-                        }
-
-                        std::vector<uint8_t> data;
-                        data.resize(4 * width * height);
-                        memcpy(data.data(), image_data, data.size());
-
-                        auto texture =
-                            scene->GetAttachmentManager<Texture>()
-                                ->CreateAttachment(
-                                    {path.C_Str(), static_cast<uint32_t>(width),
-                                     static_cast<uint32_t>(height),
-                                     std::move(data), false});
-
-                        if (texture.has_value()) {
-                            scene->texture_map()[path.C_Str()] =
-                                texture.value();
-                            texture_index = texture.value();
-                            stbi_image_free(image_data);
-                        } else {
-                            LOGW(
-                                "Loading texture \"%s\" failed with error: "
-                                "%s",
-                                path.C_Str());
-                            // texture.error().message().c_str());
-
-                            stbi_image_free(image_data);
-                            continue;
-                        }
-                    }
-
-                    TextureBinding tex_binding = {texture_index, uvindex,
-                                                  blend};
-                    if (mapmode) {
-                        for (size_t k = 0; k < 3; k++) {
-                            auto m = texture_wrap_modes.find(mapmode[k]);
-                            if (m != texture_wrap_modes.end()) {
-                                tex_binding.wrapping[k] = m->second;
-                            }
-                        }
-                    }
-
-                    material.textures[texture_type.second].push_back(
-                        std::move(tex_binding));
                 }
             }
         }
     }
 
     return std::move(scene);
+}
+
+result<TextureBinding> AssimpLoader::LoadMaterialTexture(
+    Scene *scene, const aiMaterial *ai_material, const std::string &base_path,
+    const std::pair<aiTextureType, TextureType> &texture_type,
+    uint32_t texture_index) {
+    assert(scene && "Scene must be valid");
+    assert(ai_material && "Assimp material must be valid");
+    // Get texture information from the material
+    aiString path;
+    aiTextureMapping mapping;
+    unsigned int uvindex;
+    float blend;
+    aiTextureOp op;
+    aiTextureMapMode mapmode[3];
+    ai_material->GetTexture(texture_type.first, texture_index, &path, &mapping,
+                            &uvindex, &blend, &op, mapmode);
+
+    if (path.length == 0) {
+        LOGW("No path specified for texture, skipping.");
+        return Error::NotFound;
+    }
+
+    // Gather the texture (if already loaded) or create one
+    AttachmentIndex<Texture> texture;
+    auto result = scene->texture_map().find(path.C_Str());
+    if (result != scene->texture_map().end()) {
+        texture = result->second;
+    } else {
+        // Create a texture using stb_image
+        int width, height, n;
+        auto full_path = base_path + path.C_Str();
+        auto image_data = stbi_load(full_path.c_str(), &width, &height, &n, 4);
+
+        if (!image_data) {
+            LOGW(
+                "Decompressing \"%s\" failed with error: "
+                "%s",
+                full_path.c_str(), stbi_failure_reason());
+            return Error::DecompressionFailed;
+        }
+
+        std::vector<uint8_t> data;
+        data.resize(4 * width * height);
+        memcpy(data.data(), image_data, data.size());
+
+        auto texture_result =
+            scene->GetAttachmentManager<Texture>()->CreateAttachment(
+                {path.C_Str(), static_cast<uint32_t>(width),
+                 static_cast<uint32_t>(height), std::move(data), false});
+
+        if (texture_result.has_value()) {
+            scene->texture_map()[path.C_Str()] = texture_result.value();
+            texture = texture_result.value();
+            stbi_image_free(image_data);
+        } else {
+            const auto &error = texture_result.error();
+            LOGW("Loading texture \"%s\" failed with error: %s", path.C_Str(),
+                 error.message().c_str());
+
+            stbi_image_free(image_data);
+            return Error::NotFound;  // TODO fix
+        }
+    }
+
+    static const std::map<aiTextureMapMode, TextureWrappingMode>
+        texture_wrap_modes{
+            {aiTextureMapMode_Wrap, TextureWrappingMode::Repeat},
+            {aiTextureMapMode_Clamp, TextureWrappingMode::ClampToEdge},
+            {aiTextureMapMode_Mirror, TextureWrappingMode::MirroredRepeat},
+            {aiTextureMapMode_Decal, TextureWrappingMode::Decal}};
+
+    TextureBinding tex_binding = {texture_index, uvindex, blend};
+    if (mapmode) {
+        for (size_t k = 0; k < 3; k++) {
+            auto m = texture_wrap_modes.find(mapmode[k]);
+            if (m != texture_wrap_modes.end()) {
+                tex_binding.wrapping[k] = m->second;
+            }
+        }
+    }
+
+    return tex_binding;
 }
 
 }  // namespace goma

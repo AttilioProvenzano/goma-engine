@@ -1,6 +1,7 @@
 #pragma once
 
 #include "scene/scene_loader.hpp"
+#include "scene/attachments/material.hpp"
 
 #include "assimp/scene.h"
 
@@ -13,7 +14,12 @@ class AssimpLoader : public SceneLoader {
 
   private:
     result<std::unique_ptr<Scene>> ConvertScene(const aiScene* ai_scene,
-                                                std::string base_path);
+                                                const std::string& base_path);
+
+    result<TextureBinding> LoadMaterialTexture(
+        Scene* scene, const aiMaterial* material, const std::string& base_path,
+        const std::pair<aiTextureType, TextureType>& texture_type,
+        uint32_t texture_index);
 };
 
 }  // namespace goma

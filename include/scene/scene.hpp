@@ -2,6 +2,7 @@
 
 #include "scene/node.hpp"
 #include "scene/attachment.hpp"
+#include "scene/attachments/texture.hpp"
 
 #include <outcome.hpp>
 namespace outcome = OUTCOME_V2_NAMESPACE;
@@ -9,6 +10,7 @@ using outcome::result;
 
 #include <queue>
 #include <typeindex>
+#include <map>
 #include <unordered_map>
 
 template <typename T>
@@ -43,6 +45,8 @@ class Scene {
             attachment_managers_[type_id].get());
     }
 
+    auto& texture_map() { return texture_map_; }
+
   private:
     typedef TypeMap<std::unique_ptr<AttachmentManagerBase>>
         AttachmentManagerMap;
@@ -51,6 +55,7 @@ class Scene {
     std::queue<size_t> recycled_nodes_;
 
     AttachmentManagerMap attachment_managers_;
+    std::map<std::string, AttachmentIndex<Texture>> texture_map_;
 
     bool ValidateNode(NodeIndex id);
 };  // namespace gomaclassScene

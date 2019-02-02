@@ -12,7 +12,8 @@ class AssimpLoader : public SceneLoader {
         const char* file_path) override;
 
   private:
-    result<std::unique_ptr<Scene>> ConvertScene(const aiScene* ai_scene);
+    result<std::unique_ptr<Scene>> ConvertScene(const aiScene* ai_scene,
+                                                std::string base_path);
 };
 
 }  // namespace goma

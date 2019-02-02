@@ -1,5 +1,7 @@
 #pragma once
 
+#include "scene/attachments/material.hpp"
+
 #define VK_NO_PROTOTYPES
 #include "VEZ.h"
 
@@ -56,8 +58,6 @@ enum class Format {
 
 enum class FilterType { Nearest, Linear };
 
-enum class AddressingMode { Repeat, MirroredRepeat, ClampToEdge };
-
 struct SamplerDesc {
     FilterType filter_type = FilterType::Nearest;
     FilterType mipmap_mode = FilterType::Nearest;
@@ -66,7 +66,7 @@ struct SamplerDesc {
     float max_lod = 1.0f;
     float lod_bias = 0.0f;
 
-    AddressingMode addressing_mode = AddressingMode::Repeat;
+    TextureWrappingMode addressing_mode = TextureWrappingMode::Repeat;
     float anisotropy = 0.0f;
 };
 

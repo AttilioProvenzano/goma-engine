@@ -968,13 +968,13 @@ result<VkSampler> VezBackend::GetSampler(const SamplerDesc& sampler_desc) {
 
         VkSamplerAddressMode address_mode = {};
         switch (sampler_desc.addressing_mode) {
-            case AddressingMode::Repeat:
+            case TextureWrappingMode::Repeat:
                 address_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
                 break;
-            case AddressingMode::MirroredRepeat:
+            case TextureWrappingMode::MirroredRepeat:
                 address_mode = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
                 break;
-            case AddressingMode::ClampToEdge:
+            case TextureWrappingMode::ClampToEdge:
                 address_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
                 break;
             default:
@@ -1191,7 +1191,7 @@ VezContext::SamplerHash VezBackend::GetSamplerHash(
         float anisotropy;
         FilterType filter_type : 4;
         FilterType mipmap_mode : 4;
-        AddressingMode addressing_mode : 4;
+        TextureWrappingMode addressing_mode : 4;
     };
 
     SamplerHashBitField bit_field = {

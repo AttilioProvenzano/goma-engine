@@ -9,6 +9,9 @@
 #define VK_CHECK(fn)                                      \
     {                                                     \
         VkResult _r = fn;                                 \
+        if (_r != VK_SUCCESS) {                           \
+            LOGE("Vulkan error when running %s", #fn);    \
+        };                                                \
         switch (_r) {                                     \
             case VK_SUCCESS:                              \
                 break;                                    \

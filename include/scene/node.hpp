@@ -9,8 +9,6 @@
 
 namespace goma {
 
-typedef GenIndex NodeIndex;
-
 struct Transform {
     glm::vec3 position;
     glm::quat rotation;

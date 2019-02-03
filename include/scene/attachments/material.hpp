@@ -1,6 +1,8 @@
 #pragma once
 
-#include "scene/attachment.hpp"
+#include "scene/gen_index.hpp"
+
+#include <glm/glm.hpp>
 
 #include <array>
 #include <unordered_map>

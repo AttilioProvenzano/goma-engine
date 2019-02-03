@@ -1,7 +1,6 @@
 #pragma once
 
 #include "scene/gen_index.hpp"
-#include "scene/node.hpp"
 
 #include <outcome.hpp>
 namespace outcome = OUTCOME_V2_NAMESPACE;
@@ -11,9 +10,6 @@ using outcome::result;
 #include <queue>
 
 namespace goma {
-
-template <typename T>
-using AttachmentIndex = GenIndex;
 
 template <typename T>
 struct Attachment {

@@ -31,6 +31,8 @@ set(PUBLIC_HEADERS
 	include/scene/attachment.hpp
 	include/scene/attachments/texture.hpp
 	include/scene/attachments/material.hpp
+	include/scene/attachments/camera.hpp
+	include/scene/attachments/mesh.hpp
 	include/scene/node.hpp
 	include/scene/gen_index.hpp
 	include/scene/scene_loader.hpp

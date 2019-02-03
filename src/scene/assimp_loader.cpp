@@ -63,10 +63,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                     memcpy(data.data(), ai_texture->pcData, data.size());
 
                     std::string path = ai_texture->mFilename.C_Str();
-                    auto texture =
-                        scene->GetAttachmentManager<Texture>()
-                            ->CreateAttachment({path, ai_texture->mWidth, 1,
-                                                std::move(data), true});
+                    auto texture = scene->CreateAttachment<Texture>(
+                        {path, ai_texture->mWidth, 1, std::move(data), true});
 
                     if (texture.has_value()) {
                         scene->texture_map()[path] = texture.value();
@@ -81,11 +79,10 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                     memcpy(data.data(), image_data, data.size());
 
                     std::string path = ai_texture->mFilename.C_Str();
-                    auto texture = scene->GetAttachmentManager<Texture>()
-                                       ->CreateAttachment(
-                                           {path, static_cast<uint32_t>(width),
-                                            static_cast<uint32_t>(height),
-                                            std::move(data), false});
+                    auto texture = scene->CreateAttachment<Texture>(
+                        {path, static_cast<uint32_t>(width),
+                         static_cast<uint32_t>(height), std::move(data),
+                         false});
 
                     if (texture.has_value()) {
                         scene->texture_map()[path] = texture.value();
@@ -104,10 +101,9 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 memcpy(data.data(), ai_texture->pcData, data.size());
 
                 std::string path = ai_texture->mFilename.C_Str();
-                auto texture =
-                    scene->GetAttachmentManager<Texture>()->CreateAttachment(
-                        {ai_texture->mFilename.C_Str(), ai_texture->mWidth,
-                         ai_texture->mHeight, std::move(data), false});
+                auto texture = scene->CreateAttachment<Texture>(
+                    {ai_texture->mFilename.C_Str(), ai_texture->mWidth,
+                     ai_texture->mHeight, std::move(data), false});
 
                 if (texture.has_value()) {
                     scene->texture_map()[path] = texture.value();
@@ -186,8 +182,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 material.specular_strength = specular_strength;
             }
 
-            scene->GetAttachmentManager<Material>()->CreateAttachment(
-                std::move(material));
+            scene->CreateAttachment(std::move(material));
         }
     }
 
@@ -238,10 +233,9 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
         data.resize(4 * width * height);
         memcpy(data.data(), image_data, data.size());
 
-        auto texture_result =
-            scene->GetAttachmentManager<Texture>()->CreateAttachment(
-                {path.C_Str(), static_cast<uint32_t>(width),
-                 static_cast<uint32_t>(height), std::move(data), false});
+        auto texture_result = scene->CreateAttachment<Texture>(
+            {path.C_Str(), static_cast<uint32_t>(width),
+             static_cast<uint32_t>(height), std::move(data), false});
 
         if (texture_result.has_value()) {
             scene->texture_map()[path.C_Str()] = texture_result.value();

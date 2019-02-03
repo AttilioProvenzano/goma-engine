@@ -92,8 +92,8 @@ class AttachmentManager : public AttachmentManagerBase {
             return Error::NotFound;
         }
 
-        OUTCOME_TRY(data, Get(result.second));
-        return {result.second, data};
+        OUTCOME_TRY(data, Get(result->second));
+        return std::make_pair(result->second, data);
     }
 
     size_t count() { return valid_count_; }

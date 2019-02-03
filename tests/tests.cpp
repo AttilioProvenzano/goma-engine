@@ -1,8 +1,13 @@
 #include "gtest/gtest.h"
 
 #include "scene/scene.hpp"
-#include "scene/loaders/assimp_loader.hpp"
 #include "scene/attachments/texture.hpp"
+#include "scene/attachments/material.hpp"
+#include "scene/attachments/camera.hpp"
+#include "scene/attachments/light.hpp"
+#include "scene/attachments/mesh.hpp"
+#include "scene/loaders/assimp_loader.hpp"
+
 #include "renderer/vez/vez_backend.hpp"
 #include "platform/win32_platform.hpp"
 
@@ -65,7 +70,7 @@ TEST(SceneTest, CanCreateATexture) {
     ASSERT_TRUE(texture);
 }
 
-TEST(AssimpLoaderTest, CanLoadAScene) {
+TEST(AssimpLoaderTest, CanLoadAModel) {
     AssimpLoader loader;
     auto result =
         loader.ReadSceneFromFile("../tests/models/Duck/glTF/Duck.gltf");
@@ -74,9 +79,15 @@ TEST(AssimpLoaderTest, CanLoadAScene) {
     // Extract the unique_ptr from the result wrapper
     auto scene = std::move(result.value());
 
+    EXPECT_EQ(scene->GetAttachmentCount<Texture>(), 1);
+    EXPECT_EQ(scene->GetAttachmentCount<Material>(), 2);
+    EXPECT_EQ(scene->GetAttachmentCount<Camera>(), 1);
+    EXPECT_EQ(scene->GetAttachmentCount<Light>(), 0);
+    EXPECT_EQ(scene->GetAttachmentCount<Mesh>(), 1);
+
     auto children = scene->GetChildren(scene->GetRootNode());
     ASSERT_TRUE(children);
-    ASSERT_EQ(children.value().size(), 1);
+    ASSERT_EQ(children.value().size(), 2);
 }
 
 class VezBackendTest : public ::testing::Test {

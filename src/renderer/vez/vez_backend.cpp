@@ -524,7 +524,6 @@ result<void> VezBackend::PresentImage(const char* present_image_name) {
 
     VkPipelineStageFlags wait_dst =
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkResult res;
 
     VkQueue graphics_queue = VK_NULL_HANDLE;
     vezGetDeviceGraphicsQueue(device, 0, &graphics_queue);
@@ -538,10 +537,8 @@ result<void> VezBackend::PresentImage(const char* present_image_name) {
     present_info.swapchainCount = 1;
     present_info.pSwapchains = &context_.swapchain;
     present_info.pImages = &present_image;
-    present_info.pResults = &res;
 
-    vezQueuePresent(graphics_queue, &present_info);
-    VK_CHECK(res);
+    VK_CHECK(vezQueuePresent(graphics_queue, &present_info));
 
     context_.current_frame =
         (context_.current_frame + 1) % context_.per_frame.size();

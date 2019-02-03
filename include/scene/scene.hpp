@@ -66,8 +66,6 @@ class Scene {
         return GetAttachmentManager<T>()->count();
     }
 
-    auto& texture_map() { return texture_map_; }
-
   private:
     typedef TypeMap<std::unique_ptr<AttachmentManagerBase>>
         AttachmentManagerMap;
@@ -76,7 +74,6 @@ class Scene {
     std::queue<size_t> recycled_nodes_;
 
     AttachmentManagerMap attachment_managers_;
-    std::map<std::string, AttachmentIndex<Texture>> texture_map_;
 
     template <typename T>
     AttachmentManager<T>* GetAttachmentManager() {

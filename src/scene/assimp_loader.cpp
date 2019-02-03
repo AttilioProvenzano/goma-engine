@@ -305,9 +305,9 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
 
     // Gather the texture (if already loaded) or create one
     AttachmentIndex<Texture> texture;
-    auto result = scene->texture_map().find(path.C_Str());
-    if (result != scene->texture_map().end()) {
-        texture = result->second;
+    auto result = scene->FindAttachment<Texture>(path.C_Str());
+    if (result.has_value()) {
+        texture = result.value().first;
     } else {
         // Create a texture using stb_image
         int width, height, n;
@@ -331,8 +331,8 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
              static_cast<uint32_t>(height), std::move(data), false});
 
         if (texture_result.has_value()) {
-            scene->texture_map()[path.C_Str()] = texture_result.value();
             texture = texture_result.value();
+            scene->RegisterAttachment<Texture>(texture, path.C_Str());
             stbi_image_free(image_data);
         } else {
             const auto &error = texture_result.error();

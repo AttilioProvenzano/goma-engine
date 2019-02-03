@@ -51,6 +51,17 @@ typedef std::unordered_map<TextureType, std::vector<TextureBinding>>
 struct Material {
     std::string name;
     MaterialTextureMap textures;
+
+    glm::vec3 diffuse_color = glm::vec3(0.0f);
+    glm::vec3 specular_color = glm::vec3(0.0f);
+    glm::vec3 ambient_color = glm::vec3(0.0f);
+    glm::vec3 emissive_color = glm::vec3(0.0f);
+    glm::vec3 transparent_color = glm::vec3(0.0f);
+
+    bool two_sided = false;
+    float opacity = 1.0f;
+    float shininess_exponent = 0.0f;
+    float specular_strength = 1.0f;
 };
 
 }  // namespace goma

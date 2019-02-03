@@ -106,7 +106,6 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 std::string path = ai_texture->mFilename.C_Str();
                 auto texture =
                     scene->GetAttachmentManager<Texture>()->CreateAttachment(
-                        {0, 0},
                         {ai_texture->mFilename.C_Str(), ai_texture->mWidth,
                          ai_texture->mHeight, std::move(data), false});
 
@@ -121,6 +120,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
         }
     }
 
+    // Convert materials
     if (ai_scene->HasMaterials()) {
         for (size_t i = 0; i < ai_scene->mNumMaterials; i++) {
             aiMaterial *ai_material = ai_scene->mMaterials[i];
@@ -153,7 +153,41 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                             std::move(tex_binding.value()));
                     }
                 }
+
+                aiColor3D diffuse(0, 0, 0);
+                aiColor3D specular(0, 0, 0);
+                aiColor3D ambient(0, 0, 0);
+                aiColor3D emissive(0, 0, 0);
+                aiColor3D transparent(0, 0, 0);
+                ai_material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
+                ai_material->Get(AI_MATKEY_COLOR_SPECULAR, specular);
+                ai_material->Get(AI_MATKEY_COLOR_AMBIENT, ambient);
+                ai_material->Get(AI_MATKEY_COLOR_EMISSIVE, emissive);
+                ai_material->Get(AI_MATKEY_COLOR_TRANSPARENT, transparent);
+                material.diffuse_color = {diffuse.r, diffuse.g, diffuse.b};
+                material.specular_color = {specular.r, specular.g, specular.b};
+                material.ambient_color = {ambient.r, ambient.g, ambient.b};
+                material.emissive_color = {emissive.r, emissive.g, emissive.b};
+                material.transparent_color = {transparent.r, transparent.g,
+                                              transparent.b};
+
+                int two_sided = 0;
+                float opacity = 1.0f;
+                float shininess_exponent = 0.0f;
+                float specular_strength = 1.0f;
+                ai_material->Get(AI_MATKEY_TWOSIDED, two_sided);
+                ai_material->Get(AI_MATKEY_OPACITY, opacity);
+                ai_material->Get(AI_MATKEY_SHININESS, shininess_exponent);
+                ai_material->Get(AI_MATKEY_SHININESS_STRENGTH,
+                                 specular_strength);
+                material.two_sided = (two_sided > 0);
+                material.opacity = opacity;
+                material.shininess_exponent = shininess_exponent;
+                material.specular_strength = specular_strength;
             }
+
+            scene->GetAttachmentManager<Material>()->CreateAttachment(
+                std::move(material));
         }
     }
 

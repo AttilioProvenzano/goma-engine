@@ -29,11 +29,16 @@ struct Attachment {
     }
 };
 
-class AttachmentManagerBase {};
+class AttachmentManagerBase {
+  public:
+    virtual ~AttachmentManagerBase() = default;
+};
 
 template <typename T>
 class AttachmentManager : public AttachmentManagerBase {
   public:
+    virtual ~AttachmentManager() = default;
+
     result<AttachmentIndex<T>> CreateAttachment(const NodeIndex& node_id,
                                                 T&& data = T()) {
         AttachmentIndex<T> ret_id;

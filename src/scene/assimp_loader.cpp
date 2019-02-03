@@ -39,6 +39,70 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
     const aiScene *ai_scene, const std::string &base_path) {
     std::unique_ptr<Scene> scene = std::make_unique<Scene>();
 
+    std::map<std::string, NodeIndex> node_name_map;
+
+    // Convert node structure
+    if (ai_scene->mRootNode) {
+        std::map<aiNode *, NodeIndex> node_map;
+
+        aiNode *ai_root_node = ai_scene->mRootNode;
+        aiVector3D pos, rot, scale;
+
+        ai_root_node->mTransformation.Decompose(scale, rot, pos);
+        auto root_transform = scene->GetTransform(scene->GetRootNode()).value();
+        root_transform->position = {pos.x, pos.y, pos.z};
+        root_transform->rotation = glm::quat(glm::vec3(rot.x, rot.y, rot.z));
+        root_transform->scale = {scale.x, scale.y, scale.z};
+
+        node_map[ai_root_node] = scene->GetRootNode();
+        node_name_map[ai_root_node->mName.C_Str()] = scene->GetRootNode();
+
+        // Traverse the node graph
+        std::queue<aiNode *> open_nodes;
+        std::set<aiNode *> closed_nodes;
+
+        for (unsigned int i = 0; i < ai_root_node->mNumChildren; i++) {
+            open_nodes.push(ai_root_node->mChildren[i]);
+        }
+
+        while (open_nodes.size() > 0) {
+            aiNode *ai_node = open_nodes.front();
+            open_nodes.pop();
+            closed_nodes.insert(ai_node);
+
+            NodeIndex parent = scene->GetRootNode();
+            auto result = node_map.find(ai_node->mParent);
+            if (result != node_map.end()) {
+                parent = result->second;
+            }
+
+            ai_node->mTransformation.Decompose(scale, rot, pos);
+            auto node_result = scene->CreateNode(
+                parent, {{pos.x, pos.y, pos.z},
+                         glm::quat(glm::vec3(rot.x, rot.y, rot.z)),
+                         {scale.x, scale.y, scale.z}});
+
+            if (node_result.has_value()) {
+                auto node = node_result.value();
+                node_map[ai_node] = node;
+                node_name_map[ai_node->mName.C_Str()] = node;
+            } else {
+                const auto &error = node_result.error();
+                LOGE("Node conversion failed for node \"%s\". Error: %s",
+                     ai_node->mName.C_Str(), error.message().c_str());
+            }
+
+            // Add children to open_nodes
+            for (unsigned int i = 0; i < ai_node->mNumChildren; i++) {
+                auto child = ai_node->mChildren[i];
+                // Guard against loops in the graph
+                if (closed_nodes.find(child) == closed_nodes.end()) {
+                    open_nodes.push(child);
+                }
+            }
+        }
+    }
+
     // Convert embedded textures (if any)
     if (ai_scene->HasTextures()) {
         for (unsigned int i = 0; i < ai_scene->mNumTextures; i++) {

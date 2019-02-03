@@ -197,11 +197,13 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
     assert(ai_material && "Assimp material must be valid");
     // Get texture information from the material
     aiString path;
-    aiTextureMapping mapping;
-    unsigned int uvindex;
-    float blend;
-    aiTextureOp op;
-    aiTextureMapMode mapmode[3];
+    aiTextureMapping mapping = aiTextureMapping_UV;
+    unsigned int uvindex = 0;
+    float blend = 1.0f;
+    aiTextureOp op = aiTextureOp_Add;
+    aiTextureMapMode mapmode[3] = {aiTextureMapMode_Wrap, aiTextureMapMode_Wrap,
+                                   aiTextureMapMode_Wrap};
+
     ai_material->GetTexture(texture_type.first, texture_index, &path, &mapping,
                             &uvindex, &blend, &op, mapmode);
 

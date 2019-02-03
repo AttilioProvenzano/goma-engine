@@ -1,6 +1,8 @@
 #include "scene/loaders/assimp_loader.hpp"
 
+#include "scene/attachments/texture.hpp"
 #include "scene/attachments/material.hpp"
+#include "scene/attachments/camera.hpp"
 #include "common/error_codes.hpp"
 
 #include "assimp/Importer.hpp"
@@ -183,6 +185,24 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
             }
 
             scene->CreateAttachment(std::move(material));
+        }
+    }
+
+    // Convert cameras
+    if (ai_scene->HasCameras()) {
+        for (size_t i = 0; i < ai_scene->mNumCameras; i++) {
+            aiCamera *ai_camera = ai_scene->mCameras[i];
+            scene->CreateAttachment<Camera>(
+                {ai_camera->mName.C_Str(),
+                 glm::degrees(ai_camera->mHorizontalFOV),
+                 ai_camera->mClipPlaneNear,
+                 ai_camera->mClipPlaneFar,
+                 ai_camera->mAspect,
+                 {ai_camera->mPosition.x, ai_camera->mPosition.y,
+                  ai_camera->mPosition.z},
+                 {ai_camera->mUp.x, ai_camera->mUp.y, ai_camera->mUp.z},
+                 {ai_camera->mLookAt.x, ai_camera->mLookAt.y,
+                  ai_camera->mLookAt.z}});
         }
     }
 

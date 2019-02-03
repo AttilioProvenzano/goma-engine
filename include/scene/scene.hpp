@@ -32,17 +32,15 @@ class Scene {
     result<Transform*> GetTransform(NodeIndex id);
 
     template <typename T>
-    AttachmentManager<T>* GetAttachmentManager() {
-        auto type_id = std::type_index(typeid(T));
-        auto result = attachment_managers_.find(type_id);
-        if (result != attachment_managers_.end()) {
-            return static_cast<AttachmentManager<T>*>(result->second.get());
-        }
+    result<AttachmentIndex<T>> CreateAttachment(const NodeIndex& node_id,
+                                                T&& data = T()) {
+        return GetAttachmentManager<T>()->CreateAttachment(node_id,
+                                                           std::forward<T>(data));
+    }
 
-        attachment_managers_[type_id] =
-            std::make_unique<AttachmentManager<T>>();
-        return static_cast<AttachmentManager<T>*>(
-            attachment_managers_[type_id].get());
+    template <typename T>
+    result<AttachmentIndex<T>> CreateAttachment(T&& data = T()) {
+        return GetAttachmentManager<T>()->CreateAttachment(std::forward<T>(data));
     }
 
     auto& texture_map() { return texture_map_; }
@@ -57,7 +55,21 @@ class Scene {
     AttachmentManagerMap attachment_managers_;
     std::map<std::string, AttachmentIndex<Texture>> texture_map_;
 
+    template <typename T>
+    AttachmentManager<T>* GetAttachmentManager() {
+        auto type_id = std::type_index(typeid(T));
+        auto result = attachment_managers_.find(type_id);
+        if (result != attachment_managers_.end()) {
+            return static_cast<AttachmentManager<T>*>(result->second.get());
+        }
+
+        attachment_managers_[type_id] =
+            std::make_unique<AttachmentManager<T>>();
+        return static_cast<AttachmentManager<T>*>(
+            attachment_managers_[type_id].get());
+    }
+
     bool ValidateNode(NodeIndex id);
-};  // namespace gomaclassScene
+};
 
 }  // namespace goma

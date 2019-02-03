@@ -34,7 +34,7 @@ class AttachmentManagerBase {};
 template <typename T>
 class AttachmentManager : public AttachmentManagerBase {
   public:
-    result<AttachmentIndex<T>> CreateAttachment(const NodeIndex node_id,
+    result<AttachmentIndex<T>> CreateAttachment(const NodeIndex& node_id,
                                                 T&& data = T()) {
         AttachmentIndex<T> ret_id;
         if (!recycled_attachments_.empty()) {
@@ -55,7 +55,7 @@ class AttachmentManager : public AttachmentManagerBase {
             ret_id = {id};
         }
         return ret_id;
-    };
+    }
 
     result<AttachmentIndex<T>> CreateAttachment(T&& data = T()) {
         return CreateAttachment({0, 0}, std::forward<T>(data));

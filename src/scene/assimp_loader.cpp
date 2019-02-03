@@ -3,6 +3,8 @@
 #include "scene/attachments/texture.hpp"
 #include "scene/attachments/material.hpp"
 #include "scene/attachments/camera.hpp"
+#include "scene/attachments/light.hpp"
+#include "scene/attachments/mesh.hpp"
 #include "common/error_codes.hpp"
 
 #include "assimp/Importer.hpp"
@@ -291,7 +293,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 auto c = camera_result.value();
                 scene->RegisterAttachment<Camera>(c, ai_camera->mName.C_Str());
             } else {
-                LOGW("Camera creation failed for material \"%s\".",
+                LOGW("Camera creation failed for camera \"%s\".",
                      ai_camera->mName.C_Str());
             }
         }
@@ -301,6 +303,51 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
     if (ai_scene->HasLights()) {
         for (size_t i = 0; i < ai_scene->mNumLights; i++) {
             aiLight *ai_light = ai_scene->mLights[i];
+
+            NodeIndex node = scene->GetRootNode();
+            auto result = node_name_map.find(ai_light->mName.C_Str());
+            if (result != node_name_map.end()) {
+                node = result->second;
+            }
+
+            static const std::map<aiLightSourceType, LightType> light_type_map =
+                {
+                    {aiLightSource_UNDEFINED, LightType::Directional},
+                    {aiLightSource_DIRECTIONAL, LightType::Directional},
+                    {aiLightSource_POINT, LightType::Point},
+                    {aiLightSource_SPOT, LightType::Spot},
+                    {aiLightSource_AMBIENT, LightType::Ambient},
+                    {aiLightSource_AREA, LightType::Area},
+                };
+
+            auto light_result = scene->CreateAttachment<Light>(
+                node,
+                {ai_light->mName.C_Str(),
+                 light_type_map.at(ai_light->mType),
+                 {ai_light->mPosition.x, ai_light->mPosition.y,
+                  ai_light->mPosition.z},
+                 {ai_light->mDirection.x, ai_light->mDirection.y,
+                  ai_light->mDirection.z},
+                 {ai_light->mUp.x, ai_light->mUp.y, ai_light->mUp.z},
+                 {ai_light->mColorDiffuse.r, ai_light->mColorDiffuse.g,
+                  ai_light->mColorDiffuse.b},
+                 {ai_light->mColorSpecular.r, ai_light->mColorSpecular.g,
+                  ai_light->mColorSpecular.b},
+                 {ai_light->mColorAmbient.r, ai_light->mColorAmbient.g,
+                  ai_light->mColorAmbient.b},
+                 {ai_light->mAttenuationConstant, ai_light->mAttenuationLinear,
+                  ai_light->mAttenuationQuadratic},
+                 glm::degrees(ai_light->mAngleInnerCone),
+                 glm::degrees(ai_light->mAngleOuterCone),
+                 {ai_light->mSize.x, ai_light->mSize.y}});
+
+            if (light_result.has_value()) {
+                auto l = light_result.value();
+                scene->RegisterAttachment<Light>(l, ai_light->mName.C_Str());
+            } else {
+                LOGW("Light creation failed for light \"%s\".",
+                     ai_light->mName.C_Str());
+            }
         }
     }
 

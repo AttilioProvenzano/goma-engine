@@ -105,7 +105,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
 
     // Convert embedded textures (if any)
     if (ai_scene->HasTextures()) {
-        for (unsigned int i = 0; i < ai_scene->mNumTextures; i++) {
+        for (size_t i = 0; i < ai_scene->mNumTextures; i++) {
             aiTexture *ai_texture = ai_scene->mTextures[i];
 
             if (ai_texture->mFilename.length == 0) {
@@ -133,7 +133,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                         {path, ai_texture->mWidth, 1, std::move(data), true});
 
                     if (texture.has_value()) {
-                        scene->texture_map()[path] = texture.value();
+                        auto t = texture.value();
+                        scene->RegisterAttachment<Texture>(t, path);
                     } else {
                         const auto &error = texture.error();
                         LOGW("Loading texture \"%s\" failed with error: %s",
@@ -151,7 +152,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                          false});
 
                     if (texture.has_value()) {
-                        scene->texture_map()[path] = texture.value();
+                        auto t = texture.value();
+                        scene->RegisterAttachment<Texture>(t, path);
                     } else {
                         const auto &error = texture.error();
                         LOGW("Loading texture \"%s\" failed with error: %s",
@@ -172,7 +174,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                      ai_texture->mHeight, std::move(data), false});
 
                 if (texture.has_value()) {
-                    scene->texture_map()[path] = texture.value();
+                    auto t = texture.value();
+                    scene->RegisterAttachment<Texture>(t, path);
                 } else {
                     const auto &error = texture.error();
                     LOGW("Loading texture \"%s\" failed with error: %s",
@@ -248,7 +251,16 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 material.specular_strength = specular_strength;
             }
 
-            scene->CreateAttachment(std::move(material));
+            auto material_result = scene->CreateAttachment(std::move(material));
+
+            if (material_result.has_value()) {
+                auto m = material_result.value();
+                scene->RegisterAttachment<Material>(
+                    m, ai_material->GetName().C_Str());
+            } else {
+                LOGW("Material creation failed for material \"%s\".",
+                     ai_material->GetName().C_Str());
+            }
         }
     }
 
@@ -263,7 +275,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 node = result->second;
             }
 
-            scene->CreateAttachment<Camera>(
+            auto camera_result = scene->CreateAttachment<Camera>(
                 node, {ai_camera->mName.C_Str(),
                        glm::degrees(ai_camera->mHorizontalFOV),
                        ai_camera->mClipPlaneNear,
@@ -274,6 +286,21 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                        {ai_camera->mUp.x, ai_camera->mUp.y, ai_camera->mUp.z},
                        {ai_camera->mLookAt.x, ai_camera->mLookAt.y,
                         ai_camera->mLookAt.z}});
+
+            if (camera_result.has_value()) {
+                auto c = camera_result.value();
+                scene->RegisterAttachment<Camera>(c, ai_camera->mName.C_Str());
+            } else {
+                LOGW("Camera creation failed for material \"%s\".",
+                     ai_camera->mName.C_Str());
+            }
+        }
+    }
+
+    // Convert lights
+    if (ai_scene->HasLights()) {
+        for (size_t i = 0; i < ai_scene->mNumLights; i++) {
+            aiLight *ai_light = ai_scene->mLights[i];
         }
     }
 

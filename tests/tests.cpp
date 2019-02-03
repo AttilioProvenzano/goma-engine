@@ -61,19 +61,19 @@ TEST(SceneTest, CanDeleteAndRecreateNodes) {
 
 TEST(SceneTest, CanCreateATexture) {
     Scene s;
-    auto manager = s.GetAttachmentManager<Texture>();
-    manager->CreateAttachment(s.GetRootNode(), {});
+    auto texture = s.CreateAttachment<Texture>(s.GetRootNode(), {});
+    ASSERT_TRUE(texture);
 }
 
 TEST(AssimpLoaderTest, CanLoadAScene) {
     AssimpLoader loader;
-    auto result = loader.ReadSceneFromFile("");
+    auto result =
+        loader.ReadSceneFromFile("../tests/models/Duck/glTF/Duck.gltf");
     ASSERT_TRUE(result) << result.error().message();
 
     // Extract the unique_ptr from the result wrapper
     auto scene = std::move(result.value());
 
-    // Wait for the future to be ready and get the scene pointer
     auto children = scene->GetChildren(scene->GetRootNode());
     ASSERT_TRUE(children);
     ASSERT_EQ(children.value().size(), 1);

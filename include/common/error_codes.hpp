@@ -23,6 +23,8 @@ enum class Error {
     SceneImportFailed = 14,
     DecompressionFailed = 15,
     LoadingFailed = 16,
+    KeyAlreadyExists = 17,
+    InvalidAttachment = 18,
 };
 
 }
@@ -82,6 +84,10 @@ class GomaError_category : public std::error_category {
                 return "decompression failed";
             case goma::Error::LoadingFailed:
                 return "loading failed";
+            case goma::Error::KeyAlreadyExists:
+                return "the key already exists";
+            case goma::Error::InvalidAttachment:
+                return "invalid attachment";
             default:
                 return "unknown error";
         }

@@ -8,6 +8,8 @@ using outcome::result;
 
 #include <vector>
 #include <queue>
+#include <map>
+#include <string>
 
 namespace goma {
 
@@ -36,8 +38,8 @@ class AttachmentManager : public AttachmentManagerBase {
     AttachmentManager() : valid_count_(0) {}
     virtual ~AttachmentManager() = default;
 
-    result<AttachmentIndex<T>> CreateAttachment(const NodeIndex& node_id,
-                                                T&& data = T()) {
+    result<AttachmentIndex<T>> Create(const NodeIndex& node_id,
+                                      T&& data = T()) {
         AttachmentIndex<T> ret_id;
         if (!recycled_attachments_.empty()) {
             size_t index = recycled_attachments_.front();
@@ -60,17 +62,53 @@ class AttachmentManager : public AttachmentManagerBase {
         return ret_id;
     }
 
-    result<AttachmentIndex<T>> CreateAttachment(T&& data = T()) {
-        return CreateAttachment({0, 0}, std::forward<T>(data));
+    result<AttachmentIndex<T>> Create(T&& data = T()) {
+        return Create({0, 0}, std::forward<T>(data));
     }
 
-    size_t GetCount() { return valid_count_; }
+    result<void> Register(AttachmentIndex<T> attachment,
+                          const std::string& name, bool overwrite = true) {
+        if (!overwrite) {
+            auto result = attachment_map_.find(name);
+            if (result != attachment_map_.end()) {
+                return Error::KeyAlreadyExists;
+            }
+        }
+
+        attachment_map_[name] = attachment;
+        return outcome::success();
+    }
+
+    result<T*> Get(AttachmentIndex<T> id) {
+        if (!Validate(id)) {
+            return Error::InvalidAttachment;
+        }
+        return &attachments_[id.id].data;
+    }
+
+    result<std::pair<AttachmentIndex<T>, T*>> Find(const std::string& name) {
+        auto result = attachment_map_.find(name);
+        if (result == attachment_map_.end()) {
+            return Error::NotFound;
+        }
+
+        OUTCOME_TRY(data, Get(result.second));
+        return {result.second, data};
+    }
+
+    size_t count() { return valid_count_; }
 
   private:
     std::vector<Attachment<T>> attachments_;
+    std::map<std::string, AttachmentIndex<T>> attachment_map_;
     std::queue<size_t> recycled_attachments_;
 
     size_t valid_count_;
+
+    bool Validate(AttachmentIndex<T> id) {
+        return id.gen != 0 && id.id < attachments_.size() &&
+               attachments_[id.id].id.gen == id.gen;
+    }
 };
 
 }  // namespace goma

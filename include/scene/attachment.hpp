@@ -37,6 +37,7 @@ class AttachmentManagerBase {
 template <typename T>
 class AttachmentManager : public AttachmentManagerBase {
   public:
+    AttachmentManager() : valid_count_(0) {}
     virtual ~AttachmentManager() = default;
 
     result<AttachmentIndex<T>> CreateAttachment(const NodeIndex& node_id,
@@ -59,6 +60,7 @@ class AttachmentManager : public AttachmentManagerBase {
                                       std::forward<T>(data));
             ret_id = {id};
         }
+        valid_count_++;
         return ret_id;
     }
 
@@ -66,9 +68,13 @@ class AttachmentManager : public AttachmentManagerBase {
         return CreateAttachment({0, 0}, std::forward<T>(data));
     }
 
+    size_t GetCount() { return valid_count_; }
+
   private:
     std::vector<Attachment<T>> attachments_;
     std::queue<size_t> recycled_attachments_;
+
+    size_t valid_count_;
 };
 
 }  // namespace goma

@@ -34,13 +34,19 @@ class Scene {
     template <typename T>
     result<AttachmentIndex<T>> CreateAttachment(const NodeIndex& node_id,
                                                 T&& data = T()) {
-        return GetAttachmentManager<T>()->CreateAttachment(node_id,
-                                                           std::forward<T>(data));
+        return GetAttachmentManager<T>()->CreateAttachment(
+            node_id, std::forward<T>(data));
     }
 
     template <typename T>
     result<AttachmentIndex<T>> CreateAttachment(T&& data = T()) {
-        return GetAttachmentManager<T>()->CreateAttachment(std::forward<T>(data));
+        return GetAttachmentManager<T>()->CreateAttachment(
+            std::forward<T>(data));
+    }
+
+    template <typename T>
+    size_t GetAttachmentCount() {
+        return GetAttachmentManager<T>()->GetCount();
     }
 
     auto& texture_map() { return texture_map_; }

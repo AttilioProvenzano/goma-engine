@@ -260,7 +260,7 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
             {aiTextureMapMode_Mirror, TextureWrappingMode::MirroredRepeat},
             {aiTextureMapMode_Decal, TextureWrappingMode::Decal}};
 
-    TextureBinding tex_binding = {texture_index, uvindex, blend};
+    TextureBinding tex_binding = {texture, uvindex, blend};
     if (mapmode) {
         for (size_t k = 0; k < 3; k++) {
             auto m = texture_wrap_modes.find(mapmode[k]);

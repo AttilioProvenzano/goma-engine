@@ -256,17 +256,24 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
     if (ai_scene->HasCameras()) {
         for (size_t i = 0; i < ai_scene->mNumCameras; i++) {
             aiCamera *ai_camera = ai_scene->mCameras[i];
+
+            NodeIndex node = scene->GetRootNode();
+            auto result = node_name_map.find(ai_camera->mName.C_Str());
+            if (result != node_name_map.end()) {
+                node = result->second;
+            }
+
             scene->CreateAttachment<Camera>(
-                {ai_camera->mName.C_Str(),
-                 glm::degrees(ai_camera->mHorizontalFOV),
-                 ai_camera->mClipPlaneNear,
-                 ai_camera->mClipPlaneFar,
-                 ai_camera->mAspect,
-                 {ai_camera->mPosition.x, ai_camera->mPosition.y,
-                  ai_camera->mPosition.z},
-                 {ai_camera->mUp.x, ai_camera->mUp.y, ai_camera->mUp.z},
-                 {ai_camera->mLookAt.x, ai_camera->mLookAt.y,
-                  ai_camera->mLookAt.z}});
+                node, {ai_camera->mName.C_Str(),
+                       glm::degrees(ai_camera->mHorizontalFOV),
+                       ai_camera->mClipPlaneNear,
+                       ai_camera->mClipPlaneFar,
+                       ai_camera->mAspect,
+                       {ai_camera->mPosition.x, ai_camera->mPosition.y,
+                        ai_camera->mPosition.z},
+                       {ai_camera->mUp.x, ai_camera->mUp.y, ai_camera->mUp.z},
+                       {ai_camera->mLookAt.x, ai_camera->mLookAt.y,
+                        ai_camera->mLookAt.z}});
         }
     }
 

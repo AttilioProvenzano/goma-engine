@@ -9,6 +9,7 @@ using outcome::result;
 #include <vector>
 #include <queue>
 #include <map>
+#include <set>
 #include <string>
 
 namespace goma {
@@ -16,11 +17,12 @@ namespace goma {
 template <typename T>
 struct Attachment {
     AttachmentIndex<T> id;
-    NodeIndex node_id;
+    std::set<NodeIndex> nodes;
     T data = {};
 
-    Attachment(AttachmentIndex<T> id_, NodeIndex node_id_, T&& data_ = T())
-        : id(id_), node_id(node_id_), data(std::forward<T>(data_)) {}
+    Attachment(AttachmentIndex<T> id_, const std::set<NodeIndex>& nodes_,
+               T&& data_ = T())
+        : id(id_), nodes(nodes_), data(std::forward<T>(data_)) {}
 
     bool operator==(const Attachment<T>& other) const {
         return (this->id == other.id);
@@ -38,7 +40,7 @@ class AttachmentManager : public AttachmentManagerBase {
     AttachmentManager() : valid_count_(0) {}
     virtual ~AttachmentManager() = default;
 
-    result<AttachmentIndex<T>> Create(const NodeIndex& node_id,
+    result<AttachmentIndex<T>> Create(const std::set<NodeIndex>& nodes,
                                       T&& data = T()) {
         AttachmentIndex<T> ret_id;
         if (!recycled_attachments_.empty()) {
@@ -50,11 +52,11 @@ class AttachmentManager : public AttachmentManagerBase {
             size_t new_gen = attachments_[index].id.id + 1;
 
             attachments_[index] = {
-                {index, new_gen}, node_id, std::forward<T>(data)};
+                {index, new_gen}, nodes, std::forward<T>(data)};
             ret_id = {index, new_gen};
         } else {
             size_t id = attachments_.size();
-            attachments_.emplace_back(AttachmentIndex<T>{id}, node_id,
+            attachments_.emplace_back(AttachmentIndex<T>{id}, nodes,
                                       std::forward<T>(data));
             ret_id = {id};
         }
@@ -63,7 +65,7 @@ class AttachmentManager : public AttachmentManagerBase {
     }
 
     result<AttachmentIndex<T>> Create(T&& data = T()) {
-        return Create({0, 0}, std::forward<T>(data));
+        return Create({}, std::forward<T>(data));
     }
 
     result<void> Register(AttachmentIndex<T> attachment,
@@ -94,6 +96,37 @@ class AttachmentManager : public AttachmentManagerBase {
 
         OUTCOME_TRY(data, Get(result->second));
         return std::make_pair(result->second, data);
+    }
+
+    result<void> Attach(AttachmentIndex<T> id, NodeIndex node) {
+        if (!Validate(id)) {
+            return Error::InvalidAttachment;
+        }
+        attachments_[id.id].nodes.insert(node);
+        return outcome::success();
+    }
+
+    result<void> Detach(AttachmentIndex<T> id, NodeIndex node) {
+        if (!Validate(id)) {
+            return Error::InvalidAttachment;
+        }
+        attachments_[id.id].nodes.erase(node);
+        return outcome::success();
+    }
+
+    result<void> DetachAll(AttachmentIndex<T> id) {
+        if (!Validate(id)) {
+            return Error::InvalidAttachment;
+        }
+        attachments_[id.id].nodes.clear();
+        return outcome::success();
+    }
+
+    result<std::set<NodeIndex>*> GetNodes(AttachmentIndex<T> id) {
+        if (!Validate(id)) {
+            return Error::InvalidAttachment;
+        }
+        return &attachments_[id.id].nodes;
     }
 
     size_t count() { return valid_count_; }

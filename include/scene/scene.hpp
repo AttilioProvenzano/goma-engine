@@ -34,7 +34,7 @@ class Scene {
     template <typename T>
     result<AttachmentIndex<T>> CreateAttachment(const NodeIndex& node_id,
                                                 T&& data = T()) {
-        return GetAttachmentManager<T>()->Create(node_id,
+        return GetAttachmentManager<T>()->Create({node_id},
                                                  std::forward<T>(data));
     }
 
@@ -45,8 +45,8 @@ class Scene {
 
     template <typename T>
     result<void> RegisterAttachment(AttachmentIndex<T> attachment,
-                                  const std::string& name,
-                                  bool overwrite = true) {
+                                    const std::string& name,
+                                    bool overwrite = true) {
         return GetAttachmentManager<T>()->Register(attachment, name, overwrite);
     }
 
@@ -64,6 +64,26 @@ class Scene {
     template <typename T>
     size_t GetAttachmentCount() {
         return GetAttachmentManager<T>()->count();
+    }
+
+    template <typename T>
+    result<void> Attach(AttachmentIndex<T> id, NodeIndex node) {
+        return GetAttachmentManager<T>()->Attach(id, node);
+    }
+
+    template <typename T>
+    result<void> Detach(AttachmentIndex<T> id, NodeIndex node) {
+        return GetAttachmentManager<T>()->Detach(id, node);
+    }
+
+    template <typename T>
+    result<void> DetachAll(AttachmentIndex<T> id) {
+        return GetAttachmentManager<T>()->DetachAll(id);
+    }
+
+    template <typename T>
+    result<std::set<NodeIndex>*> GetAttachedNodes(AttachmentIndex<T> id) {
+        return GetAttachmentManager<T>()->GetNodes(id);
     }
 
   private:

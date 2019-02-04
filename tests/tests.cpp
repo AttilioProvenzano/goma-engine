@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <thread>
+#include <set>
 
 using namespace goma;
 
@@ -62,6 +63,32 @@ TEST(SceneTest, CanDeleteAndRecreateNodes) {
     auto new_node = s.CreateNode(s.GetRootNode()).value();
     ASSERT_EQ(new_node, NodeIndex(1, 2)) << "New generation not set properly";
     ASSERT_EQ(s.GetParent(new_node).value(), s.GetRootNode());
+}
+
+TEST(SceneTest, CanCreateAttachments) {
+    Scene s;
+
+    auto node = s.CreateNode(s.GetRootNode()).value();
+    auto other_node = s.CreateNode(s.GetRootNode()).value();
+
+    auto texture_result = s.CreateAttachment<Texture>({node}, {});
+    ASSERT_TRUE(texture_result);
+
+    auto texture = texture_result.value();
+    auto attached_nodes = s.GetAttachedNodes<Texture>(texture).value();
+    ASSERT_EQ(*attached_nodes, std::set<NodeIndex>({node}));
+
+    s.Attach<Texture>(texture, other_node);
+    ASSERT_EQ(*attached_nodes, std::set<NodeIndex>({node, other_node}));
+
+    s.Detach<Texture>(texture, node);
+    ASSERT_EQ(*attached_nodes, std::set<NodeIndex>({other_node}));
+
+    s.Attach<Texture>(texture, node);
+    ASSERT_EQ(*attached_nodes, std::set<NodeIndex>({node, other_node}));
+
+    s.DetachAll<Texture>(texture);
+    ASSERT_EQ(*attached_nodes, std::set<NodeIndex>());
 }
 
 TEST(SceneTest, CanCreateATexture) {

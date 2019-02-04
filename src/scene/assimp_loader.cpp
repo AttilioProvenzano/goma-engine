@@ -43,6 +43,88 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
 
     std::map<std::string, NodeIndex> node_name_map;
 
+    // Convert meshes
+    if (ai_scene->HasMeshes()) {
+        for (size_t i = 0; i < ai_scene->mNumMeshes; i++) {
+            aiMesh *ai_mesh = ai_scene->mMeshes[i];
+            Mesh mesh{ai_mesh->mName.C_Str()};
+
+            for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
+                const auto &pos = ai_mesh->mVertices[j];
+                mesh.vertices.push_back({pos.x, pos.y, pos.z});
+            }
+
+            if (ai_mesh->HasNormals()) {
+                for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
+                    const auto &nor = ai_mesh->mNormals[j];
+                    mesh.normals.push_back({nor.x, nor.y, nor.z});
+                }
+            }
+
+            if (ai_mesh->HasTangentsAndBitangents()) {
+                for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
+                    const auto &tan = ai_mesh->mTangents[j];
+                    const auto &bit = ai_mesh->mBitangents[j];
+                    mesh.tangents.push_back({tan.x, tan.y, tan.z});
+                    mesh.bitangents.push_back({bit.x, bit.y, bit.z});
+                }
+            }
+
+            if (ai_mesh->HasFaces()) {
+                for (size_t j = 0; j < ai_mesh->mNumFaces; j++) {
+                    const auto &tri = ai_mesh->mFaces[j];
+                    for (size_t k = 0; k < tri.mNumIndices; k++) {
+                        mesh.indices.push_back(tri.mIndices[k]);
+                    }
+                }
+            }
+
+            if (ai_mesh->HasVertexColors(0)) {
+                auto color_set = ai_mesh->mColors[0];
+                for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
+                    const auto &col = color_set[j];
+                    mesh.colors.push_back({col.r, col.g, col.b, col.a});
+                }
+            }
+
+            for (size_t j = 0; j < ai_mesh->GetNumUVChannels(); j++) {
+                // UV coords
+                if (ai_mesh->mNumUVComponents[j] == 2) {
+                    auto ai_uv_set = ai_mesh->mTextureCoords[j];
+                    std::vector<glm::vec2> uv_set;
+
+                    for (size_t k = 0; k < ai_mesh->mNumVertices; k++) {
+                        const auto &uv = ai_uv_set[k];
+                        uv_set.push_back({uv.x, uv.y});
+                    }
+                    mesh.uv_sets.push_back(std::move(uv_set));
+                }
+
+                // UVW coords
+                if (ai_mesh->mNumUVComponents[j] == 3) {
+                    auto ai_uvw_set = ai_mesh->mTextureCoords[j];
+                    std::vector<glm::vec3> uvw_set;
+
+                    for (size_t k = 0; k < ai_mesh->mNumVertices; k++) {
+                        const auto &uvw = ai_uvw_set[k];
+                        uvw_set.push_back({uvw.x, uvw.y, uvw.z});
+                    }
+                    mesh.uvw_sets.push_back(std::move(uvw_set));
+                }
+            }
+
+            auto mesh_result = scene->CreateAttachment(std::move(mesh));
+
+            if (mesh_result.has_value()) {
+                auto m = mesh_result.value();
+                scene->RegisterAttachment<Mesh>(m, ai_mesh->mName.C_Str());
+            } else {
+                LOGW("Mesh creation failed for mesh \"%s\".",
+                     ai_mesh->mName.C_Str());
+            }
+        }
+    }
+
     // Convert node structure
     if (ai_scene->mRootNode) {
         std::map<aiNode *, NodeIndex> node_map;

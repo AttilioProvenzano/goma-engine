@@ -112,6 +112,9 @@ TEST(AssimpLoaderTest, CanLoadAModel) {
     EXPECT_EQ(scene->GetAttachmentCount<Light>(), 0);
     EXPECT_EQ(scene->GetAttachmentCount<Mesh>(), 1);
 
+    auto attached_nodes = scene->GetAttachedNodes<Mesh>({0}).value();
+    EXPECT_EQ(*attached_nodes, std::set<NodeIndex>({1}));
+
     auto children = scene->GetChildren(scene->GetRootNode());
     ASSERT_TRUE(children);
     ASSERT_EQ(children.value().size(), 2);

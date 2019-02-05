@@ -141,6 +141,13 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
         node_map[ai_root_node] = scene->GetRootNode();
         node_name_map[ai_root_node->mName.C_Str()] = scene->GetRootNode();
 
+        for (unsigned int i = 0; i < ai_root_node->mNumMeshes; i++) {
+            // We have a 1:1 correspondence between aiMesh and Mesh objects,
+            // so we can use the same index
+            uint32_t mesh_index = ai_root_node->mMeshes[i];
+            scene->Attach<Mesh>({mesh_index}, scene->GetRootNode());
+        }
+
         // Traverse the node graph
         std::queue<aiNode *> open_nodes;
         std::set<aiNode *> closed_nodes;
@@ -166,14 +173,22 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                          glm::quat(glm::vec3(rot.x, rot.y, rot.z)),
                          {scale.x, scale.y, scale.z}});
 
-            if (node_result.has_value()) {
-                auto node = node_result.value();
-                node_map[ai_node] = node;
-                node_name_map[ai_node->mName.C_Str()] = node;
-            } else {
+            if (!node_result.has_value()) {
                 const auto &error = node_result.error();
                 LOGE("Node conversion failed for node \"%s\". Error: %s",
                      ai_node->mName.C_Str(), error.message().c_str());
+                continue;
+            }
+
+            auto node = node_result.value();
+            node_map[ai_node] = node;
+            node_name_map[ai_node->mName.C_Str()] = node;
+
+            for (unsigned int i = 0; i < ai_node->mNumMeshes; i++) {
+                // We have a 1:1 correspondence between aiMesh and Mesh objects,
+                // so we can use the same index
+                uint32_t mesh_index = ai_node->mMeshes[i];
+                scene->Attach<Mesh>({mesh_index}, node);
             }
 
             // Add children to open_nodes

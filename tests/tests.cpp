@@ -100,7 +100,7 @@ TEST(SceneTest, CanCreateATexture) {
 TEST(AssimpLoaderTest, CanLoadAModel) {
     AssimpLoader loader;
     auto result =
-        loader.ReadSceneFromFile("../tests/models/Duck/glTF/Duck.gltf");
+        loader.ReadSceneFromFile("../models/Duck/glTF/Duck.gltf");
     ASSERT_TRUE(result) << result.error().message();
 
     // Extract the unique_ptr from the result wrapper

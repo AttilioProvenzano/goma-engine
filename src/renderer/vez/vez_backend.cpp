@@ -875,13 +875,14 @@ result<VkBuffer> VezBackend::CreateBuffer(VezContext::BufferHash hash,
             void* buffer_memory;
             VK_CHECK(vezMapBuffer(device, buffer, 0, size, &buffer_memory));
             memcpy(buffer_memory, initial_contents, size);
-            vezUnmapBuffer(device, buffer);
 
             VezMappedBufferRange range = {};
             range.buffer = buffer;
             range.offset = 0;
             range.size = size;
             VK_CHECK(vezFlushMappedBufferRanges(device, 1, &range));
+
+            vezUnmapBuffer(device, buffer);
         } else {
             // GPU-only buffer can't be mapped, so we use V-EZ's utility
             // function to submit data

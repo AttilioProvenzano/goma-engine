@@ -20,7 +20,11 @@ struct Transform {
         : position(pos), rotation(rot), scale(scale_) {}
 
     bool operator==(const Transform& other) const {
-        return (memcmp(this, &other, sizeof(this)) == 0);
+        return (memcmp(this, &other, sizeof(*this)) == 0);
+    }
+
+    bool operator!=(const Transform& other) const {
+        return (memcmp(this, &other, sizeof(*this)) != 0);
     }
 
     friend std::ostream& operator<<(std::ostream& o, const goma::Transform& t);
@@ -37,6 +41,8 @@ struct Node {
         : id(id_), parent(parent_), transform(transform_) {}
 
     bool operator==(const Node& other) const { return (this->id == other.id); }
+
+    bool operator!=(const Node& other) const { return (this->id != other.id); }
 
     bool valid() const { return id.valid(); }
 

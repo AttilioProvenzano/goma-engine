@@ -13,11 +13,15 @@ struct GenIndex {
     bool valid() const { return gen > 0; }
 
     bool operator==(const GenIndex& other) const {
-        return (memcmp(this, &other, sizeof(this)) == 0);
+        return (memcmp(this, &other, sizeof(*this)) == 0);
+    }
+
+    bool operator!=(const GenIndex& other) const {
+        return (memcmp(this, &other, sizeof(*this)) != 0);
     }
 
     bool operator<(const GenIndex& other) const {
-        return (memcmp(this, &other, sizeof(this)) < 0);
+        return (memcmp(this, &other, sizeof(*this)) < 0);
     }
 
     friend std::ostream& operator<<(std::ostream& o, const goma::GenIndex& id);

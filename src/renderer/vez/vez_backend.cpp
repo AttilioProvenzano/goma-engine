@@ -350,6 +350,13 @@ result<size_t> VezBackend::StartFrame(uint32_t threads) {
     }
 
     auto& per_frame = context_.per_frame[context_.current_frame];
+    if (per_frame.presentation_fence != VK_NULL_HANDLE) {
+        vezWaitForFences(context_.device, 1, &per_frame.presentation_fence,
+                         VK_TRUE, UINT64_MAX);
+        vezDestroyFence(context_.device, per_frame.presentation_fence);
+        per_frame.presentation_fence = VK_NULL_HANDLE;
+    }
+
     auto command_buffer_count = per_frame.command_buffers.size();
     if (threads > command_buffer_count) {
         VkQueue graphics_queue = VK_NULL_HANDLE;
@@ -525,8 +532,8 @@ result<void> VezBackend::FinishFrame() {
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = &per_frame.submission_semaphore;
 
-    VkFence fence = VK_NULL_HANDLE;
-    VK_CHECK(vezQueueSubmit(graphics_queue, 1, &submit_info, &fence));
+    VK_CHECK(vezQueueSubmit(graphics_queue, 1, &submit_info,
+                            &per_frame.presentation_fence));
     return outcome::success();
 }
 

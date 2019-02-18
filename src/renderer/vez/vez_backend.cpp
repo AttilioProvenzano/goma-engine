@@ -434,6 +434,13 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
     return outcome::success();
 }
 
+result<void> VezBackend::BindUniformBuffer(Buffer buffer, uint64_t offset,
+                                           uint64_t size, uint32_t binding,
+                                           uint32_t array_index) {
+    vezCmdBindBuffer(buffer.vez, offset, size, 0, binding, array_index);
+    return outcome::success();
+}
+
 result<void> VezBackend::BindTextures(const std::vector<Image>& images,
                                       uint32_t first_binding,
                                       const SamplerDesc* sampler_override) {

@@ -54,6 +54,9 @@ class VezBackend : public Backend {
     virtual result<size_t> StartFrame(uint32_t threads = 1) override;
     virtual result<void> StartRenderPass(Framebuffer fb,
                                          RenderPassDesc rp_desc) override;
+    virtual result<void> BindUniformBuffer(Buffer buffer, uint64_t offset,
+                                           uint64_t size, uint32_t binding,
+                                           uint32_t array_index = 0) override;
     virtual result<void> BindTextures(
         const std::vector<Image>& images, uint32_t first_binding = 0,
         const SamplerDesc* sampler_override = nullptr) override;

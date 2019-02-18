@@ -99,8 +99,7 @@ TEST(SceneTest, CanCreateATexture) {
 
 TEST(AssimpLoaderTest, CanLoadAModel) {
     AssimpLoader loader;
-    auto result =
-        loader.ReadSceneFromFile("../models/Duck/glTF/Duck.gltf");
+    auto result = loader.ReadSceneFromFile("../models/Duck/glTF/Duck.gltf");
     ASSERT_TRUE(result) << result.error().message();
 
     // Extract the unique_ptr from the result wrapper
@@ -246,8 +245,7 @@ TEST_F(VezBackendTest, RenderModel) {
     ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
 
     AssimpLoader loader;
-    auto result =
-        loader.ReadSceneFromFile("../models/Duck/glTF/Duck.gltf");
+    auto result = loader.ReadSceneFromFile("../models/Duck/glTF/Duck.gltf");
     ASSERT_TRUE(result) << result.error().message();
 
     // Extract the unique_ptr from the result wrapper
@@ -278,17 +276,22 @@ TEST_F(VezBackendTest, RenderModel) {
     ASSERT_TRUE(vertex_input_format_result)
         << vertex_input_format_result.error().message();
 
-    TextureDesc texture_desc = {512, 512};
-    std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {0, 0, 0, 255});
-    for (uint32_t y = 0; y < 512; y++) {
-        for (uint32_t x = 0; x < 512; x++) {
-            pixels[512 * y + x][0] = x / 2;
-            pixels[512 * y + x][1] = y / 2;
-        }
+    /*
+TextureDesc texture_desc = {512, 512};
+std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {0, 0, 0, 255});
+for (uint32_t y = 0; y < 512; y++) {
+    for (uint32_t x = 0; x < 512; x++) {
+        pixels[512 * y + x][0] = x / 2;
+        pixels[512 * y + x][1] = y / 2;
     }
+}
+    */
+
+    auto tex = scene->GetAttachment<Texture>({0}).value();
+    TextureDesc texture_desc = {tex->width, tex->height};
 
     auto create_texture_result =
-        vez.CreateTexture("texture", texture_desc, pixels.data());
+        vez.CreateTexture("texture", texture_desc, tex->data.data());
     ASSERT_TRUE(create_texture_result)
         << create_texture_result.error().message();
 
@@ -300,8 +303,12 @@ layout(location = 1) in vec2 inUVs;
 
 layout(location = 0) out vec2 outUVs;
 
+layout(set = 1, binding = 0) uniform UBO {
+	mat4 mvp;
+} ubo;
+
 void main() {
-    gl_Position = vec4(inPosition / 250, 1.0);
+    gl_Position = ubo.mvp * vec4(inPosition, 1.0);
     outUVs = inUVs;
 }
 )";
@@ -316,7 +323,7 @@ layout(location = 0) in vec2 inUVs;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    outColor = texture(mainTexture, inUVs);
+    outColor = texture(mainTexture, vec2(inUVs.x, -inUVs.y));
 }
 )";
 
@@ -325,22 +332,142 @@ void main() {
     ASSERT_TRUE(create_pipeline_result)
         << create_pipeline_result.error().message();
 
-    FramebufferDesc fb_desc = {800, 600};
-    auto create_fb_result = vez.CreateFramebuffer(0, "fb", fb_desc);
+    auto nodes = scene->GetAttachedNodes<Mesh>({0}).value();
+    auto node = *nodes->begin();
 
-    vez.SetupFrames(
-        1);  // TODO crashes if we don't call SetupFrames before StartFrames
-    vez.StartFrame();
-    vez.StartRenderPass(create_fb_result.value(), {});
-    vez.BindGraphicsPipeline(create_pipeline_result.value());
-    vez.BindVertexInputFormat(vertex_input_format_result.value());
-    vez.BindVertexBuffers(
-        {create_pos_buffer_result.value(), create_uv_buffer_result.value()});
-    vez.BindIndexBuffer(create_index_buffer_result.value());
-    vez.BindTextures({create_texture_result.value()});
-    vez.DrawIndexed(static_cast<uint32_t>(mesh->indices.size()));
-    vez.FinishFrame();
-    vez.PresentImage("color");
+    glm::mat4 model = glm::mat4(1.0f);
+
+    auto transform = scene->GetTransform(node).value();
+    model = glm::scale(model, transform->scale);
+    model = glm::mat4_cast(transform->rotation) * model;
+    model = glm::translate(model, transform->position);
+
+    auto parent_node = scene->GetParent(node).value();
+    while (node != scene->GetRootNode()) {
+        auto transform = scene->GetTransform(parent_node).value();
+        model = glm::scale(model, transform->scale);
+        model = glm::mat4_cast(transform->rotation) * model;
+        model = glm::translate(model, transform->position);
+        node = parent_node;
+        parent_node = scene->GetParent(node).value();
+    }
+
+    /*
+auto camera_nodes = scene->GetAttachedNodes<Camera>({0}).value();
+auto camera_node = *camera_nodes->begin();
+
+glm::mat4 camera_model = glm::mat4(1.0f);
+
+transform = scene->GetTransform(camera_node).value();
+camera_model = glm::scale(camera_model, transform->scale);
+camera_model = glm::mat4_cast(transform->rotation) * camera_model;
+camera_model = glm::translate(camera_model, transform->position);
+
+auto camera_parent_node = scene->GetParent(camera_node).value();
+while (camera_node != scene->GetRootNode()) {
+    auto camera_transform = scene->GetTransform(camera_parent_node).value();
+    camera_model = glm::scale(camera_model, camera_transform->scale);
+    camera_model =
+        glm::mat4_cast(camera_transform->rotation) * camera_model;
+    camera_model = glm::translate(camera_model, camera_transform->position);
+    camera_node = camera_parent_node;
+    camera_parent_node = scene->GetParent(camera_node).value();
+}
+    */
+
+    // TODO check .end() - 1
+    mesh->bounding_box = {
+        {std::min_element(
+             mesh->vertices.begin(), mesh->vertices.end(),
+             [](const auto& v1, const auto& v2) { return (v1.x < v2.x); })
+             ->x,
+         std::min_element(
+             mesh->vertices.begin(), mesh->vertices.end(),
+             [](const auto& v1, const auto& v2) { return (v1.y < v2.y); })
+             ->y,
+         std::min_element(
+             mesh->vertices.begin(), mesh->vertices.end(),
+             [](const auto& v1, const auto& v2) { return (v1.z < v2.z); })
+             ->z},
+        {
+            std::max_element(
+                mesh->vertices.begin(), mesh->vertices.end(),
+                [](const auto& v1, const auto& v2) { return (v1.x < v2.x); })
+                ->x,
+            std::max_element(
+                mesh->vertices.begin(), mesh->vertices.end(),
+                [](const auto& v1, const auto& v2) { return (v1.y < v2.y); })
+                ->y,
+            std::max_element(
+                mesh->vertices.begin(), mesh->vertices.end(),
+                [](const auto& v1, const auto& v2) { return (v1.z < v2.z); })
+                ->z,
+        }};
+
+    Box transformed_bbox = {model * glm::vec4(mesh->bounding_box.min, 1.0f),
+                            model * glm::vec4(mesh->bounding_box.max, 1.0f)};
+
+    auto camera = scene->GetAttachment<Camera>({0}).value();
+
+    // Let's draw a cone with the fov angle from the camera to the bounding box
+    auto fovy = camera->h_fov * 600 /
+                800;  // TODO implement the full formula in the renderer
+    // TODO add absolute values (transformed might have min/max swapped)
+    float dist = (transformed_bbox.max.x - transformed_bbox.min.x) /
+                 (2 * tan(glm::radians(camera->h_fov)));
+    dist = std::max(dist, (transformed_bbox.max.y - transformed_bbox.min.y) /
+                              (2 * tan(glm::radians(fovy))));
+
+    dist += transformed_bbox.max.z;
+    dist += camera->near_plane;
+
+    glm::vec3 center = {(transformed_bbox.max.x + transformed_bbox.min.x) / 2,
+                        (transformed_bbox.max.y + transformed_bbox.min.y) / 2,
+                        (transformed_bbox.max.z + transformed_bbox.min.z) / 2};
+
+    glm::mat4 view =
+        glm::lookAt(center + glm::vec3(0, 0, dist), center, camera->up);
+    glm::mat4 proj = glm::perspective(fovy, camera->aspect_ratio,
+                                      camera->near_plane, camera->far_plane);
+    proj[1][1] *= -1;  // Fix GL's inverted y axis
+
+    uint64_t unif_offset = 256;
+    auto create_unif_buffer_result =
+        vez.CreateBuffer({}, 3 * unif_offset, VEZ_MEMORY_CPU_TO_GPU,
+                         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    ASSERT_TRUE(create_unif_buffer_result)
+        << create_unif_buffer_result.error().message();
+
+    auto mvp_buffer = create_unif_buffer_result.value();
+
+    vez.SetupFrames(3);
+
+    FramebufferDesc fb_desc = {800, 600};
+    std::vector<Framebuffer> fbs;
+    fbs.push_back(vez.CreateFramebuffer(0, "fb", fb_desc).value());
+    fbs.push_back(vez.CreateFramebuffer(1, "fb", fb_desc).value());
+    fbs.push_back(vez.CreateFramebuffer(2, "fb", fb_desc).value());
+
+    for (size_t i = 0; i < 200; i++) {
+        auto frame_id = vez.StartFrame().value();
+        vez.StartRenderPass(fbs[frame_id], {});
+        vez.BindGraphicsPipeline(create_pipeline_result.value());
+
+        model = glm::rotate(model, glm::radians(1.0f), camera->up);
+        glm::mat4 mvp = proj * view * model;
+        vez.UpdateBuffer(mvp_buffer, frame_id * unif_offset, sizeof(mvp), &mvp);
+
+        vezCmdBindBuffer(mvp_buffer, frame_id * unif_offset, sizeof(mvp), 1, 0,
+                         0);
+        vez.BindVertexInputFormat(vertex_input_format_result.value());
+        vez.BindVertexBuffers({create_pos_buffer_result.value(),
+                               create_uv_buffer_result.value()});
+        vez.BindIndexBuffer(create_index_buffer_result.value());
+        vez.BindTextures({create_texture_result.value()});
+        vez.DrawIndexed(static_cast<uint32_t>(mesh->indices.size()));
+        vez.FinishFrame();
+        vez.PresentImage("color");
+    }
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }

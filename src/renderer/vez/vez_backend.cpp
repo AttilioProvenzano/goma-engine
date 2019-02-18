@@ -1140,6 +1140,8 @@ result<void> VezBackend::GetActiveCommandBuffer(uint32_t thread) {
         VkViewport viewport = {};
         viewport.width = 800;
         viewport.height = 600;
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
         vezCmdSetViewport(0, 1, &viewport);
     }
 

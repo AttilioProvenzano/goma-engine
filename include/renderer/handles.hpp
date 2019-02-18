@@ -115,7 +115,7 @@ struct DepthAttachmentDesc {
     bool active = true;
     bool clear = true;
     bool store = false;
-    float clear_depth = 0.0f;
+    float clear_depth = 1.0f;
     uint32_t clear_stencil = 0;
 };
 

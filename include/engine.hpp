@@ -13,11 +13,15 @@ class Engine {
   public:
     Engine();
 
-    const Platform* platform() { return platform_.get(); }
+    result<void> LoadScene(const char* file_path);
+
+    Platform* platform() { return platform_.get(); }
+    Scene* scene() { return scene_.get(); }
 
   private:
     std::unique_ptr<Renderer> renderer_;
     std::unique_ptr<Platform> platform_;
+    std::unique_ptr<Scene> scene_;
 };
 
 }  // namespace goma

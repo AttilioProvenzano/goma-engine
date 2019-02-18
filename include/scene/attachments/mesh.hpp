@@ -4,6 +4,11 @@
 
 namespace goma {
 
+struct Box {
+    glm::vec3 min = glm::vec3(0.0f);
+    glm::vec3 max = glm::vec3(0.0f);
+};
+
 struct Mesh {
     std::string name;
 
@@ -17,6 +22,8 @@ struct Mesh {
     std::vector<glm::vec4> colors;
     std::vector<std::vector<glm::vec2>> uv_sets;
     std::vector<std::vector<glm::vec3>> uvw_sets;
+
+    Box bounding_box = {};
 };
 
 }  // namespace goma

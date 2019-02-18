@@ -60,12 +60,13 @@ class VezBackend : public Backend {
     virtual result<void> BindVertexBuffers(
         const std::vector<Buffer>& vertex_buffers, uint32_t first_binding = 0,
         std::vector<size_t> offsets = {}) override;
-    virtual result<void> BindIndexBuffer(Buffer index_buffer, size_t offset = 0,
+    virtual result<void> BindIndexBuffer(Buffer index_buffer,
+                                         uint64_t offset = 0,
                                          bool short_indices = false) override;
     virtual result<void> BindGraphicsPipeline(Pipeline pipeline) override;
     virtual result<void> BindVertexInputFormat(
         VertexInputFormat vertex_input_format) override;
-	virtual result<void> Draw(uint32_t vertex_count,
+    virtual result<void> Draw(uint32_t vertex_count,
                               uint32_t instance_count = 1,
                               uint32_t first_vertex = 0,
                               uint32_t first_instance = 0) override;

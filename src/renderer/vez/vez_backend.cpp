@@ -468,7 +468,7 @@ result<void> VezBackend::BindVertexBuffers(
     return outcome::success();
 }
 
-result<void> VezBackend::BindIndexBuffer(Buffer index_buffer, size_t offset,
+result<void> VezBackend::BindIndexBuffer(Buffer index_buffer, uint64_t offset,
                                          bool short_indices) {
     vezCmdBindIndexBuffer(
         index_buffer.vez, static_cast<VkDeviceSize>(offset),

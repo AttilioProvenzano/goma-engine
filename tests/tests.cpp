@@ -303,7 +303,7 @@ layout(location = 1) in vec2 inUVs;
 
 layout(location = 0) out vec2 outUVs;
 
-layout(set = 1, binding = 0) uniform UBO {
+layout(set = 0, binding = 1) uniform UBO {
 	mat4 mvp;
 } ubo;
 
@@ -457,8 +457,8 @@ while (camera_node != scene->GetRootNode()) {
         glm::mat4 mvp = proj * view * model;
         vez.UpdateBuffer(mvp_buffer, frame_id * unif_offset, sizeof(mvp), &mvp);
 
-        vezCmdBindBuffer(mvp_buffer, frame_id * unif_offset, sizeof(mvp), 1, 0,
-                         0);
+        vez.BindUniformBuffer(mvp_buffer, frame_id * unif_offset, sizeof(mvp),
+                              1, 0);
         vez.BindVertexInputFormat(vertex_input_format_result.value());
         vez.BindVertexBuffers({create_pos_buffer_result.value(),
                                create_uv_buffer_result.value()});

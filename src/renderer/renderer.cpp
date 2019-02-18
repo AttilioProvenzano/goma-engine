@@ -12,11 +12,17 @@ namespace goma {
 
 Renderer::Renderer(Engine* engine)
     : engine_(engine), backend_(std::make_unique<VezBackend>(engine)) {
-	if (auto result = backend_->InitContext()) {
+    if (auto result = backend_->InitContext()) {
         LOGI("Context initialized.");
     } else {
         LOGE("%s", result.error().message().c_str());
     }
+}
+
+result<void> Renderer::Render() {
+    Scene* scene = engine_->scene();
+
+    return outcome::success();
 }
 
 }  // namespace goma

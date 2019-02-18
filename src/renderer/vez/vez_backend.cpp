@@ -313,6 +313,21 @@ result<Buffer> VezBackend::GetIndexBuffer(const char* name) {
     return Error::NotFound;
 }
 
+result<void> VezBackend::UpdateBuffer(Buffer buffer, uint64_t offset,
+                                      uint64_t size, void* contents) {
+    uint8_t* data;
+    auto res = vezMapBuffer(context_.device, buffer.vez, offset, size,
+                            reinterpret_cast<void**>(&data));
+    if (res != VK_SUCCESS) {
+        return Error::BufferCannotBeMapped;
+    }
+
+    memcpy(data + offset, contents, size);
+    vezUnmapBuffer(context_.device, buffer.vez);
+
+    return outcome::success();
+}
+
 result<void> VezBackend::SetupFrames(uint32_t frames) {
     if (frames > context_.per_frame.size()) {
         context_.per_frame.resize(frames);

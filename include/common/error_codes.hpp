@@ -25,6 +25,7 @@ enum class Error {
     LoadingFailed = 16,
     KeyAlreadyExists = 17,
     InvalidAttachment = 18,
+    BufferCannotBeMapped = 19,
 };
 
 }
@@ -88,6 +89,8 @@ class GomaError_category : public std::error_category {
                 return "the key already exists";
             case goma::Error::InvalidAttachment:
                 return "invalid attachment";
+            case goma::Error::BufferCannotBeMapped:
+                return "buffer cannot be mapped";
             default:
                 return "unknown error";
         }

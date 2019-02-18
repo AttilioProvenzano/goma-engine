@@ -417,19 +417,19 @@ while (camera_node != scene->GetRootNode()) {
                  (2 * tan(glm::radians(camera->h_fov)));
     dist = std::max(dist, (transformed_bbox.max.y - transformed_bbox.min.y) /
                               (2 * tan(glm::radians(fovy))));
-
-    dist += transformed_bbox.max.z;
     dist += camera->near_plane;
+    dist += transformed_bbox.max.z;
+    dist *= 3;
 
     glm::vec3 center = {(transformed_bbox.max.x + transformed_bbox.min.x) / 2,
                         (transformed_bbox.max.y + transformed_bbox.min.y) / 2,
                         (transformed_bbox.max.z + transformed_bbox.min.z) / 2};
 
     glm::mat4 view =
-        glm::lookAt(center + glm::vec3(0, 0, dist), center, camera->up);
-    glm::mat4 proj = glm::perspective(fovy, camera->aspect_ratio,
+        glm::lookAt(center - glm::vec3(0, 0, dist), center, camera->up);
+    glm::mat4 proj = glm::perspective(glm::radians(fovy), camera->aspect_ratio,
                                       camera->near_plane, camera->far_plane);
-    proj[1][1] *= -1;  // Fix GL's inverted y axis
+    proj[1][1] *= -1;
 
     uint64_t unif_offset = 256;
     auto create_unif_buffer_result =
@@ -464,6 +464,18 @@ while (camera_node != scene->GetRootNode()) {
                                create_uv_buffer_result.value()});
         vez.BindIndexBuffer(create_index_buffer_result.value());
         vez.BindTextures({create_texture_result.value()});
+
+        VezDepthStencilState ds_state = {};
+        ds_state.depthTestEnable = VK_TRUE;
+        ds_state.depthCompareOp = VK_COMPARE_OP_LESS;
+        ds_state.depthWriteEnable = VK_TRUE;
+        vezCmdSetDepthStencilState(&ds_state);
+
+        VezRasterizationState raster_state = {};
+        raster_state.cullMode = VK_CULL_MODE_BACK_BIT;
+        raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        vezCmdSetRasterizationState(&raster_state);
+
         vez.DrawIndexed(static_cast<uint32_t>(mesh->indices.size()));
         vez.FinishFrame();
         vez.PresentImage("color");

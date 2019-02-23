@@ -26,6 +26,7 @@ enum class Error {
     KeyAlreadyExists = 17,
     InvalidAttachment = 18,
     BufferCannotBeMapped = 19,
+    NoSceneLoaded = 20,
 };
 
 }
@@ -91,6 +92,8 @@ class GomaError_category : public std::error_category {
                 return "invalid attachment";
             case goma::Error::BufferCannotBeMapped:
                 return "buffer cannot be mapped";
+            case goma::Error::NoSceneLoaded:
+                return "no scene loaded";
             default:
                 return "unknown error";
         }

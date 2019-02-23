@@ -13,12 +13,6 @@
 
 namespace goma {
 
-struct PhysicalDevice {
-    VkPhysicalDevice physical_device;
-    VkPhysicalDeviceProperties properties;
-    VkPhysicalDeviceFeatures features;
-};
-
 class VezBackend : public Backend {
   public:
     VezBackend(Engine* engine = nullptr);
@@ -85,6 +79,12 @@ class VezBackend : public Backend {
         const char* present_image_name = "color") override;
 
     virtual result<void> TeardownContext() override;
+
+    struct PhysicalDevice {
+        VkPhysicalDevice physical_device;
+        VkPhysicalDeviceProperties properties;
+        VkPhysicalDeviceFeatures features;
+    };
 
     result<VkInstance> CreateInstance();
     result<VkDebugReportCallbackEXT> CreateDebugCallback(VkInstance instance);

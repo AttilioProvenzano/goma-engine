@@ -742,7 +742,8 @@ result<VkDebugReportCallbackEXT> VezBackend::CreateDebugCallback(
     return debug_callback;
 }
 
-result<PhysicalDevice> VezBackend::CreatePhysicalDevice(VkInstance instance) {
+result<VezBackend::PhysicalDevice> VezBackend::CreatePhysicalDevice(
+    VkInstance instance) {
     uint32_t physical_device_count;
     vezEnumeratePhysicalDevices(instance, &physical_device_count, nullptr);
 

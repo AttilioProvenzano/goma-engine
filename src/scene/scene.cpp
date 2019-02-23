@@ -26,6 +26,20 @@ std::ostream& operator<<(std::ostream& o, const goma::Node& n) {
     return o;
 }
 
+template <typename T>
+std::ostream& operator<<(std::ostream& o, const Attachment<T>& a) {
+    o << "Attachment(id: " << a.id << ", nodes: (";
+    if (!a.nodes.empty()) {
+        for (const auto& n : a.nodes) {
+            o << n.id << ", ";
+        }
+        // Remove the last ", "
+        o.seekp(o.tellp() - 2);
+    }
+    o << "))";
+    return o;
+}
+
 Scene::Scene() { nodes_.emplace_back(NodeIndex{0}, NodeIndex{0, 0}); }
 
 result<NodeIndex> Scene::CreateNode(const NodeIndex parent,

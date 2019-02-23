@@ -28,6 +28,14 @@ struct Attachment {
     bool operator==(const Attachment<T>& other) const {
         return (this->id == other.id);
     }
+
+    bool operator!=(const Attachment<T>& other) const {
+        return (this->id != other.id);
+    }
+
+    bool valid() const { return id.valid(); }
+
+    friend std::ostream& operator<<(std::ostream& o, const Attachment<T>& n);
 };
 
 class AttachmentManagerBase {

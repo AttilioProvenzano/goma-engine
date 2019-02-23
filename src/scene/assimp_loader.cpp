@@ -8,6 +8,7 @@
 #include "common/error_codes.hpp"
 
 #include "assimp/Importer.hpp"
+#include "assimp/postprocess.h"
 
 #define LOG(prefix, format, ...) printf(prefix format "\n", __VA_ARGS__)
 #define LOGE(format, ...) LOG("** ERROR: ", format, __VA_ARGS__)
@@ -25,7 +26,9 @@ namespace goma {
 result<std::unique_ptr<Scene>> AssimpLoader::ReadSceneFromFile(
     const char *file_path) {
     Assimp::Importer importer;
-    auto ai_scene = importer.ReadFile(file_path, 0);
+    auto ai_scene =
+        importer.ReadFile(file_path, aiProcessPreset_TargetRealtime_Quality |
+                                         aiProcess_TransformUVCoords);
 
     if (!ai_scene) {
         LOGE("%s", importer.GetErrorString());

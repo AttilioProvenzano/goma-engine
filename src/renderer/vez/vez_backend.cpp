@@ -267,10 +267,11 @@ result<Framebuffer> VezBackend::CreateFramebuffer(size_t frame_index,
     return {framebuffer};
 }
 
-result<Buffer> VezBackend::CreateVertexBuffer(const char* name, uint64_t size,
+result<Buffer> VezBackend::CreateVertexBuffer(const AttachmentIndex<Mesh>& mesh,
+                                              const char* name, uint64_t size,
                                               bool gpu_stored,
                                               void* initial_contents) {
-    auto hash = GetBufferHash(name);
+    auto hash = GetMeshBufferHash(mesh, name);
     OUTCOME_TRY(buffer, CreateBuffer(hash, static_cast<VkDeviceSize>(size),
                                      gpu_stored ? VEZ_MEMORY_GPU_ONLY
                                                 : VEZ_MEMORY_CPU_TO_GPU,
@@ -280,8 +281,9 @@ result<Buffer> VezBackend::CreateVertexBuffer(const char* name, uint64_t size,
     return {buffer};
 }
 
-result<Buffer> VezBackend::GetVertexBuffer(const char* name) {
-    auto hash = GetBufferHash(name);
+result<Buffer> VezBackend::GetVertexBuffer(const AttachmentIndex<Mesh>& mesh,
+                                           const char* name) {
+    auto hash = GetMeshBufferHash(mesh, name);
     auto result = context_.buffer_cache.find(hash);
     if (result != context_.buffer_cache.end()) {
         return {result->second};
@@ -290,10 +292,11 @@ result<Buffer> VezBackend::GetVertexBuffer(const char* name) {
     return Error::NotFound;
 }
 
-result<Buffer> VezBackend::CreateIndexBuffer(const char* name, uint64_t size,
+result<Buffer> VezBackend::CreateIndexBuffer(const AttachmentIndex<Mesh>& mesh,
+                                             const char* name, uint64_t size,
                                              bool gpu_stored,
                                              void* initial_contents) {
-    auto hash = GetBufferHash(name);
+    auto hash = GetMeshBufferHash(mesh, name);
     OUTCOME_TRY(buffer, CreateBuffer(hash, static_cast<VkDeviceSize>(size),
                                      gpu_stored ? VEZ_MEMORY_GPU_ONLY
                                                 : VEZ_MEMORY_CPU_TO_GPU,
@@ -303,8 +306,9 @@ result<Buffer> VezBackend::CreateIndexBuffer(const char* name, uint64_t size,
     return {buffer};
 }
 
-result<Buffer> VezBackend::GetIndexBuffer(const char* name) {
-    auto hash = GetBufferHash(name);
+result<Buffer> VezBackend::GetIndexBuffer(const AttachmentIndex<Mesh>& mesh,
+                                          const char* name) {
+    auto hash = GetMeshBufferHash(mesh, name);
     auto result = context_.buffer_cache.find(hash);
     if (result != context_.buffer_cache.end()) {
         return {result->second};
@@ -1171,6 +1175,11 @@ VkFormat VezBackend::GetVkFormat(Format format) {
 
 VezContext::BufferHash VezBackend::GetBufferHash(const char* name) {
     return {sdbm_hash(name)};
+}
+
+VezContext::BufferHash VezBackend::GetMeshBufferHash(
+    const const AttachmentIndex<Mesh>& mesh, const char* name) {
+    return {mesh.id, mesh.gen, sdbm_hash(name)};
 }
 
 VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,

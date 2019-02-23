@@ -40,13 +40,15 @@ class VezBackend : public Backend {
     virtual result<Framebuffer> CreateFramebuffer(
         size_t frame_index, const char* name, FramebufferDesc fb_desc) override;
     virtual result<Buffer> CreateVertexBuffer(
-        const char* name, uint64_t size, bool gpu_stored = true,
-        void* initial_contents = nullptr) override;
-    virtual result<Buffer> GetVertexBuffer(const char* name) override;
+        const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
+        bool gpu_stored = true, void* initial_contents = nullptr) override;
+    virtual result<Buffer> GetVertexBuffer(const AttachmentIndex<Mesh>& mesh,
+                                           const char* name) override;
     virtual result<Buffer> CreateIndexBuffer(
-        const char* name, uint64_t size, bool gpu_stored = true,
-        void* initial_contents = nullptr) override;
-    virtual result<Buffer> GetIndexBuffer(const char* name) override;
+        const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
+        bool gpu_stored = true, void* initial_contents = nullptr) override;
+    virtual result<Buffer> GetIndexBuffer(const AttachmentIndex<Mesh>& mesh,
+                                          const char* name) override;
     virtual result<void> UpdateBuffer(Buffer buffer, uint64_t offset,
                                       uint64_t size, void* contents) override;
 
@@ -120,6 +122,8 @@ class VezBackend : public Backend {
     VkFormat GetVkFormat(Format format);
 
     VezContext::BufferHash GetBufferHash(const char* name);
+    VezContext::BufferHash GetMeshBufferHash(const AttachmentIndex<Mesh>& mesh,
+                                             const char* name);
     VezContext::ShaderHash GetShaderHash(const char* source,
                                          const char* entry_point);
     VezContext::PipelineHash GetGraphicsPipelineHash(VkShaderModule vs,

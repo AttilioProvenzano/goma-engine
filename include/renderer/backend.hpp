@@ -2,6 +2,7 @@
 
 #include "renderer/handles.hpp"
 #include "platform/platform.hpp"
+#include "scene/attachments/mesh.hpp"
 
 #include <outcome.hpp>
 namespace outcome = OUTCOME_V2_NAMESPACE;
@@ -34,13 +35,15 @@ class Backend {
                                                   const char* name,
                                                   FramebufferDesc fb_desc) = 0;
     virtual result<Buffer> CreateVertexBuffer(
-        const char* name, uint64_t size, bool gpu_stored = true,
-        void* initial_contents = nullptr) = 0;
-    virtual result<Buffer> GetVertexBuffer(const char* name) = 0;
+        const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
+        bool gpu_stored = true, void* initial_contents = nullptr) = 0;
+    virtual result<Buffer> GetVertexBuffer(const AttachmentIndex<Mesh>& mesh,
+                                           const char* name) = 0;
     virtual result<Buffer> CreateIndexBuffer(
-        const char* name, uint64_t size, bool gpu_stored = true,
-        void* initial_contents = nullptr) = 0;
-    virtual result<Buffer> GetIndexBuffer(const char* name) = 0;
+        const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
+        bool gpu_stored = true, void* initial_contents = nullptr) = 0;
+    virtual result<Buffer> GetIndexBuffer(const AttachmentIndex<Mesh>& mesh,
+                                          const char* name) = 0;
     virtual result<void> UpdateBuffer(Buffer buffer, uint64_t offset,
                                       uint64_t size, void* contents) = 0;
 

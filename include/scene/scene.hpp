@@ -51,6 +51,23 @@ class Scene {
     }
 
     template <typename T>
+    void ForEach(std::function<void(const AttachmentIndex<T>,
+                                    const std::set<NodeIndex>&, T&)>
+                     fun) {
+        return GetAttachmentManager<T>()->ForEach(std::move(fun));
+    }
+
+    template <typename T>
+    void ForEach(std::function<void(T&)> fun) {
+        return GetAttachmentManager<T>()->ForEach(std::move(fun));
+    }
+
+    template <typename T>
+    const std::vector<Attachment<T>>& GetAttachments() {
+        return GetAttachmentManager<T>()->GetAll();
+    }
+
+    template <typename T>
     result<T*> GetAttachment(AttachmentIndex<T> id) {
         return GetAttachmentManager<T>()->Get(id);
     }

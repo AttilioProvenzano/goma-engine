@@ -11,6 +11,7 @@ using outcome::result;
 #include <map>
 #include <set>
 #include <string>
+#include <functional>
 
 namespace goma {
 
@@ -80,6 +81,28 @@ class AttachmentManager : public AttachmentManagerBase {
         attachment_map_[name] = attachment;
         return outcome::success();
     }
+
+    void ForEach(std::function<void(const AttachmentIndex<T>,
+                                    const std::set<NodeIndex>&, T&)>
+                     fun) {
+        for (auto& a : attachments_) {
+            if (!a.valid()) {
+                continue;
+            }
+            fun(a.index, a.nodes, a.data);
+        }
+    }
+
+    void ForEach(std::function<void(T&)> fun) {
+        for (auto& a : attachments_) {
+            if (!a.valid()) {
+                continue;
+            }
+            fun(a.data);
+        }
+    }
+
+    const std::vector<Attachment<T>>& GetAll() { return attachments_; }
 
     result<T*> Get(AttachmentIndex<T> id) {
         if (!Validate(id)) {

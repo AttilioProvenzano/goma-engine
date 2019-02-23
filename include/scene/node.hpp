@@ -46,7 +46,7 @@ struct Node {
 
     bool valid() const { return id.valid(); }
 
-    friend std::ostream& operator<<(std::ostream& o, const goma::Node& n);
+    friend std::ostream& operator<<(std::ostream& o, const Node& n);
 };
 
 }  // namespace goma

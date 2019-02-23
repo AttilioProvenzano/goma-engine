@@ -143,7 +143,7 @@ TEST_F(VezBackendTest, RenderQuad) {
                                         {0.5f, 0.5f, 0.0f}};
 
     auto create_pos_buffer_result = vez.CreateVertexBuffer(
-        "triangle_pos", positions.size() * sizeof(positions[0]), true,
+        {0}, "triangle_pos", positions.size() * sizeof(positions[0]), true,
         positions.data());
     ASSERT_TRUE(create_pos_buffer_result)
         << create_pos_buffer_result.error().message();
@@ -152,14 +152,14 @@ TEST_F(VezBackendTest, RenderQuad) {
         {0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
 
     auto create_uv_buffer_result = vez.CreateVertexBuffer(
-        "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
+        {0}, "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
     ASSERT_TRUE(create_uv_buffer_result)
         << create_uv_buffer_result.error().message();
 
     std::vector<uint32_t> indices = {0, 1, 3, 0, 3, 2};
 
     auto create_index_buffer_result = vez.CreateIndexBuffer(
-        "triangle_indices", indices.size() * sizeof(indices[0]), true,
+        {0}, "triangle_indices", indices.size() * sizeof(indices[0]), true,
         indices.data());
     ASSERT_TRUE(create_index_buffer_result)
         << create_index_buffer_result.error().message();
@@ -253,20 +253,22 @@ TEST_F(VezBackendTest, RenderModel) {
 
     auto mesh = scene->GetAttachment<Mesh>({0}).value();
     auto create_pos_buffer_result = vez.CreateVertexBuffer(
-        "triangle_pos", mesh->vertices.size() * sizeof(mesh->vertices[0]), true,
-        mesh->vertices.data());
+        {0}, "triangle_pos", mesh->vertices.size() * sizeof(mesh->vertices[0]),
+        true, mesh->vertices.data());
     ASSERT_TRUE(create_pos_buffer_result)
         << create_pos_buffer_result.error().message();
 
     auto create_uv_buffer_result = vez.CreateVertexBuffer(
-        "triangle_uvs", mesh->uv_sets[0].size() * sizeof(mesh->uv_sets[0][0]),
-        true, mesh->uv_sets[0].data());
+        {0}, "triangle_uvs",
+        mesh->uv_sets[0].size() * sizeof(mesh->uv_sets[0][0]), true,
+        mesh->uv_sets[0].data());
     ASSERT_TRUE(create_uv_buffer_result)
         << create_uv_buffer_result.error().message();
 
-    auto create_index_buffer_result = vez.CreateIndexBuffer(
-        "triangle_indices", mesh->indices.size() * sizeof(mesh->indices[0]),
-        true, mesh->indices.data());
+    auto create_index_buffer_result =
+        vez.CreateIndexBuffer({0}, "triangle_indices",
+                              mesh->indices.size() * sizeof(mesh->indices[0]),
+                              true, mesh->indices.data());
     ASSERT_TRUE(create_index_buffer_result)
         << create_index_buffer_result.error().message();
 
@@ -448,12 +450,12 @@ while (camera_node != scene->GetRootNode()) {
     fbs.push_back(vez.CreateFramebuffer(1, "fb", fb_desc).value());
     fbs.push_back(vez.CreateFramebuffer(2, "fb", fb_desc).value());
 
-    for (size_t i = 0; i < 200; i++) {
+    for (size_t i = 0; i < 100; i++) {
         auto frame_id = vez.StartFrame().value();
         vez.StartRenderPass(fbs[frame_id], {});
         vez.BindGraphicsPipeline(create_pipeline_result.value());
 
-        model = glm::rotate(model, glm::radians(1.0f), camera->up);
+        model = glm::rotate(model, glm::radians(2.0f), camera->up);
         glm::mat4 mvp = proj * view * model;
         vez.UpdateBuffer(mvp_buffer, frame_id * unif_offset, sizeof(mvp), &mvp);
 
@@ -480,8 +482,6 @@ while (camera_node != scene->GetRootNode()) {
         vez.FinishFrame();
         vez.PresentImage("color");
     }
-
-    std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
 }  // namespace

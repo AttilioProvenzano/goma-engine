@@ -34,25 +34,26 @@ class Backend {
     virtual result<Framebuffer> CreateFramebuffer(size_t frame_index,
                                                   const char* name,
                                                   FramebufferDesc fb_desc) = 0;
-    virtual result<Buffer> CreateVertexBuffer(
+    virtual result<std::shared_ptr<Buffer>> CreateVertexBuffer(
         const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
         bool gpu_stored = true, void* initial_contents = nullptr) = 0;
-    virtual result<Buffer> GetVertexBuffer(const AttachmentIndex<Mesh>& mesh,
-                                           const char* name) = 0;
-    virtual result<Buffer> CreateIndexBuffer(
+    virtual result<std::shared_ptr<Buffer>> GetVertexBuffer(
+        const AttachmentIndex<Mesh>& mesh, const char* name) = 0;
+    virtual result<std::shared_ptr<Buffer>> CreateIndexBuffer(
         const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
         bool gpu_stored = true, void* initial_contents = nullptr) = 0;
-    virtual result<Buffer> GetIndexBuffer(const AttachmentIndex<Mesh>& mesh,
-                                          const char* name) = 0;
-    virtual result<void> UpdateBuffer(Buffer buffer, uint64_t offset,
+    virtual result<std::shared_ptr<Buffer>> GetIndexBuffer(
+        const AttachmentIndex<Mesh>& mesh, const char* name) = 0;
+    virtual result<void> UpdateBuffer(const Buffer& buffer, uint64_t offset,
                                       uint64_t size, void* contents) = 0;
 
     virtual result<void> SetupFrames(uint32_t frames) = 0;
     virtual result<size_t> StartFrame(uint32_t threads = 1) = 0;
     virtual result<void> StartRenderPass(Framebuffer fb,
                                          RenderPassDesc rp_desc) = 0;
-    virtual result<void> BindUniformBuffer(Buffer buffer, uint64_t offset,
-                                           uint64_t size, uint32_t binding,
+    virtual result<void> BindUniformBuffer(const Buffer& buffer,
+                                           uint64_t offset, uint64_t size,
+                                           uint32_t binding,
                                            uint32_t array_index = 0) = 0;
     virtual result<void> BindTextures(
         const std::vector<Image>& images, uint32_t first_binding = 0,
@@ -60,7 +61,8 @@ class Backend {
     virtual result<void> BindVertexBuffers(
         const std::vector<Buffer>& vertex_buffers, uint32_t first_binding = 0,
         std::vector<size_t> offsets = {}) = 0;
-    virtual result<void> BindIndexBuffer(Buffer index_buffer, size_t offset = 0,
+    virtual result<void> BindIndexBuffer(const Buffer& index_buffer,
+                                         size_t offset = 0,
                                          bool short_indices = false) = 0;
     virtual result<void> BindVertexInputFormat(
         VertexInputFormat vertex_input_format) = 0;

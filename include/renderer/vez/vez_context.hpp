@@ -23,7 +23,7 @@ struct VezContext {
         VertexInputFormatCache;
 
     typedef std::vector<uint64_t> BufferHash;
-    typedef std::map<BufferHash, VkBuffer> BufferCache;
+    typedef std::map<BufferHash, std::shared_ptr<Buffer>> BufferCache;
 
     typedef std::vector<uint64_t> ImageHash;
     typedef std::map<ImageHash, VulkanImage> ImageCache;

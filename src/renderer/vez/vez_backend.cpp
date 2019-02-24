@@ -267,10 +267,9 @@ result<Framebuffer> VezBackend::CreateFramebuffer(size_t frame_index,
     return {framebuffer};
 }
 
-result<Buffer> VezBackend::CreateVertexBuffer(const AttachmentIndex<Mesh>& mesh,
-                                              const char* name, uint64_t size,
-                                              bool gpu_stored,
-                                              void* initial_contents) {
+result<std::shared_ptr<Buffer>> VezBackend::CreateVertexBuffer(
+    const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
+    bool gpu_stored, void* initial_contents) {
     auto hash = GetMeshBufferHash(mesh, name);
     OUTCOME_TRY(buffer, CreateBuffer(hash, static_cast<VkDeviceSize>(size),
                                      gpu_stored ? VEZ_MEMORY_GPU_ONLY
@@ -278,24 +277,23 @@ result<Buffer> VezBackend::CreateVertexBuffer(const AttachmentIndex<Mesh>& mesh,
                                      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
                                          VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                      initial_contents));
-    return {buffer};
+    return buffer;
 }
 
-result<Buffer> VezBackend::GetVertexBuffer(const AttachmentIndex<Mesh>& mesh,
-                                           const char* name) {
+result<std::shared_ptr<Buffer>> VezBackend::GetVertexBuffer(
+    const AttachmentIndex<Mesh>& mesh, const char* name) {
     auto hash = GetMeshBufferHash(mesh, name);
     auto result = context_.buffer_cache.find(hash);
     if (result != context_.buffer_cache.end()) {
-        return {result->second};
+        return result->second;
     }
 
     return Error::NotFound;
 }
 
-result<Buffer> VezBackend::CreateIndexBuffer(const AttachmentIndex<Mesh>& mesh,
-                                             const char* name, uint64_t size,
-                                             bool gpu_stored,
-                                             void* initial_contents) {
+result<std::shared_ptr<Buffer>> VezBackend::CreateIndexBuffer(
+    const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
+    bool gpu_stored, void* initial_contents) {
     auto hash = GetMeshBufferHash(mesh, name);
     OUTCOME_TRY(buffer, CreateBuffer(hash, static_cast<VkDeviceSize>(size),
                                      gpu_stored ? VEZ_MEMORY_GPU_ONLY
@@ -303,21 +301,21 @@ result<Buffer> VezBackend::CreateIndexBuffer(const AttachmentIndex<Mesh>& mesh,
                                      VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                                          VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                      initial_contents));
-    return {buffer};
+    return buffer;
 }
 
-result<Buffer> VezBackend::GetIndexBuffer(const AttachmentIndex<Mesh>& mesh,
-                                          const char* name) {
+result<std::shared_ptr<Buffer>> VezBackend::GetIndexBuffer(
+    const AttachmentIndex<Mesh>& mesh, const char* name) {
     auto hash = GetMeshBufferHash(mesh, name);
     auto result = context_.buffer_cache.find(hash);
     if (result != context_.buffer_cache.end()) {
-        return {result->second};
+        return result->second;
     }
 
     return Error::NotFound;
 }
 
-result<void> VezBackend::UpdateBuffer(Buffer buffer, uint64_t offset,
+result<void> VezBackend::UpdateBuffer(const Buffer& buffer, uint64_t offset,
                                       uint64_t size, void* contents) {
     uint8_t* data;
     auto res = vezMapBuffer(context_.device, buffer.vez, offset, size,
@@ -438,8 +436,9 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
     return outcome::success();
 }
 
-result<void> VezBackend::BindUniformBuffer(Buffer buffer, uint64_t offset,
-                                           uint64_t size, uint32_t binding,
+result<void> VezBackend::BindUniformBuffer(const Buffer& buffer,
+                                           uint64_t offset, uint64_t size,
+                                           uint32_t binding,
                                            uint32_t array_index) {
     vezCmdBindBuffer(buffer.vez, offset, size, 0, binding, array_index);
     return outcome::success();
@@ -486,8 +485,8 @@ result<void> VezBackend::BindVertexBuffers(
     return outcome::success();
 }
 
-result<void> VezBackend::BindIndexBuffer(Buffer index_buffer, uint64_t offset,
-                                         bool short_indices) {
+result<void> VezBackend::BindIndexBuffer(const Buffer& index_buffer,
+                                         uint64_t offset, bool short_indices) {
     vezCmdBindIndexBuffer(
         index_buffer.vez, static_cast<VkDeviceSize>(offset),
         short_indices ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
@@ -613,7 +612,8 @@ result<void> VezBackend::TeardownContext() {
     }
 
     for (auto buffer : context_.buffer_cache) {
-        vezDestroyBuffer(context_.device, buffer.second);
+        vezDestroyBuffer(context_.device, buffer.second->vez);
+        buffer.second->valid;
     }
 
     for (auto pipeline : context_.pipeline_cache) {
@@ -883,18 +883,17 @@ result<VkShaderModule> VezBackend::GetFragmentShaderModule(
     }
 }
 
-result<VkBuffer> VezBackend::CreateBuffer(VezContext::BufferHash hash,
-                                          VkDeviceSize size,
-                                          VezMemoryFlagsBits storage,
-                                          VkBufferUsageFlags usage,
-                                          void* initial_contents) {
+result<std::shared_ptr<Buffer>> VezBackend::CreateBuffer(
+    VezContext::BufferHash hash, VkDeviceSize size, VezMemoryFlagsBits storage,
+    VkBufferUsageFlags usage, void* initial_contents) {
     assert(context_.device &&
            "Context must be initialized before creating a buffer");
     VkDevice device = context_.device;
 
     auto result = context_.buffer_cache.find(hash);
     if (result != context_.buffer_cache.end()) {
-        vezDestroyBuffer(device, result->second);
+        vezDestroyBuffer(device, result->second->vez);
+        result->second->valid = false;
     }
 
     VezBufferCreateInfo buffer_info = {};
@@ -925,11 +924,13 @@ result<VkBuffer> VezBackend::CreateBuffer(VezContext::BufferHash hash,
         }
     }
 
-    context_.buffer_cache[hash] = buffer;
-    return buffer;
+    auto ret = std::make_shared<Buffer>(buffer);
+    context_.buffer_cache[hash] = ret;
+    return ret;
 }
 
-result<VkBuffer> VezBackend::GetBuffer(VezContext::BufferHash hash) {
+result<std::shared_ptr<Buffer>> VezBackend::GetBuffer(
+    VezContext::BufferHash hash) {
     auto result = context_.buffer_cache.find(hash);
     if (result != context_.buffer_cache.end()) {
         return result->second;
@@ -1179,7 +1180,7 @@ VezContext::BufferHash VezBackend::GetBufferHash(const char* name) {
 }
 
 VezContext::BufferHash VezBackend::GetMeshBufferHash(
-    const const AttachmentIndex<Mesh>& mesh, const char* name) {
+    const AttachmentIndex<Mesh>& mesh, const char* name) {
     return {mesh.id, mesh.gen, sdbm_hash(name)};
 }
 

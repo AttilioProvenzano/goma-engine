@@ -90,14 +90,14 @@ class AttachmentManager : public AttachmentManagerBase {
         return outcome::success();
     }
 
-    void ForEach(std::function<void(const AttachmentIndex<T>,
+    void ForEach(std::function<void(const AttachmentIndex<T>&,
                                     const std::set<NodeIndex>&, T&)>
                      fun) {
         for (auto& a : attachments_) {
             if (!a.valid()) {
                 continue;
             }
-            fun(a.index, a.nodes, a.data);
+            fun(a.id, a.nodes, a.data);
         }
     }
 

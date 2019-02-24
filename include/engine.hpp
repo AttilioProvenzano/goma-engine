@@ -16,6 +16,7 @@ class Engine {
     result<void> LoadScene(const char* file_path);
 
     Platform* platform() { return platform_.get(); }
+    Renderer* renderer() { return renderer_.get(); }
     Scene* scene() { return scene_.get(); }
 
   private:

@@ -227,8 +227,8 @@ void main() {
     vez.BindGraphicsPipeline(create_pipeline_result.value());
     vez.BindVertexInputFormat(vertex_input_format_result.value());
     vez.BindVertexBuffers(
-        {create_pos_buffer_result.value(), create_uv_buffer_result.value()});
-    vez.BindIndexBuffer(create_index_buffer_result.value());
+        {*create_pos_buffer_result.value(), *create_uv_buffer_result.value()});
+    vez.BindIndexBuffer(*create_index_buffer_result.value());
     vez.BindTextures({create_texture_result.value()});
     vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
     vez.FinishFrame();
@@ -457,14 +457,15 @@ while (camera_node != scene->GetRootNode()) {
 
         model = glm::rotate(model, glm::radians(2.0f), camera->up);
         glm::mat4 mvp = proj * view * model;
-        vez.UpdateBuffer(mvp_buffer, frame_id * unif_offset, sizeof(mvp), &mvp);
+        vez.UpdateBuffer(*mvp_buffer, frame_id * unif_offset, sizeof(mvp),
+                         &mvp);
 
-        vez.BindUniformBuffer(mvp_buffer, frame_id * unif_offset, sizeof(mvp),
+        vez.BindUniformBuffer(*mvp_buffer, frame_id * unif_offset, sizeof(mvp),
                               1, 0);
         vez.BindVertexInputFormat(vertex_input_format_result.value());
-        vez.BindVertexBuffers({create_pos_buffer_result.value(),
-                               create_uv_buffer_result.value()});
-        vez.BindIndexBuffer(create_index_buffer_result.value());
+        vez.BindVertexBuffers({*create_pos_buffer_result.value(),
+                               *create_uv_buffer_result.value()});
+        vez.BindIndexBuffer(*create_index_buffer_result.value());
         vez.BindTextures({create_texture_result.value()});
 
         VezDepthStencilState ds_state = {};

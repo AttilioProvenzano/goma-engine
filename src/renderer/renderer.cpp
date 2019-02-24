@@ -32,12 +32,18 @@ result<void> Renderer::Render() {
     // TODO ordering
 
     // Ensure that all meshes have their own buffers
-    scene->ForEach<Mesh>([](Mesh& mesh) {
-        // TODO Need to change the way the buffers are hashed (what they
-        // contain)
-        // Also need to have a shared_ptr to the buffers in the mesh, with a
-        // valid bit
-        LOGI("%s", mesh.name);
+    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+		// Create vertex buffer
+        if (!mesh.vertices.empty()) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "vertex", mesh.vertices.size() * sizeof(mesh.vertices[0]),
+                true, mesh.vertices.data());
+
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.vertex = vb;
+            }
+        }
     });
 
     return outcome::success();

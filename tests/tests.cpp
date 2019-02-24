@@ -1,5 +1,7 @@
 #include "gtest/gtest.h"
 
+#include "engine.hpp"
+
 #include "scene/scene.hpp"
 #include "scene/attachments/texture.hpp"
 #include "scene/attachments/material.hpp"
@@ -483,6 +485,12 @@ while (camera_node != scene->GetRootNode()) {
         vez.FinishFrame();
         vez.PresentImage("color");
     }
+}
+
+TEST(RendererTest, RenderModel) {
+    Engine e;
+    e.LoadScene("../models/Duck/glTF/Duck.gltf");
+    e.renderer()->Render();
 }
 
 }  // namespace

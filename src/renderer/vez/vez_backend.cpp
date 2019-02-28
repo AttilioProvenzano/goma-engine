@@ -613,8 +613,9 @@ result<void> VezBackend::TeardownContext() {
 
     for (auto buffer : context_.buffer_cache) {
         vezDestroyBuffer(context_.device, buffer.second->vez);
-        buffer.second->valid;
+        buffer.second->valid = false;
     }
+    context_.buffer_cache.clear();
 
     for (auto pipeline : context_.pipeline_cache) {
         vezDestroyPipeline(context_.device, pipeline.second);

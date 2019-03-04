@@ -73,6 +73,10 @@ result<NodeIndex> Scene::GetParent(NodeIndex id) {
     if (!ValidateNode(id)) {
         return Error::InvalidNode;
     }
+    if (id == GetRootNode()) {
+        return Error::InvalidParentNode;
+    }
+
     return nodes_[id.id].parent;
 }
 

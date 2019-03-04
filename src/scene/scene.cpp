@@ -90,6 +90,29 @@ result<Transform*> Scene::GetTransform(NodeIndex id) {
     return &nodes_[id.id].transform;
 }
 
+bool Scene::HasCachedModel(NodeIndex id) {
+    if (!ValidateNode(id)) {
+        return false;
+    }
+    return static_cast<bool>(nodes_[id.id].cached_model);
+}
+
+result<glm::mat4> Scene::GetCachedModel(NodeIndex id) {
+    if (!ValidateNode(id)) {
+        return Error::InvalidNode;
+    }
+    return *nodes_[id.id].cached_model.get();
+}
+
+result<void> Scene::SetCachedModel(NodeIndex id, const glm::mat4& model) {
+    if (!ValidateNode(id)) {
+        return Error::InvalidNode;
+    }
+    nodes_[id.id].cached_model = std::make_unique<glm::mat4>(model);
+
+    return outcome::success();
+}
+
 result<void> Scene::DeleteNode(NodeIndex id) {
     // Root node cannot be deleted
     if (id.id == 0) {

@@ -30,6 +30,9 @@ class Scene {
     result<NodeIndex> GetParent(NodeIndex id);
     result<std::set<NodeIndex>> GetChildren(NodeIndex id);
     result<Transform*> GetTransform(NodeIndex id);
+    bool HasCachedModel(NodeIndex id);
+    result<glm::mat4> GetCachedModel(NodeIndex id);
+    result<void> SetCachedModel(NodeIndex id, const glm::mat4& model);
 
     template <typename T>
     result<AttachmentIndex<T>> CreateAttachment(const NodeIndex& node_id,

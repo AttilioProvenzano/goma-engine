@@ -4,6 +4,8 @@
 #include "renderer/vez/vez_backend.hpp"
 #include "scene/attachments/mesh.hpp"
 
+#include <stack>
+
 #define LOG(prefix, format, ...) printf(prefix format "\n", __VA_ARGS__)
 #define LOGE(format, ...) LOG("** ERROR: ", format, __VA_ARGS__)
 #define LOGW(format, ...) LOG("* Warning: ", format, __VA_ARGS__)
@@ -143,6 +145,56 @@ result<void> Renderer::Render() {
                     auto& vb = vb_result.value();
                     mesh.buffers.uvw[i] = vb;
                 }
+            }
+        }
+    });
+
+    // Ensure that all meshes have world-space model matrices
+    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+        auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
+        if (!nodes_result || !nodes_result.value()) {
+            return;
+        }
+
+        for (auto& mesh_node : *nodes_result.value()) {
+            std::stack<NodeIndex> node_stack;
+
+            // Fill the stack with nodes for which we need
+            // to compute model matrix
+            auto current_node = mesh_node;
+            while (!scene->HasCachedModel(current_node)) {
+                node_stack.push(current_node);
+
+                auto parent = scene->GetParent(current_node);
+                if (!parent) {
+                    break;
+                } else {
+                    current_node = parent.value();
+                }
+            }
+
+            // Compute model matrices
+            auto current_model = glm::mat4(1.0f);
+            if (!node_stack.empty()) {
+                auto parent = scene->GetParent(node_stack.top());
+                if (parent && scene->HasCachedModel(parent.value())) {
+                    current_model =
+                        scene->GetCachedModel(parent.value()).value();
+                }
+            }
+
+            while (!node_stack.empty()) {
+                auto node = node_stack.top();
+                node_stack.pop();
+
+                auto transform = scene->GetTransform(node).value();
+                current_model = glm::scale(current_model, transform->scale);
+                current_model =
+                    glm::mat4_cast(transform->rotation) * current_model;
+                current_model =
+                    glm::translate(current_model, transform->position);
+
+                scene->SetCachedModel(node, current_model);
             }
         }
     });

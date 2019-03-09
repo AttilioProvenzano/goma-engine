@@ -2,6 +2,7 @@
 
 #include "engine.hpp"
 #include "renderer/vez/vez_backend.hpp"
+#include "scene/attachments/camera.hpp"
 #include "scene/attachments/mesh.hpp"
 
 #include <stack>
@@ -197,6 +198,67 @@ result<void> Renderer::Render() {
                 scene->SetCachedModel(node, current_model);
             }
         }
+    });
+
+    // Get the VP matrix
+    auto camera_res = scene->GetAttachment<Camera>({0}); // TODO main camera
+    if (!camera_res) {
+        return Error::NoMainCamera;
+    }
+
+    auto& camera = camera_res.value();
+    auto fovy = camera->h_fov / camera->aspect_ratio; // TODO use proper aspect ratio
+    glm::mat4 view =
+        glm::lookAt(glm::vec3(0, 0, -10.0f), glm::vec3(0, 0, 0), camera->up);
+    glm::mat4 proj = glm::perspective(glm::radians(camera->h_fov), camera->aspect_ratio,
+        camera->near_plane, camera->far_plane);
+    proj[1][1] *= -1; // Vulkan-style projection
+
+    glm::mat4 vp = proj * view;
+
+    // Render meshes
+    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+        auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
+        if (!nodes_result || !nodes_result.value()) {
+            return;
+        }
+
+        auto material_result = scene->GetAttachment<Material>(mesh.material);
+        if (!material_result) {
+            return;
+        }
+        auto& material = material_result.value();
+
+        // TODO support no index buffer
+        // TODO backend->BindVertexInputFormat(vertex_input_format_result.value());
+        backend->BindVertexBuffers({mesh.buffers.vertex, mesh.buffers.uv[0]});
+        backend->BindIndexBuffer(mesh.buffers.index);
+
+        auto diffuse_binding = material.textures.find(TextureType::Diffuse);
+        if (diffuse_binding != material.textures.end()) {
+            auto texture_result = scene->GetAttachment<Texture>(diffuse_binding->index);
+            if (texture_result) {
+                backend->BindTextures(texture_result.value());
+            }
+        }
+
+        for (auto& mesh_node : *nodes_result.value()) {
+            backend_->BindVertexUniforms({vp * scene->GetCachedModel(mesh_node).value()});
+        }
+
+        // TODO backend functions to set state
+        VezDepthStencilState ds_state = {};
+        ds_state.depthTestEnable = VK_TRUE;
+        ds_state.depthCompareOp = VK_COMPARE_OP_LESS;
+        ds_state.depthWriteEnable = VK_TRUE;
+        vezCmdSetDepthStencilState(&ds_state);
+
+        VezRasterizationState raster_state = {};
+        raster_state.cullMode = VK_CULL_MODE_BACK_BIT;
+        raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        vezCmdSetRasterizationState(&raster_state);
+
+        backend->DrawIndexed(static_cast<uint32_t>(mesh->indices.size()));
     });
 
     return outcome::success();

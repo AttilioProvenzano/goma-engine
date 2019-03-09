@@ -437,11 +437,13 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
 }
 
 result<void> VezBackend::BindVertexUniforms(const VertexUniforms& vertex_uniforms) {
-    vezCmdPushConstants(0, std::min(sizeof(vertex_uniforms), 128ULL), &vertex_uniforms);
+    vezCmdPushConstants(0, static_cast<uint32_t>(std::min(sizeof(vertex_uniforms), 128ULL)), &vertex_uniforms);
+    return outcome::success();
 };
 
 result<void> VezBackend::BindFragmentUniforms(const FragmentUniforms& fragment_uniforms) {
-    vezCmdPushConstants(128, std::min(sizeof(fragment_uniforms), 128ULL), &fragment_uniforms);
+    vezCmdPushConstants(128, static_cast<uint32_t>(std::min(sizeof(fragment_uniforms), 128ULL)), &fragment_uniforms);
+    return outcome::success();
 };
 
 result<void> VezBackend::BindUniformBuffer(const Buffer& buffer,

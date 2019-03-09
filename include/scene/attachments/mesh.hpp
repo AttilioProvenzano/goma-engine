@@ -3,6 +3,7 @@
 #include <renderer/handles.hpp>
 
 #include <glm/glm.hpp>
+#include <memory>
 
 namespace goma {
 

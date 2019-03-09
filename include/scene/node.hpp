@@ -6,6 +6,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <set>
+#include <memory>
 
 namespace goma {
 

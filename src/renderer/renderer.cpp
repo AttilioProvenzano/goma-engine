@@ -227,18 +227,19 @@ result<void> Renderer::Render() {
         if (!material_result) {
             return;
         }
-        auto& material = material_result.value();
+        auto& material = *material_result.value();
 
         // TODO support no index buffer
         // TODO backend->BindVertexInputFormat(vertex_input_format_result.value());
-        backend->BindVertexBuffers({mesh.buffers.vertex, mesh.buffers.uv[0]});
-        backend->BindIndexBuffer(mesh.buffers.index);
+        backend_->BindVertexBuffers({*mesh.buffers.vertex, *mesh.buffers.uv[0]});
+        backend_->BindIndexBuffer(*mesh.buffers.index);
 
         auto diffuse_binding = material.textures.find(TextureType::Diffuse);
-        if (diffuse_binding != material.textures.end()) {
-            auto texture_result = scene->GetAttachment<Texture>(diffuse_binding->index);
+        if (diffuse_binding != material.textures.end() && !diffuse_binding->second.empty()) {
+            auto texture_result = scene->GetAttachment<Texture>(diffuse_binding->second[0].index);
             if (texture_result) {
-                backend->BindTextures(texture_result.value());
+                // TODO upload textures so we can bind them
+                // backend_->BindTextures();
             }
         }
 
@@ -258,7 +259,7 @@ result<void> Renderer::Render() {
         raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         vezCmdSetRasterizationState(&raster_state);
 
-        backend->DrawIndexed(static_cast<uint32_t>(mesh->indices.size()));
+        backend_->DrawIndexed(static_cast<uint32_t>(mesh.indices.size()));
     });
 
     return outcome::success();

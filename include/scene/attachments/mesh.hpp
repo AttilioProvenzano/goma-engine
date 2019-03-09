@@ -38,6 +38,8 @@ struct Mesh {
     std::vector<std::vector<glm::vec2>> uv_sets;
     std::vector<std::vector<glm::vec3>> uvw_sets;
 
+    AttachmentIndex<Material> material = {};
+
     Box bounding_box = {};
     MeshBuffers buffers = {};
 };

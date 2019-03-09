@@ -116,6 +116,11 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 }
             }
 
+            // TODO this relies on all materials being converted.
+            // The correct approach would be with a map from materialIndex
+            // to Material attachments.
+            mesh.material = {ai_mesh->mMaterialIndex};
+
             auto mesh_result = scene->CreateAttachment(std::move(mesh));
 
             if (mesh_result.has_value()) {

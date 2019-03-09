@@ -13,6 +13,14 @@ namespace goma {
 
 class Engine;
 
+struct VertexUniforms {
+    glm::mat4 mvp;
+};
+
+struct FragmentUniforms {
+
+};
+
 class Backend {
   public:
     Backend(Engine* engine = nullptr) : engine_(engine) {}
@@ -51,6 +59,9 @@ class Backend {
     virtual result<size_t> StartFrame(uint32_t threads = 1) = 0;
     virtual result<void> StartRenderPass(Framebuffer fb,
                                          RenderPassDesc rp_desc) = 0;
+
+    virtual result<void> BindVertexUniforms(const VertexUniforms& vertex_uniforms) = 0;
+    virtual result<void> BindFragmentUniforms(const FragmentUniforms& fragment_uniforms) = 0;
     virtual result<void> BindUniformBuffer(const Buffer& buffer,
                                            uint64_t offset, uint64_t size,
                                            uint32_t binding,

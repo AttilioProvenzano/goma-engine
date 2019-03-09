@@ -50,6 +50,9 @@ class VezBackend : public Backend {
     virtual result<size_t> StartFrame(uint32_t threads = 1) override;
     virtual result<void> StartRenderPass(Framebuffer fb,
                                          RenderPassDesc rp_desc) override;
+
+    virtual result<void> BindVertexUniforms(const VertexUniforms& vertex_uniforms) override;
+    virtual result<void> BindFragmentUniforms(const FragmentUniforms& fragment_uniforms) override;
     virtual result<void> BindUniformBuffer(const Buffer& buffer,
                                            uint64_t offset, uint64_t size,
                                            uint32_t binding,

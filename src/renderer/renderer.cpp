@@ -21,6 +21,12 @@ Renderer::Renderer(Engine* engine)
     } else {
         LOGE("%s", result.error().message().c_str());
     }
+
+    if (auto result = backend_->InitSurface(engine_->platform())) {
+        LOGI("Surface initialized.");
+    } else {
+        LOGE("%s", result.error().message().c_str());
+    }
 }
 
 result<void> Renderer::Render() {

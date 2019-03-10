@@ -17,6 +17,9 @@ class Renderer {
   private:
     Engine* engine_ = nullptr;
     std::unique_ptr<Backend> backend_;
+
+    std::shared_ptr<Pipeline> pipeline_;
+    std::vector<Framebuffer> framebuffers_;
 };
 
 }  // namespace goma

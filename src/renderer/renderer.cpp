@@ -236,20 +236,76 @@ result<void> Renderer::Render() {
     });
 
     // Get the VP matrix
-    auto camera_res = scene->GetAttachment<Camera>({0}); // TODO main camera
+    auto camera_res = scene->GetAttachment<Camera>({0});  // TODO main camera
     if (!camera_res) {
         return Error::NoMainCamera;
     }
 
     auto& camera = camera_res.value();
-    auto fovy = camera->h_fov / camera->aspect_ratio; // TODO use proper aspect ratio
+    auto fovy =
+        camera->h_fov / camera->aspect_ratio;  // TODO use proper aspect ratio
     glm::mat4 view =
         glm::lookAt(glm::vec3(0, 0, -10.0f), glm::vec3(0, 0, 0), camera->up);
-    glm::mat4 proj = glm::perspective(glm::radians(camera->h_fov), camera->aspect_ratio,
-        camera->near_plane, camera->far_plane);
-    proj[1][1] *= -1; // Vulkan-style projection
+    glm::mat4 proj =
+        glm::perspective(glm::radians(camera->h_fov), camera->aspect_ratio,
+                         camera->near_plane, camera->far_plane);
+    proj[1][1] *= -1;  // Vulkan-style projection
 
     glm::mat4 vp = proj * view;
+
+    // Ensure framebuffers are created for all frames
+    backend_->SetupFrames(3);
+
+    if (framebuffers_.size() < 3) {
+        FramebufferDesc fb_desc = {800, 600};
+        for (uint32_t i = 0; i < 3; i++) {
+            framebuffers_.push_back(
+                backend_->CreateFramebuffer(i, "fb", fb_desc).value());
+        }
+    }
+
+    if (!pipeline_ || !pipeline_->valid) {
+        static const char* vert = R"(
+#version 450
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inUVs;
+
+layout(location = 0) out vec2 outUVs;
+
+layout(push_constant) uniform PC {
+	mat4 mvp;
+} pc;
+
+void main() {
+    gl_Position = pc.mvp * vec4(inPosition, 1.0);
+    outUVs = inUVs;
+}
+)";
+
+        static const char* frag = R"(
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+// layout(set = 0, binding = 0) uniform sampler2D mainTexture;
+
+layout(location = 0) in vec2 inUVs;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = vec4(inUVs, 1.0, 1.0); // texture(mainTexture, inUVs);
+}
+)";
+
+        auto pipeline_res = backend_->GetGraphicsPipeline(vert, frag);
+        if (pipeline_res) {
+            pipeline_ = pipeline_res.value();
+        }
+    }
+
+    auto frame_id = backend_->StartFrame().value();
+    backend_->StartRenderPass(framebuffers_[frame_id], {});
+    backend_->BindGraphicsPipeline(*pipeline_);
 
     // Render meshes
     scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
@@ -265,8 +321,9 @@ result<void> Renderer::Render() {
         auto& material = *material_result.value();
 
         // TODO support no index buffer
-        // TODO backend->BindVertexInputFormat(vertex_input_format_result.value());
-        backend_->BindVertexBuffers({*mesh.buffers.vertex, *mesh.buffers.uv[0]});
+        backend_->BindVertexInputFormat(*mesh.vertex_input_format);
+        backend_->BindVertexBuffers(
+            {*mesh.buffers.vertex, *mesh.buffers.uv[0]});
         backend_->BindIndexBuffer(*mesh.buffers.index);
 
         auto diffuse_binding = material.textures.find(TextureType::Diffuse);
@@ -299,6 +356,9 @@ result<void> Renderer::Render() {
 
         backend_->DrawIndexed(static_cast<uint32_t>(mesh.indices.size()));
     });
+
+    backend_->FinishFrame();
+    backend_->PresentImage("color");
 
     return outcome::success();
 }

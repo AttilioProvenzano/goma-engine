@@ -210,10 +210,12 @@ result<void> Renderer::Render() {
             // Compute model matrices
             auto current_model = glm::mat4(1.0f);
             if (!node_stack.empty()) {
-                auto parent = scene->GetParent(node_stack.top());
-                if (parent && scene->HasCachedModel(parent.value())) {
-                    current_model =
-                        scene->GetCachedModel(parent.value()).value();
+                auto parent_res = scene->GetParent(node_stack.top());
+                if (parent_res.has_value()) {
+                    auto& parent = parent_res.value();
+                    if (scene->HasCachedModel(parent)) {
+                        current_model = scene->GetCachedModel(parent).value();
+                    }
                 }
             }
 

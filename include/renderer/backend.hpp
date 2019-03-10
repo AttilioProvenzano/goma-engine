@@ -17,9 +17,7 @@ struct VertexUniforms {
     glm::mat4 mvp;
 };
 
-struct FragmentUniforms {
-
-};
+struct FragmentUniforms {};
 
 class Backend {
   public:
@@ -60,8 +58,10 @@ class Backend {
     virtual result<void> StartRenderPass(Framebuffer fb,
                                          RenderPassDesc rp_desc) = 0;
 
-    virtual result<void> BindVertexUniforms(const VertexUniforms& vertex_uniforms) = 0;
-    virtual result<void> BindFragmentUniforms(const FragmentUniforms& fragment_uniforms) = 0;
+    virtual result<void> BindVertexUniforms(
+        const VertexUniforms& vertex_uniforms) = 0;
+    virtual result<void> BindFragmentUniforms(
+        const FragmentUniforms& fragment_uniforms) = 0;
     virtual result<void> BindUniformBuffer(const Buffer& buffer,
                                            uint64_t offset, uint64_t size,
                                            uint32_t binding,

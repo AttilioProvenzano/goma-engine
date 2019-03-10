@@ -235,8 +235,10 @@ result<void> Renderer::Render() {
         backend_->BindIndexBuffer(*mesh.buffers.index);
 
         auto diffuse_binding = material.textures.find(TextureType::Diffuse);
-        if (diffuse_binding != material.textures.end() && !diffuse_binding->second.empty()) {
-            auto texture_result = scene->GetAttachment<Texture>(diffuse_binding->second[0].index);
+        if (diffuse_binding != material.textures.end() &&
+            !diffuse_binding->second.empty()) {
+            auto texture_result =
+                scene->GetAttachment<Texture>(diffuse_binding->second[0].index);
             if (texture_result) {
                 // TODO upload textures so we can bind them
                 // backend_->BindTextures();
@@ -244,7 +246,8 @@ result<void> Renderer::Render() {
         }
 
         for (auto& mesh_node : *nodes_result.value()) {
-            backend_->BindVertexUniforms({vp * scene->GetCachedModel(mesh_node).value()});
+            backend_->BindVertexUniforms(
+                {vp * scene->GetCachedModel(mesh_node).value()});
         }
 
         // TODO backend functions to set state

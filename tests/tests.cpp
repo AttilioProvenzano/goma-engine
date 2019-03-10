@@ -226,8 +226,8 @@ void main() {
         1);  // TODO crashes if we don't call SetupFrames before StartFrames
     vez.StartFrame();
     vez.StartRenderPass(create_fb_result.value(), {});
-    vez.BindGraphicsPipeline(create_pipeline_result.value());
-    vez.BindVertexInputFormat(vertex_input_format_result.value());
+    vez.BindGraphicsPipeline(*create_pipeline_result.value());
+    vez.BindVertexInputFormat(*vertex_input_format_result.value());
     vez.BindVertexBuffers(
         {*create_pos_buffer_result.value(), *create_uv_buffer_result.value()});
     vez.BindIndexBuffer(*create_index_buffer_result.value());
@@ -455,7 +455,7 @@ while (camera_node != scene->GetRootNode()) {
     for (size_t i = 0; i < 100; i++) {
         auto frame_id = vez.StartFrame().value();
         vez.StartRenderPass(fbs[frame_id], {});
-        vez.BindGraphicsPipeline(create_pipeline_result.value());
+        vez.BindGraphicsPipeline(*create_pipeline_result.value());
 
         model = glm::rotate(model, glm::radians(2.0f), camera->up);
         glm::mat4 mvp = proj * view * model;
@@ -464,7 +464,7 @@ while (camera_node != scene->GetRootNode()) {
 
         vez.BindUniformBuffer(*mvp_buffer, frame_id * unif_offset, sizeof(mvp),
                               1, 0);
-        vez.BindVertexInputFormat(vertex_input_format_result.value());
+        vez.BindVertexInputFormat(*vertex_input_format_result.value());
         vez.BindVertexBuffers({*create_pos_buffer_result.value(),
                                *create_uv_buffer_result.value()});
         vez.BindIndexBuffer(*create_index_buffer_result.value());
@@ -491,6 +491,8 @@ TEST(RendererTest, RenderModel) {
     Engine e;
     e.LoadScene("../models/Duck/glTF/Duck.gltf");
     e.renderer()->Render();
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
 }  // namespace

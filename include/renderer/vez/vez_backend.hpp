@@ -20,11 +20,11 @@ class VezBackend : public Backend {
 
     virtual result<void> InitContext() override;
     virtual result<void> InitSurface(Platform* platform) override;
-    virtual result<Pipeline> GetGraphicsPipeline(
+    virtual result<std::shared_ptr<Pipeline>> GetGraphicsPipeline(
         const char* vs_source, const char* fs_source,
         const char* vs_entry_point = "main",
         const char* fs_entry_point = "main") override;
-    virtual result<VertexInputFormat> GetVertexInputFormat(
+    virtual result<std::shared_ptr<VertexInputFormat>> GetVertexInputFormat(
         const VertexInputFormatDesc& desc) override;
 
     virtual result<Image> CreateTexture(

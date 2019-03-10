@@ -16,10 +16,10 @@ struct VezContext {
     typedef std::map<ShaderHash, VkShaderModule> ShaderCache;
 
     typedef std::vector<VkShaderModule> PipelineHash;
-    typedef std::map<PipelineHash, VezPipeline> PipelineCache;
+    typedef std::map<PipelineHash, std::shared_ptr<Pipeline>> PipelineCache;
 
     typedef std::vector<uint64_t> VertexInputFormatHash;
-    typedef std::map<VertexInputFormatHash, VezVertexInputFormat>
+    typedef std::map<VertexInputFormatHash, std::shared_ptr<VertexInputFormat>>
         VertexInputFormatCache;
 
     typedef std::vector<uint64_t> BufferHash;

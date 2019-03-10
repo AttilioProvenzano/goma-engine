@@ -105,10 +105,9 @@ result<void> VezBackend::InitSurface(Platform* platform) {
     return outcome::success();
 }
 
-result<Pipeline> VezBackend::GetGraphicsPipeline(const char* vs_source,
-                                                 const char* fs_source,
-                                                 const char* vs_entry_point,
-                                                 const char* fs_entry_point) {
+result<std::shared_ptr<Pipeline>> VezBackend::GetGraphicsPipeline(
+    const char* vs_source, const char* fs_source, const char* vs_entry_point,
+    const char* fs_entry_point) {
     assert(context_.device &&
            "Context must be initialized before creating a pipeline");
     VkDevice device = context_.device;
@@ -135,12 +134,14 @@ result<Pipeline> VezBackend::GetGraphicsPipeline(const char* vs_source,
 
         VezPipeline pipeline = VK_NULL_HANDLE;
         VK_CHECK(vezCreateGraphicsPipeline(device, &pipeline_info, &pipeline));
-        context_.pipeline_cache[hash] = pipeline;
-        return {pipeline};
+
+        auto ret = std::make_shared<Pipeline>(pipeline);
+        context_.pipeline_cache[hash] = ret;
+        return ret;
     }
 }
 
-result<VertexInputFormat> VezBackend::GetVertexInputFormat(
+result<std::shared_ptr<VertexInputFormat>> VezBackend::GetVertexInputFormat(
     const VertexInputFormatDesc& desc) {
     assert(context_.device && "Context must be initialized");
     VkDevice device = context_.device;
@@ -149,7 +150,7 @@ result<VertexInputFormat> VezBackend::GetVertexInputFormat(
 
     auto result = context_.vertex_input_format_cache.find(hash);
     if (result != context_.vertex_input_format_cache.end()) {
-        return {result->second};
+        return result->second;
     }
 
     std::vector<VkVertexInputBindingDescription> bindings;
@@ -175,8 +176,10 @@ result<VertexInputFormat> VezBackend::GetVertexInputFormat(
 
     VezVertexInputFormat input_format;
     vezCreateVertexInputFormat(device, &input_info, &input_format);
-    context_.vertex_input_format_cache[hash] = input_format;
-    return {input_format};
+
+    auto ret = std::make_shared<VertexInputFormat>(input_format);
+    context_.vertex_input_format_cache[hash] = ret;
+    return ret;
 };
 
 result<Image> VezBackend::CreateTexture(const char* name,
@@ -606,7 +609,8 @@ result<void> VezBackend::TeardownContext() {
     }
 
     for (auto& vertex_input : context_.vertex_input_format_cache) {
-        vezDestroyVertexInputFormat(context_.device, vertex_input.second);
+        vezDestroyVertexInputFormat(context_.device, vertex_input.second->vez);
+        vertex_input.second->valid = false;
     }
 
     for (auto framebuffer : context_.framebuffer_cache) {
@@ -634,7 +638,8 @@ result<void> VezBackend::TeardownContext() {
     context_.buffer_cache.clear();
 
     for (auto pipeline : context_.pipeline_cache) {
-        vezDestroyPipeline(context_.device, pipeline.second);
+        vezDestroyPipeline(context_.device, pipeline.second->vez);
+        pipeline.second->valid = false;
     }
 
     for (auto shader : context_.vertex_shader_cache) {

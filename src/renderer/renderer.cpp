@@ -150,6 +150,33 @@ result<void> Renderer::Render() {
         }
     });
 
+    // Ensure that all meshes have their own vertex input format
+    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+        VertexInputFormatDesc input_format_desc;
+
+        uint32_t binding_id = 0;
+        if (!mesh.vertices.empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.vertices[0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGB32, 0});
+        }
+
+        binding_id++;
+        if (!mesh.uv_sets[0].empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.uv_sets[0][0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRG32, 0});
+        }
+
+        auto input_format_res =
+            backend_->GetVertexInputFormat(input_format_desc);
+        if (input_format_res) {
+            mesh.vertex_input_format = input_format_res.value();
+        }
+    });
+
     // Ensure that all meshes have world-space model matrices
     scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
         auto nodes_result = scene->GetAttachedNodes<Mesh>(id);

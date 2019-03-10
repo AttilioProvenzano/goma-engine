@@ -41,6 +41,7 @@ struct Mesh {
 
     AttachmentIndex<Material> material = {};
 
+    std::shared_ptr<VertexInputFormat> vertex_input_format;
     Box bounding_box = {};
     MeshBuffers buffers = {};
 };

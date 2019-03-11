@@ -27,6 +27,7 @@ enum class Error {
     InvalidAttachment = 18,
     BufferCannotBeMapped = 19,
     NoSceneLoaded = 20,
+    NoMainCamera = 21,
 };
 
 }
@@ -94,6 +95,8 @@ class GomaError_category : public std::error_category {
                 return "buffer cannot be mapped";
             case goma::Error::NoSceneLoaded:
                 return "no scene loaded";
+            case goma::Error::NoMainCamera:
+                return "no main camera";
             default:
                 return "unknown error";
         }

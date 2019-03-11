@@ -20,17 +20,18 @@ class VezBackend : public Backend {
 
     virtual result<void> InitContext() override;
     virtual result<void> InitSurface(Platform* platform) override;
-    virtual result<Pipeline> GetGraphicsPipeline(
+    virtual result<std::shared_ptr<Pipeline>> GetGraphicsPipeline(
         const char* vs_source, const char* fs_source,
         const char* vs_entry_point = "main",
         const char* fs_entry_point = "main") override;
-    virtual result<VertexInputFormat> GetVertexInputFormat(
+    virtual result<std::shared_ptr<VertexInputFormat>> GetVertexInputFormat(
         const VertexInputFormatDesc& desc) override;
 
-    virtual result<Image> CreateTexture(
-        const char* name, TextureDesc texture_desc,
+    virtual result<std::shared_ptr<Image>> CreateTexture(
+        const char* name, const TextureDesc& texture_desc,
         void* initial_contents = nullptr) override;
-    virtual result<Image> GetTexture(const char* name) override;
+    virtual result<std::shared_ptr<Image>> GetTexture(
+        const char* name) override;
     virtual result<Framebuffer> CreateFramebuffer(
         size_t frame_index, const char* name, FramebufferDesc fb_desc) override;
     virtual result<std::shared_ptr<Buffer>> CreateVertexBuffer(
@@ -50,6 +51,11 @@ class VezBackend : public Backend {
     virtual result<size_t> StartFrame(uint32_t threads = 1) override;
     virtual result<void> StartRenderPass(Framebuffer fb,
                                          RenderPassDesc rp_desc) override;
+
+    virtual result<void> BindVertexUniforms(
+        const VertexUniforms& vertex_uniforms) override;
+    virtual result<void> BindFragmentUniforms(
+        const FragmentUniforms& fragment_uniforms) override;
     virtual result<void> BindUniformBuffer(const Buffer& buffer,
                                            uint64_t offset, uint64_t size,
                                            uint32_t binding,
@@ -101,14 +107,14 @@ class VezBackend : public Backend {
         VezMemoryFlagsBits storage, VkBufferUsageFlags usage,
         void* initial_contents = nullptr);
     result<std::shared_ptr<Buffer>> GetBuffer(VezContext::BufferHash hash);
-    result<VulkanImage> CreateFramebufferImage(
+    result<std::shared_ptr<Image>> CreateFramebufferImage(
         size_t frame_index, const FramebufferColorImageDesc& desc,
         uint32_t width, uint32_t height);
-    result<VulkanImage> CreateFramebufferImage(
+    result<std::shared_ptr<Image>> CreateFramebufferImage(
         size_t frame_index, const FramebufferDepthImageDesc& desc,
         uint32_t width, uint32_t height);
-    result<VulkanImage> GetFramebufferImage(size_t frame_index,
-                                            const char* name);
+    result<std::shared_ptr<Image>> GetFramebufferImage(size_t frame_index,
+                                                       const char* name);
     result<VkSampler> GetSampler(const SamplerDesc& sampler_desc);
 
   private:

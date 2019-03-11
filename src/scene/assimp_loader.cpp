@@ -116,6 +116,11 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 }
             }
 
+            // TODO this relies on all materials being converted.
+            // The correct approach would be with a map from materialIndex
+            // to Material attachments.
+            mesh.material = {ai_mesh->mMaterialIndex};
+
             auto mesh_result = scene->CreateAttachment(std::move(mesh));
 
             if (mesh_result.has_value()) {
@@ -138,8 +143,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
         ai_root_node->mTransformation.Decompose(scale, rot, pos);
         auto root_transform = scene->GetTransform(scene->GetRootNode()).value();
         root_transform->position = {pos.x, pos.y, pos.z};
-        root_transform->rotation = glm::quat(glm::vec3(
-            glm::degrees(rot.x), glm::degrees(rot.y), glm::degrees(rot.z)));
+        root_transform->rotation = glm::quat(glm::vec3(rot.x, rot.y, rot.z));
         root_transform->scale = {scale.x, scale.y, scale.z};
 
         node_map[ai_root_node] = scene->GetRootNode();
@@ -173,11 +177,9 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
 
             ai_node->mTransformation.Decompose(scale, rot, pos);
             auto node_result = scene->CreateNode(
-                parent,
-                {{pos.x, pos.y, pos.z},
-                 glm::quat(glm::vec3(glm::degrees(rot.x), glm::degrees(rot.y),
-                                     glm::degrees(rot.z))),
-                 {scale.x, scale.y, scale.z}});
+                parent, {{pos.x, pos.y, pos.z},
+                         glm::quat(glm::vec3(rot.x, rot.y, rot.z)),
+                         {scale.x, scale.y, scale.z}});
 
             if (!node_result.has_value()) {
                 const auto &error = node_result.error();

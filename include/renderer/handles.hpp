@@ -18,37 +18,37 @@ struct VulkanImage {
 
 struct Image {
     const VulkanImage vez = {};
-    bool valid = true;
+    bool valid = false;
 
-    Image(VulkanImage vez_) : vez(vez_) {}
+    Image(VulkanImage vez_) : vez(vez_), valid(true) {}
 };
 
 struct Framebuffer {
     const VezFramebuffer vez = {};
-    bool valid = true;
+    bool valid = false;
 
-    Framebuffer(VezFramebuffer vez_) : vez(vez_) {}
+    Framebuffer(VezFramebuffer vez_) : vez(vez_), valid(true) {}
 };
 
 struct Pipeline {
     const VezPipeline vez = VK_NULL_HANDLE;
-    bool valid = true;
+    bool valid = false;
 
-    Pipeline(VezPipeline vez_) : vez(vez_) {}
+    Pipeline(VezPipeline vez_) : vez(vez_), valid(true) {}
 };
 
 struct Buffer {
     const VkBuffer vez = VK_NULL_HANDLE;
-    bool valid = true;
+    bool valid = false;
 
-    Buffer(VkBuffer vez_) : vez(vez_) {}
+    Buffer(VkBuffer vez_) : vez(vez_), valid(true) {}
 };
 
 struct VertexInputFormat {
     const VezVertexInputFormat vez = VK_NULL_HANDLE;
-    bool valid = true;
+    bool valid = false;
 
-    VertexInputFormat(VezVertexInputFormat vez_) : vez(vez_) {}
+    VertexInputFormat(VezVertexInputFormat vez_) : vez(vez_), valid(true) {}
 };
 
 enum class Format {

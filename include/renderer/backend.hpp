@@ -13,6 +13,12 @@ namespace goma {
 
 class Engine;
 
+struct VertexUniforms {
+    glm::mat4 mvp;
+};
+
+struct FragmentUniforms {};
+
 class Backend {
   public:
     Backend(Engine* engine = nullptr) : engine_(engine) {}
@@ -20,17 +26,17 @@ class Backend {
 
     virtual result<void> InitContext() = 0;
     virtual result<void> InitSurface(Platform* platform) = 0;
-    virtual result<Pipeline> GetGraphicsPipeline(
+    virtual result<std::shared_ptr<Pipeline>> GetGraphicsPipeline(
         const char* vs_source, const char* fs_source,
         const char* vs_entry_point = "main",
         const char* fs_entry_point = "main") = 0;
-    virtual result<VertexInputFormat> GetVertexInputFormat(
+    virtual result<std::shared_ptr<VertexInputFormat>> GetVertexInputFormat(
         const VertexInputFormatDesc& desc) = 0;
 
-    virtual result<Image> CreateTexture(const char* name,
-                                        TextureDesc texture_desc,
-                                        void* initial_contents = nullptr) = 0;
-    virtual result<Image> GetTexture(const char* name) = 0;
+    virtual result<std::shared_ptr<Image>> CreateTexture(
+        const char* name, const TextureDesc& texture_desc,
+        void* initial_contents = nullptr) = 0;
+    virtual result<std::shared_ptr<Image>> GetTexture(const char* name) = 0;
     virtual result<Framebuffer> CreateFramebuffer(size_t frame_index,
                                                   const char* name,
                                                   FramebufferDesc fb_desc) = 0;
@@ -51,6 +57,11 @@ class Backend {
     virtual result<size_t> StartFrame(uint32_t threads = 1) = 0;
     virtual result<void> StartRenderPass(Framebuffer fb,
                                          RenderPassDesc rp_desc) = 0;
+
+    virtual result<void> BindVertexUniforms(
+        const VertexUniforms& vertex_uniforms) = 0;
+    virtual result<void> BindFragmentUniforms(
+        const FragmentUniforms& fragment_uniforms) = 0;
     virtual result<void> BindUniformBuffer(const Buffer& buffer,
                                            uint64_t offset, uint64_t size,
                                            uint32_t binding,

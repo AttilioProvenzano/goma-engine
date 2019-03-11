@@ -3,6 +3,7 @@
 #include <renderer/handles.hpp>
 
 #include <glm/glm.hpp>
+#include <memory>
 
 namespace goma {
 
@@ -38,6 +39,9 @@ struct Mesh {
     std::vector<std::vector<glm::vec2>> uv_sets;
     std::vector<std::vector<glm::vec3>> uvw_sets;
 
+    AttachmentIndex<Material> material = {};
+
+    std::shared_ptr<VertexInputFormat> vertex_input_format;
     Box bounding_box = {};
     MeshBuffers buffers = {};
 };

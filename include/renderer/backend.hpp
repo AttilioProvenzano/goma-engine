@@ -33,10 +33,10 @@ class Backend {
     virtual result<std::shared_ptr<VertexInputFormat>> GetVertexInputFormat(
         const VertexInputFormatDesc& desc) = 0;
 
-    virtual result<Image> CreateTexture(const char* name,
-                                        TextureDesc texture_desc,
-                                        void* initial_contents = nullptr) = 0;
-    virtual result<Image> GetTexture(const char* name) = 0;
+    virtual result<std::shared_ptr<Image>> CreateTexture(
+        const char* name, const TextureDesc& texture_desc,
+        void* initial_contents = nullptr) = 0;
+    virtual result<std::shared_ptr<Image>> GetTexture(const char* name) = 0;
     virtual result<Framebuffer> CreateFramebuffer(size_t frame_index,
                                                   const char* name,
                                                   FramebufferDesc fb_desc) = 0;

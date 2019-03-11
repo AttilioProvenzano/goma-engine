@@ -26,7 +26,7 @@ struct VezContext {
     typedef std::map<BufferHash, std::shared_ptr<Buffer>> BufferCache;
 
     typedef std::vector<uint64_t> ImageHash;
-    typedef std::map<ImageHash, VulkanImage> ImageCache;
+    typedef std::map<ImageHash, std::shared_ptr<Image>> ImageCache;
 
     typedef std::vector<uint64_t> SamplerHash;
     typedef std::map<SamplerHash, VkSampler> SamplerCache;

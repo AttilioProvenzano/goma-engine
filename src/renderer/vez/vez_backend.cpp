@@ -182,14 +182,13 @@ result<std::shared_ptr<VertexInputFormat>> VezBackend::GetVertexInputFormat(
     return ret;
 };
 
-result<Image> VezBackend::CreateTexture(const char* name,
-                                        TextureDesc texture_desc,
-                                        void* initial_contents) {
+result<std::shared_ptr<Image>> VezBackend::CreateTexture(
+    const char* name, const TextureDesc& texture_desc, void* initial_contents) {
     auto hash = GetTextureHash(name);
     auto result = context_.texture_cache.find(hash);
     if (result != context_.texture_cache.end()) {
-        vezDestroyImageView(context_.device, result->second.image_view);
-        vezDestroyImage(context_.device, result->second.image);
+        vezDestroyImageView(context_.device, result->second->vez.image_view);
+        vezDestroyImage(context_.device, result->second->vez.image);
     }
 
     VkFormat format = GetVkFormat(texture_desc.format);
@@ -215,15 +214,16 @@ result<Image> VezBackend::CreateTexture(const char* name,
     OUTCOME_TRY(sampler, GetSampler(texture_desc.sampler));
     vulkan_image.sampler = sampler;
 
-    context_.texture_cache[hash] = vulkan_image;
-    return {vulkan_image};
+    auto ret = std::make_shared<Image>(vulkan_image);
+    context_.texture_cache[hash] = ret;
+    return ret;
 }
 
-result<Image> VezBackend::GetTexture(const char* name) {
+result<std::shared_ptr<Image>> VezBackend::GetTexture(const char* name) {
     auto hash = GetTextureHash(name);
     auto result = context_.texture_cache.find(hash);
     if (result != context_.texture_cache.end()) {
-        return {result->second};
+        return result->second;
     }
 
     return Error::NotFound;
@@ -247,14 +247,14 @@ result<Framebuffer> VezBackend::CreateFramebuffer(size_t frame_index,
         OUTCOME_TRY(image,
                     CreateFramebufferImage(frame_index, image_desc,
                                            fb_desc.width, fb_desc.height));
-        attachments.push_back(image.image_view);
+        attachments.push_back(image->vez.image_view);
     }
 
     if (fb_desc.depth_image.depth_type != DepthImageType::None) {
         OUTCOME_TRY(image,
                     CreateFramebufferImage(frame_index, fb_desc.depth_image,
                                            fb_desc.width, fb_desc.height));
-        attachments.push_back(image.image_view);
+        attachments.push_back(image->vez.image_view);
     }
 
     VezFramebufferCreateInfo fb_info = {};
@@ -571,7 +571,7 @@ result<void> VezBackend::PresentImage(const char* present_image_name) {
 
     OUTCOME_TRY(fb_image, GetFramebufferImage(context_.current_frame,
                                               present_image_name));
-    VkImage present_image = fb_image.image;
+    VkImage present_image = fb_image->vez.image;
 
     VkPipelineStageFlags wait_dst =
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -618,13 +618,13 @@ result<void> VezBackend::TeardownContext() {
     }
 
     for (auto image : context_.texture_cache) {
-        vezDestroyImageView(context_.device, image.second.image_view);
-        vezDestroyImage(context_.device, image.second.image);
+        vezDestroyImageView(context_.device, image.second->vez.image_view);
+        vezDestroyImage(context_.device, image.second->vez.image);
     }
 
     for (auto image : context_.fb_image_cache) {
-        vezDestroyImageView(context_.device, image.second.image_view);
-        vezDestroyImage(context_.device, image.second.image);
+        vezDestroyImageView(context_.device, image.second->vez.image_view);
+        vezDestroyImage(context_.device, image.second->vez.image);
     }
 
     for (auto sampler : context_.sampler_cache) {
@@ -961,14 +961,14 @@ result<std::shared_ptr<Buffer>> VezBackend::GetBuffer(
     return Error::NotFound;
 }
 
-result<VulkanImage> VezBackend::CreateFramebufferImage(
+result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
     size_t frame_index, const FramebufferColorImageDesc& image_desc,
     uint32_t width, uint32_t height) {
     auto hash = GetFramebufferImageHash(frame_index, image_desc.name.c_str());
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
-        vezDestroyImageView(context_.device, result->second.image_view);
-        vezDestroyImage(context_.device, result->second.image);
+        vezDestroyImageView(context_.device, result->second->vez.image_view);
+        vezDestroyImage(context_.device, result->second->vez.image);
     }
 
     VkFormat format = GetVkFormat(image_desc.format);
@@ -986,18 +986,20 @@ result<VulkanImage> VezBackend::CreateFramebufferImage(
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
-    context_.fb_image_cache[hash] = vulkan_image;
-    return vulkan_image;
+
+    auto ret = std::make_shared<Image>(vulkan_image);
+    context_.fb_image_cache[hash] = ret;
+    return ret;
 }
 
-result<VulkanImage> VezBackend::CreateFramebufferImage(
+result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
     size_t frame_index, const FramebufferDepthImageDesc& image_desc,
     uint32_t width, uint32_t height) {
     auto hash = GetFramebufferImageHash(frame_index, image_desc.name.c_str());
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
-        vezDestroyImageView(context_.device, result->second.image_view);
-        vezDestroyImage(context_.device, result->second.image);
+        vezDestroyImageView(context_.device, result->second->vez.image_view);
+        vezDestroyImage(context_.device, result->second->vez.image);
     }
 
     VkFormat format;
@@ -1025,12 +1027,14 @@ result<VulkanImage> VezBackend::CreateFramebufferImage(
                        VK_IMAGE_USAGE_SAMPLED_BIT;
 
     OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
-    context_.fb_image_cache[hash] = vulkan_image;
-    return vulkan_image;
+
+    auto ret = std::make_shared<Image>(vulkan_image);
+    context_.fb_image_cache[hash] = ret;
+    return ret;
 }
 
-result<VulkanImage> VezBackend::GetFramebufferImage(size_t frame_index,
-                                                    const char* name) {
+result<std::shared_ptr<Image>> VezBackend::GetFramebufferImage(
+    size_t frame_index, const char* name) {
     auto hash = GetFramebufferImageHash(frame_index, name);
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {

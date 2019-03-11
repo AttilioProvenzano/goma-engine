@@ -231,7 +231,7 @@ void main() {
     vez.BindVertexBuffers(
         {*create_pos_buffer_result.value(), *create_uv_buffer_result.value()});
     vez.BindIndexBuffer(*create_index_buffer_result.value());
-    vez.BindTextures({create_texture_result.value()});
+    vez.BindTextures({*create_texture_result.value()});
     vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
     vez.FinishFrame();
     vez.PresentImage("color");
@@ -468,7 +468,7 @@ while (camera_node != scene->GetRootNode()) {
         vez.BindVertexBuffers({*create_pos_buffer_result.value(),
                                *create_uv_buffer_result.value()});
         vez.BindIndexBuffer(*create_index_buffer_result.value());
-        vez.BindTextures({create_texture_result.value()});
+        vez.BindTextures({*create_texture_result.value()});
 
         VezDepthStencilState ds_state = {};
         ds_state.depthTestEnable = VK_TRUE;
@@ -489,8 +489,10 @@ while (camera_node != scene->GetRootNode()) {
 
 TEST(RendererTest, RenderModel) {
     Engine e;
-    e.LoadScene("../models/Duck/glTF/Duck.gltf");
-    e.renderer()->Render();
+    e.LoadScene("../models/Sponza/glTF/Sponza.gltf");
+    auto res = e.renderer()->Render();
+
+    ASSERT_TRUE(res) << res.error().message();
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }

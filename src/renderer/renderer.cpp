@@ -235,17 +235,45 @@ result<void> Renderer::Render() {
         }
     });
 
+    // Upload textures
+    scene->ForEach<Texture>([&](auto id, auto _, Texture& texture) {
+        // TODO compressed textures
+        if (!texture.compressed) {
+            // TODO mipmaps
+            TextureDesc tex_desc{texture.width, texture.height};
+            auto image_res = backend_->CreateTexture(
+                texture.path.c_str(), tex_desc, texture.data.data());
+
+            if (image_res) {
+                texture.image = image_res.value();
+            }
+        }
+    });
+
     // Get the VP matrix
     auto camera_res = scene->GetAttachment<Camera>({0});  // TODO main camera
     if (!camera_res) {
-        return Error::NoMainCamera;
+        Camera camera = {};
+        camera.aspect_ratio = 800.0f / 600.0f;
+
+        auto new_camera_res =
+            scene->CreateAttachment<Camera>(std::move(camera));
+        if (!new_camera_res) {
+            return Error::NoMainCamera;
+        }
+
+        auto new_camera_id = new_camera_res.value();
+        camera_res = scene->GetAttachment<Camera>(new_camera_id);
+        if (!camera_res) {
+            return Error::NoMainCamera;
+        }
     }
 
     auto& camera = camera_res.value();
     auto fovy =
         camera->h_fov / camera->aspect_ratio;  // TODO use proper aspect ratio
     glm::mat4 view =
-        glm::lookAt(glm::vec3(0, 0, -10.0f), glm::vec3(0, 0, 0), camera->up);
+        glm::lookAt(glm::vec3(0, 0, 0), glm::vec3(0, 0, -1.0f), camera->up);
     glm::mat4 proj =
         glm::perspective(glm::radians(camera->h_fov), camera->aspect_ratio,
                          camera->near_plane, camera->far_plane);

@@ -357,11 +357,11 @@ void main() {
         auto diffuse_binding = material.textures.find(TextureType::Diffuse);
         if (diffuse_binding != material.textures.end() &&
             !diffuse_binding->second.empty()) {
-            auto texture_result =
+            auto texture_res =
                 scene->GetAttachment<Texture>(diffuse_binding->second[0].index);
-            if (texture_result) {
-                // TODO upload textures so we can bind them
-                // backend_->BindTextures();
+            if (texture_res) {
+                auto& texture = texture_res.value();
+                backend_->BindTextures({*texture->image});
             }
         }
 

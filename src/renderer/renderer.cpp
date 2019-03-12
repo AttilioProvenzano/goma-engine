@@ -253,6 +253,7 @@ result<void> Renderer::Render() {
     // Get the VP matrix
     auto camera_res = scene->GetAttachment<Camera>({0});  // TODO main camera
     if (!camera_res) {
+        // TODO proper aspect ratio
         Camera camera = {};
         camera.aspect_ratio = 800.0f / 600.0f;
 
@@ -269,11 +270,14 @@ result<void> Renderer::Render() {
         }
     }
 
+    // TODO proper camera transform
+    // (also move cached transform to a function)
     auto& camera = camera_res.value();
     auto fovy =
         camera->h_fov / camera->aspect_ratio;  // TODO use proper aspect ratio
     glm::mat4 view =
-        glm::lookAt(glm::vec3(0, 0, 0), glm::vec3(0, 0, -1.0f), camera->up);
+        glm::lookAt(glm::vec3(0, 0, 3.0f), glm::vec3(0, 0, 0), camera->up);
+    //	    glm::lookAt(glm::vec3(0, 0, 0), glm::vec3(0, 0, -1.0f), camera->up);
     glm::mat4 proj =
         glm::perspective(glm::radians(camera->h_fov), camera->aspect_ratio,
                          camera->near_plane, camera->far_plane);

@@ -147,9 +147,12 @@ struct VertexInputFormatDesc {
     std::vector<VertexInputAttributeDesc> attributes;
 };
 
+enum class ShaderSourceType { Source, Filename };
+
 struct ShaderDesc {
     std::string source;
-    bool is_filename = false;
+    ShaderSourceType source_type = ShaderSourceType::Source;
+
     std::string preamble = "";
     std::string entry_point = "main";
 };

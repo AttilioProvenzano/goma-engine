@@ -296,7 +296,22 @@ result<void> Renderer::Render() {
         }
     }
 
-    if (!pipeline_ || !pipeline_->valid) {
+    auto frame_id = backend_->StartFrame().value();
+    backend_->StartRenderPass(framebuffers_[frame_id], {});
+
+    // Render meshes
+    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+        auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
+        if (!nodes_result || !nodes_result.value()) {
+            return;
+        }
+
+        auto material_result = scene->GetAttachment<Material>(mesh.material);
+        if (!material_result) {
+            return;
+        }
+        auto& material = *material_result.value();
+
         static const char* vert = R"(
 #version 450
 
@@ -329,28 +344,14 @@ void main() {
 }
 )";
 
-        auto pipeline_res = backend_->GetGraphicsPipeline({vert}, {frag});
-        if (pipeline_res) {
-            pipeline_ = pipeline_res.value();
-        }
-    }
-
-    auto frame_id = backend_->StartFrame().value();
-    backend_->StartRenderPass(framebuffers_[frame_id], {});
-    backend_->BindGraphicsPipeline(*pipeline_);
-
-    // Render meshes
-    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
-        auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
-        if (!nodes_result || !nodes_result.value()) {
+        // TODO preamble based on textures/vertex input format
+        auto pipeline_res = backend_->GetGraphicsPipeline(
+            {vert, ShaderSourceType::Source, GetVertexShaderPreamble(mesh)},
+            {frag});
+        if (!pipeline_res) {
             return;
         }
-
-        auto material_result = scene->GetAttachment<Material>(mesh.material);
-        if (!material_result) {
-            return;
-        }
-        auto& material = *material_result.value();
+        backend_->BindGraphicsPipeline(*pipeline_res.value());
 
         // TODO support no index buffer
         backend_->BindVertexInputFormat(*mesh.vertex_input_format);

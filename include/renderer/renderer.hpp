@@ -19,7 +19,6 @@ class Renderer {
     Engine* engine_ = nullptr;
     std::unique_ptr<Backend> backend_;
 
-    std::shared_ptr<Pipeline> pipeline_;
     std::vector<Framebuffer> framebuffers_;
 
     union VertexShaderPreambleDesc {

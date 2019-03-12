@@ -391,4 +391,51 @@ void main() {
     return outcome::success();
 }
 
+const char* Renderer::GetVertexShaderPreamble(
+    const VertexShaderPreambleDesc& desc) {
+    auto result = vs_preamble_map_.find(desc.int_repr);
+
+    if (result != vs_preamble_map_.end()) {
+        return result->second.c_str();
+    } else {
+        std::string preamble;
+
+        if (desc.has_positions) {
+            preamble += "#define HAS_POSITIONS\n";
+        }
+        if (desc.has_normals) {
+            preamble += "#define HAS_NORMALS\n";
+        }
+        if (desc.has_tangents) {
+            preamble += "#define HAS_TANGENTS\n";
+        }
+        if (desc.has_bitangents) {
+            preamble += "#define HAS_BITANGENTS\n";
+        }
+        if (desc.has_colors) {
+            preamble += "#define HAS_COLORS\n";
+        }
+        if (desc.has_uv0) {
+            preamble += "#define HAS_UV0\n";
+        }
+        if (desc.has_uv1) {
+            preamble += "#define HAS_UV1\n";
+        }
+        if (desc.has_uvw) {
+            preamble += "#define HAS_UVW\n";
+        }
+
+        vs_preamble_map_[desc.int_repr] = std::move(preamble);
+        return vs_preamble_map_[desc.int_repr].c_str();
+    }
+}
+
+const char* Renderer::GetVertexShaderPreamble(const Mesh& mesh) {
+    return GetVertexShaderPreamble(VertexShaderPreambleDesc{
+        !mesh.vertices.empty(), !mesh.normals.empty(), !mesh.tangents.empty(),
+        !mesh.bitangents.empty(), !mesh.colors.empty(),
+        mesh.uv_sets.size() > 0, mesh.uv_sets.size() > 1,
+        mesh.uvw_sets.size() > 0});
+}
+
 }  // namespace goma

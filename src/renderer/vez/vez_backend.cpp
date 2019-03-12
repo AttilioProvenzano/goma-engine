@@ -106,16 +106,13 @@ result<void> VezBackend::InitSurface(Platform* platform) {
 }
 
 result<std::shared_ptr<Pipeline>> VezBackend::GetGraphicsPipeline(
-    const char* vs_source, const char* fs_source, const char* vs_entry_point,
-    const char* fs_entry_point) {
+    const ShaderDesc& vert, const ShaderDesc& frag) {
     assert(context_.device &&
            "Context must be initialized before creating a pipeline");
     VkDevice device = context_.device;
 
-    OUTCOME_TRY(vertex_shader,
-                GetVertexShaderModule(vs_source, vs_entry_point));
-    OUTCOME_TRY(fragment_shader,
-                GetFragmentShaderModule(fs_source, fs_entry_point));
+    OUTCOME_TRY(vertex_shader, GetVertexShaderModule(vert));
+    OUTCOME_TRY(fragment_shader, GetFragmentShaderModule(frag));
 
     auto hash = GetGraphicsPipelineHash(vertex_shader, fragment_shader);
     auto result = context_.pipeline_cache.find(hash);
@@ -836,12 +833,15 @@ result<VezSwapchain> VezBackend::CreateSwapchain(VkSurfaceKHR surface) {
 }
 
 result<VkShaderModule> VezBackend::GetVertexShaderModule(
-    const char* source, const char* entry_point) {
+    const ShaderDesc& vert) {
     assert(context_.device &&
            "Context must be initialized before creating a shader");
     VkDevice device = context_.device;
 
-    auto hash = GetShaderHash(source, entry_point);
+    // TODO is_filename (read the shader from file)
+
+    auto hash = GetShaderHash(vert.source.c_str(), vert.preamble.c_str(),
+                              vert.entry_point.c_str());
     auto result = context_.vertex_shader_cache.find(hash);
 
     if (result != context_.vertex_shader_cache.end()) {
@@ -849,9 +849,10 @@ result<VkShaderModule> VezBackend::GetVertexShaderModule(
     } else {
         VezShaderModuleCreateInfo shader_info = {};
         shader_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
-        shader_info.codeSize = strlen(source);
-        shader_info.pGLSLSource = source;
-        shader_info.pEntryPoint = entry_point;
+        shader_info.codeSize = vert.source.length();
+        shader_info.pGLSLSource = vert.source.c_str();
+        shader_info.pPreamble = vert.preamble.c_str();
+        shader_info.pEntryPoint = vert.entry_point.c_str();
 
         VkShaderModule shader = VK_NULL_HANDLE;
         auto shader_compilation_result =
@@ -871,12 +872,13 @@ result<VkShaderModule> VezBackend::GetVertexShaderModule(
 }
 
 result<VkShaderModule> VezBackend::GetFragmentShaderModule(
-    const char* source, const char* entry_point) {
+    const ShaderDesc& frag) {
     assert(context_.device &&
            "Context must be initialized before creating a shader");
     VkDevice device = context_.device;
 
-    auto hash = GetShaderHash(source, entry_point);
+    auto hash = GetShaderHash(frag.source.c_str(), frag.preamble.c_str(),
+                              frag.entry_point.c_str());
     auto result = context_.fragment_shader_cache.find(hash);
 
     if (result != context_.fragment_shader_cache.end()) {
@@ -884,9 +886,10 @@ result<VkShaderModule> VezBackend::GetFragmentShaderModule(
     } else {
         VezShaderModuleCreateInfo shader_info = {};
         shader_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        shader_info.codeSize = strlen(source);
-        shader_info.pGLSLSource = source;
-        shader_info.pEntryPoint = entry_point;
+        shader_info.codeSize = frag.source.length();
+        shader_info.pGLSLSource = frag.source.c_str();
+        shader_info.pPreamble = frag.preamble.c_str();
+        shader_info.pEntryPoint = frag.entry_point.c_str();
 
         VkShaderModule shader = VK_NULL_HANDLE;
         auto shader_compilation_result =
@@ -1211,8 +1214,9 @@ VezContext::BufferHash VezBackend::GetMeshBufferHash(
 }
 
 VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,
+                                                 const char* preamble,
                                                  const char* entry_point) {
-    return {sdbm_hash(source), sdbm_hash(entry_point)};
+    return {sdbm_hash(source), sdbm_hash(preamble), sdbm_hash(entry_point)};
 }
 
 VezContext::PipelineHash VezBackend::GetGraphicsPipelineHash(

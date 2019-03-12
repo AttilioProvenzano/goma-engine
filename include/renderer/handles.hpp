@@ -147,4 +147,11 @@ struct VertexInputFormatDesc {
     std::vector<VertexInputAttributeDesc> attributes;
 };
 
+struct ShaderDesc {
+    std::string source;
+    bool is_filename = false;
+    std::string preamble = "";
+    std::string entry_point = "main";
+};
+
 }  // namespace goma

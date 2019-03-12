@@ -325,7 +325,7 @@ void main() {
 }
 )";
 
-        auto pipeline_res = backend_->GetGraphicsPipeline(vert, frag);
+        auto pipeline_res = backend_->GetGraphicsPipeline({vert}, {frag});
         if (pipeline_res) {
             pipeline_ = pipeline_res.value();
         }

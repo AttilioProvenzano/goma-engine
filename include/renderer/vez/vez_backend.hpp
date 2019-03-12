@@ -21,9 +21,7 @@ class VezBackend : public Backend {
     virtual result<void> InitContext() override;
     virtual result<void> InitSurface(Platform* platform) override;
     virtual result<std::shared_ptr<Pipeline>> GetGraphicsPipeline(
-        const char* vs_source, const char* fs_source,
-        const char* vs_entry_point = "main",
-        const char* fs_entry_point = "main") override;
+        const ShaderDesc& vert, const ShaderDesc& frag) override;
     virtual result<std::shared_ptr<VertexInputFormat>> GetVertexInputFormat(
         const VertexInputFormatDesc& desc) override;
 
@@ -98,10 +96,8 @@ class VezBackend : public Backend {
     result<PhysicalDevice> CreatePhysicalDevice(VkInstance instance);
     result<VkDevice> CreateDevice(VkPhysicalDevice physical_device);
     result<VezSwapchain> CreateSwapchain(VkSurfaceKHR surface);
-    result<VkShaderModule> GetVertexShaderModule(const char* source,
-                                                 const char* entry_point);
-    result<VkShaderModule> GetFragmentShaderModule(const char* source,
-                                                   const char* entry_point);
+    result<VkShaderModule> GetVertexShaderModule(const ShaderDesc& vert);
+    result<VkShaderModule> GetFragmentShaderModule(const ShaderDesc& frag);
     result<std::shared_ptr<Buffer>> CreateBuffer(
         VezContext::BufferHash hash, VkDeviceSize size,
         VezMemoryFlagsBits storage, VkBufferUsageFlags usage,
@@ -132,6 +128,7 @@ class VezBackend : public Backend {
     VezContext::BufferHash GetMeshBufferHash(const AttachmentIndex<Mesh>& mesh,
                                              const char* name);
     VezContext::ShaderHash GetShaderHash(const char* source,
+                                         const char* preamble,
                                          const char* entry_point);
     VezContext::PipelineHash GetGraphicsPipelineHash(VkShaderModule vs,
                                                      VkShaderModule fs);

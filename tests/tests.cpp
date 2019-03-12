@@ -215,7 +215,7 @@ void main() {
 )";
 
     auto create_pipeline_result =
-        vez.GetGraphicsPipeline(vertex_shader_glsl, fragment_shader_glsl);
+        vez.GetGraphicsPipeline({vertex_shader_glsl}, {fragment_shader_glsl});
     ASSERT_TRUE(create_pipeline_result)
         << create_pipeline_result.error().message();
 
@@ -332,7 +332,7 @@ void main() {
 )";
 
     auto create_pipeline_result =
-        vez.GetGraphicsPipeline(vertex_shader_glsl, fragment_shader_glsl);
+        vez.GetGraphicsPipeline({vertex_shader_glsl}, {fragment_shader_glsl});
     ASSERT_TRUE(create_pipeline_result)
         << create_pipeline_result.error().message();
 

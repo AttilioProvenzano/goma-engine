@@ -487,6 +487,16 @@ while (camera_node != scene->GetRootNode()) {
     }
 }
 
+TEST(RendererTest, RenderDuck) {
+    Engine e;
+    e.LoadScene("../models/Duck/glTF/Duck.gltf");
+    auto res = e.renderer()->Render();
+
+    ASSERT_TRUE(res) << res.error().message();
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
 TEST(RendererTest, RenderLantern) {
     Engine e;
     e.LoadScene("../models/Lantern/glTF/Lantern.gltf");

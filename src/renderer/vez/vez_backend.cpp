@@ -477,6 +477,12 @@ result<void> VezBackend::BindTextures(const std::vector<Image>& images,
     return outcome::success();
 }
 
+result<void> VezBackend::BindVertexBuffer(const Buffer& vertex_buffer,
+                                          uint32_t binding, size_t offset) {
+    vezCmdBindVertexBuffers(binding, 1, &vertex_buffer.vez, &offset);
+    return outcome::success();
+}
+
 result<void> VezBackend::BindVertexBuffers(
     const std::vector<Buffer>& vertex_buffers, uint32_t first_binding,
     std::vector<size_t> offsets) {

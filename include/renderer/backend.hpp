@@ -67,6 +67,9 @@ class Backend {
     virtual result<void> BindTextures(
         const std::vector<Image>& images, uint32_t first_binding = 0,
         const SamplerDesc* sampler_override = nullptr) = 0;
+    virtual result<void> BindVertexBuffer(const Buffer& vertex_buffer,
+                                          uint32_t binding = 0,
+                                          size_t offset = 0) = 0;
     virtual result<void> BindVertexBuffers(
         const std::vector<Buffer>& vertex_buffers, uint32_t first_binding = 0,
         std::vector<size_t> offsets = {}) = 0;

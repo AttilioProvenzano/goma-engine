@@ -1195,6 +1195,8 @@ VkFormat VezBackend::GetVkFormat(Format format) {
             return VK_FORMAT_R8G8B8A8_UNORM;
         case Format::UNormBGRA8:
             return VK_FORMAT_B8G8R8A8_UNORM;
+        case Format::SFloatRGBA32:
+            return VK_FORMAT_R32G32B32A32_SFLOAT;
         case Format::SFloatRGB32:
             return VK_FORMAT_R32G32B32_SFLOAT;
         case Format::SFloatRG32:

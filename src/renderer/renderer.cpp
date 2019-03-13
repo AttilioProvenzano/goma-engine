@@ -410,8 +410,7 @@ void main() {
 
         // TODO support no index buffer
         backend_->BindVertexInputFormat(*mesh.vertex_input_format);
-        backend_->BindVertexBuffers(
-            {*mesh.buffers.vertex, *mesh.buffers.uv[0]});
+        BindMeshBuffers(mesh);
         backend_->BindIndexBuffer(*mesh.buffers.index);
 
         auto diffuse_binding = material.textures.find(TextureType::Diffuse);
@@ -562,6 +561,27 @@ const char* Renderer::GetFragmentShaderPreamble(const Material& material) {
         check_type(TextureType::Displacement),
         check_type(TextureType::LightMap),
         check_type(TextureType::Reflection)});
+}
+
+result<void> Renderer::BindMeshBuffers(const Mesh& mesh) {
+    uint32_t binding = 0;
+    auto bind = [&](std::shared_ptr<Buffer> buf) {
+        if (buf && buf->valid) {
+            backend_->BindVertexBuffer(*buf, binding, 0);
+        }
+        binding++;
+    };
+
+    bind(mesh.buffers.vertex);
+    bind(mesh.buffers.normal);
+    bind(mesh.buffers.tangent);
+    bind(mesh.buffers.bitangent);
+    bind(mesh.buffers.color);
+    bind(mesh.buffers.uv0);
+    bind(mesh.buffers.uv1);
+    bind(mesh.buffers.uvw);
+
+    return outcome::success();
 }
 
 }  // namespace goma

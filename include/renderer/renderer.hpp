@@ -63,6 +63,8 @@ class Renderer {
     const char* GetFragmentShaderPreamble(
         const FragmentShaderPreambleDesc& desc);
     const char* GetFragmentShaderPreamble(const Material& material);
+
+    result<void> BindMeshBuffers(const Mesh& mesh);
 };
 
 }  // namespace goma

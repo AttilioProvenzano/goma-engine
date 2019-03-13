@@ -121,37 +121,43 @@ result<void> Renderer::Render() {
             }
         }
 
-        mesh.buffers.uv.resize(mesh.uv_sets.size());
-        for (size_t i = 0; i < mesh.uv_sets.size(); i++) {
-            auto& uv_set = mesh.uv_sets[i];
+        // Create UV0 buffer
+        if (mesh.uv_sets.size() > 0 &&
+            (!mesh.buffers.uv0 || !mesh.buffers.uv0->valid)) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "uv0", mesh.uv_sets[0].size() * sizeof(mesh.uv_sets[0][0]),
+                true, mesh.uv_sets[0].data());
 
-            if (!mesh.buffers.uv[i] || !mesh.buffers.uv[i]->valid) {
-                // Create UV buffer
-                auto vb_result = backend_->CreateVertexBuffer(
-                    id, "uv" + i, uv_set.size() * sizeof(uv_set[0]), true,
-                    uv_set.data());
-
-                if (vb_result) {
-                    auto& vb = vb_result.value();
-                    mesh.buffers.uv[i] = vb;
-                }
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.uv0 = vb;
             }
         }
 
-        mesh.buffers.uvw.resize(mesh.uvw_sets.size());
-        for (size_t i = 0; i < mesh.uvw_sets.size(); i++) {
-            auto& uvw_set = mesh.uvw_sets[i];
+        // Create UV1 buffer
+        if (mesh.uv_sets.size() > 1 &&
+            (!mesh.buffers.uv1 || !mesh.buffers.uv1->valid)) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "uv1", mesh.uv_sets[1].size() * sizeof(mesh.uv_sets[1][0]),
+                true, mesh.uv_sets[1].data());
 
-            if (!mesh.buffers.uvw[i] || !mesh.buffers.uvw[i]->valid) {
-                // Create UV buffer
-                auto vb_result = backend_->CreateVertexBuffer(
-                    id, "uvw" + i, uvw_set.size() * sizeof(uvw_set[0]), true,
-                    uvw_set.data());
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.uv1 = vb;
+            }
+        }
 
-                if (vb_result) {
-                    auto& vb = vb_result.value();
-                    mesh.buffers.uvw[i] = vb;
-                }
+        // Create UVW buffer
+        if (mesh.uvw_sets.size() > 0 &&
+            (!mesh.buffers.uvw || !mesh.buffers.uvw->valid)) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "uvw",
+                mesh.uvw_sets[0].size() * sizeof(mesh.uvw_sets[0][0]), true,
+                mesh.uvw_sets[0].data());
+
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.uvw = vb;
             }
         }
     });

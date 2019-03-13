@@ -17,12 +17,13 @@ struct MeshBuffers {
     std::shared_ptr<Buffer> normal;
     std::shared_ptr<Buffer> tangent;
     std::shared_ptr<Buffer> bitangent;
+    std::shared_ptr<Buffer> color;
 
     std::shared_ptr<Buffer> index;
 
-    std::shared_ptr<Buffer> color;
-    std::vector<std::shared_ptr<Buffer>> uv;
-    std::vector<std::shared_ptr<Buffer>> uvw;
+    std::shared_ptr<Buffer> uv0;
+    std::shared_ptr<Buffer> uv1;
+    std::shared_ptr<Buffer> uvw;
 };
 
 struct Mesh {

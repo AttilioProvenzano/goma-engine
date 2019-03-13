@@ -347,7 +347,8 @@ void main() {
         // TODO preamble based on textures/vertex input format
         auto pipeline_res = backend_->GetGraphicsPipeline(
             {vert, ShaderSourceType::Source, GetVertexShaderPreamble(mesh)},
-            {frag});
+            {frag, ShaderSourceType::Source,
+             GetFragmentShaderPreamble(material)});
         if (!pipeline_res) {
             return;
         }
@@ -438,9 +439,75 @@ const char* Renderer::GetVertexShaderPreamble(
 const char* Renderer::GetVertexShaderPreamble(const Mesh& mesh) {
     return GetVertexShaderPreamble(VertexShaderPreambleDesc{
         !mesh.vertices.empty(), !mesh.normals.empty(), !mesh.tangents.empty(),
-        !mesh.bitangents.empty(), !mesh.colors.empty(),
-        mesh.uv_sets.size() > 0, mesh.uv_sets.size() > 1,
-        mesh.uvw_sets.size() > 0});
+        !mesh.bitangents.empty(), !mesh.colors.empty(), mesh.uv_sets.size() > 0,
+        mesh.uv_sets.size() > 1, mesh.uvw_sets.size() > 0});
+}
+
+const char* Renderer::GetFragmentShaderPreamble(
+    const FragmentShaderPreambleDesc& desc) {
+    auto result = fs_preamble_map_.find(desc.int_repr);
+
+    if (result != fs_preamble_map_.end()) {
+        return result->second.c_str();
+    } else {
+        std::string preamble;
+
+        if (desc.has_diffuse_map) {
+            preamble += "#define HAS_DIFFUSE_MAP\n";
+        }
+        if (desc.has_specular_map) {
+            preamble += "#define HAS_SPECULAR_MAP\n";
+        }
+        if (desc.has_ambient_map) {
+            preamble += "#define HAS_AMBIENT_MAP\n";
+        }
+        if (desc.has_emissive_map) {
+            preamble += "#define HAS_EMISSIVE_MAP\n";
+        }
+        if (desc.has_metallic_roughness_map) {
+            preamble += "#define HAS_METALLIC_ROUGHNESS_MAP\n";
+        }
+        if (desc.has_height_map) {
+            preamble += "#define HAS_HEIGHT_MAP\n";
+        }
+        if (desc.has_normal_map) {
+            preamble += "#define HAS_NORMAL_MAP\n";
+        }
+        if (desc.has_shininess_map) {
+            preamble += "#define HAS_SHININESS_MAP\n";
+        }
+        if (desc.has_opacity_map) {
+            preamble += "#define HAS_OPACITY_MAP\n";
+        }
+        if (desc.has_displacement_map) {
+            preamble += "#define HAS_DISPLACEMENT_MAP\n";
+        }
+        if (desc.has_light_map) {
+            preamble += "#define HAS_LIGHT_MAP\n";
+        }
+        if (desc.has_reflection_map) {
+            preamble += "#define HAS_REFLECTIONS_MAP\n";
+        }
+
+        fs_preamble_map_[desc.int_repr] = std::move(preamble);
+        return fs_preamble_map_[desc.int_repr].c_str();
+    }
+}
+
+const char* Renderer::GetFragmentShaderPreamble(const Material& material) {
+    auto check_type = [&](TextureType type) {
+        return material.textures.find(type) != material.textures.end();
+    };
+
+    return GetFragmentShaderPreamble(FragmentShaderPreambleDesc{
+        check_type(TextureType::Diffuse), check_type(TextureType::Specular),
+        check_type(TextureType::Ambient), check_type(TextureType::Emissive),
+        check_type(TextureType::MetallicRoughness),
+        check_type(TextureType::HeightMap), check_type(TextureType::NormalMap),
+        check_type(TextureType::Shininess), check_type(TextureType::Opacity),
+        check_type(TextureType::Displacement),
+        check_type(TextureType::LightMap),
+        check_type(TextureType::Reflection)});
 }
 
 }  // namespace goma

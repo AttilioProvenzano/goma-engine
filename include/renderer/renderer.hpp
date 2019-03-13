@@ -39,6 +39,30 @@ class Renderer {
     std::map<uint32_t, std::string> vs_preamble_map_;
     const char* GetVertexShaderPreamble(const VertexShaderPreambleDesc& desc);
     const char* GetVertexShaderPreamble(const Mesh& mesh);
+
+    union FragmentShaderPreambleDesc {
+        struct {
+            bool has_diffuse_map : 1;
+            bool has_specular_map : 1;
+            bool has_ambient_map : 1;
+            bool has_emissive_map : 1;
+            bool has_metallic_roughness_map : 1;
+            bool has_height_map : 1;
+            bool has_normal_map : 1;
+            bool has_shininess_map : 1;
+            bool has_opacity_map : 1;
+            bool has_displacement_map : 1;
+            bool has_light_map : 1;
+            bool has_reflection_map : 1;
+        };
+
+        uint32_t int_repr;
+    };
+
+    std::map<uint32_t, std::string> fs_preamble_map_;
+    const char* GetFragmentShaderPreamble(
+        const FragmentShaderPreambleDesc& desc);
+    const char* GetFragmentShaderPreamble(const Material& material);
 };
 
 }  // namespace goma

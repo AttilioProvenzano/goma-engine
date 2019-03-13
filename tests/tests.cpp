@@ -108,7 +108,7 @@ TEST(AssimpLoaderTest, CanLoadAModel) {
     auto scene = std::move(result.value());
 
     EXPECT_EQ(scene->GetAttachmentCount<Texture>(), 1);
-    EXPECT_EQ(scene->GetAttachmentCount<Material>(), 2);
+    EXPECT_EQ(scene->GetAttachmentCount<Material>(), 1);
     EXPECT_EQ(scene->GetAttachmentCount<Camera>(), 1);
     EXPECT_EQ(scene->GetAttachmentCount<Light>(), 0);
     EXPECT_EQ(scene->GetAttachmentCount<Mesh>(), 1);
@@ -346,14 +346,14 @@ void main() {
     model = glm::mat4_cast(transform->rotation) * model;
     model = glm::translate(model, transform->position);
 
-    auto parent_node = scene->GetParent(node).value();
+    NodeIndex parent_node;
     while (node != scene->GetRootNode()) {
+        parent_node = scene->GetParent(node).value();
         auto transform = scene->GetTransform(parent_node).value();
         model = glm::scale(model, transform->scale);
         model = glm::mat4_cast(transform->rotation) * model;
         model = glm::translate(model, transform->position);
         node = parent_node;
-        parent_node = scene->GetParent(node).value();
     }
 
     /*

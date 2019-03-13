@@ -175,11 +175,59 @@ result<void> Renderer::Render() {
         }
 
         binding_id++;
-        if (!mesh.uv_sets[0].empty()) {
+        if (!mesh.normals.empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.normals[0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGB32, 0});
+        }
+
+        binding_id++;
+        if (!mesh.tangents.empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.tangents[0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGB32, 0});
+        }
+
+        binding_id++;
+        if (!mesh.bitangents.empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.bitangents[0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGB32, 0});
+        }
+
+        binding_id++;
+        if (!mesh.colors.empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.colors[0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGBA32, 0});
+        }
+
+        binding_id++;
+        if (mesh.uv_sets.size() > 0 && !mesh.uv_sets[0].empty()) {
             input_format_desc.bindings.push_back(
                 {binding_id, sizeof(mesh.uv_sets[0][0])});
             input_format_desc.attributes.push_back(
                 {binding_id, binding_id, Format::SFloatRG32, 0});
+        }
+
+        binding_id++;
+        if (mesh.uv_sets.size() > 1 && !mesh.uv_sets[1].empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.uv_sets[1][0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRG32, 0});
+        }
+
+        binding_id++;
+        if (mesh.uvw_sets.size() > 0 && !mesh.uvw_sets[0].empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.uvw_sets[0][0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGB32, 0});
         }
 
         auto input_format_res =

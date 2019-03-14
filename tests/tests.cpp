@@ -101,7 +101,8 @@ TEST(SceneTest, CanCreateATexture) {
 
 TEST(AssimpLoaderTest, CanLoadAModel) {
     AssimpLoader loader;
-    auto result = loader.ReadSceneFromFile("../models/Duck/glTF/Duck.gltf");
+    auto result =
+        loader.ReadSceneFromFile("../assets/models/Duck/glTF/Duck.gltf");
     ASSERT_TRUE(result) << result.error().message();
 
     // Extract the unique_ptr from the result wrapper
@@ -247,7 +248,8 @@ TEST_F(VezBackendTest, RenderModel) {
     ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
 
     AssimpLoader loader;
-    auto result = loader.ReadSceneFromFile("../models/Duck/glTF/Duck.gltf");
+    auto result =
+        loader.ReadSceneFromFile("../assets/models/Duck/glTF/Duck.gltf");
     ASSERT_TRUE(result) << result.error().message();
 
     // Extract the unique_ptr from the result wrapper
@@ -489,7 +491,7 @@ while (camera_node != scene->GetRootNode()) {
 
 TEST(RendererTest, RenderDuck) {
     Engine e;
-    e.LoadScene("../models/Duck/glTF/Duck.gltf");
+    e.LoadScene("../assets/models/Duck/glTF/Duck.gltf");
     auto res = e.renderer()->Render();
 
     ASSERT_TRUE(res) << res.error().message();
@@ -499,7 +501,7 @@ TEST(RendererTest, RenderDuck) {
 
 TEST(RendererTest, RenderLantern) {
     Engine e;
-    e.LoadScene("../models/Lantern/glTF/Lantern.gltf");
+    e.LoadScene("../assets/models/Lantern/glTF/Lantern.gltf");
     auto res = e.renderer()->Render();
 
     ASSERT_TRUE(res) << res.error().message();
@@ -509,7 +511,7 @@ TEST(RendererTest, RenderLantern) {
 
 TEST(RendererTest, RenderSponza) {
     Engine e;
-    e.LoadScene("../models/Sponza/glTF/Sponza.gltf");
+    e.LoadScene("../assets/models/Sponza/glTF/Sponza.gltf");
     auto res = e.renderer()->Render();
 
     ASSERT_TRUE(res) << res.error().message();

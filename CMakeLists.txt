@@ -4,8 +4,6 @@ project (GomaEngine C CXX)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W3")
 
-set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-
 if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 endif()
@@ -50,10 +48,12 @@ set(SOURCES
 	src/platform/win32_platform.cpp
 )
 
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 add_library(goma-engine SHARED
 	${PUBLIC_HEADERS}
 	${SOURCES}
 )
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/assimp)

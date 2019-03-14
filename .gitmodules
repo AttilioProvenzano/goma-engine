@@ -21,7 +21,7 @@
 	url = https://github.com/KhronosGroup/Vulkan-Headers.git
 [submodule "third_party/V-EZ"]
 	path = third_party/V-EZ
-	url = https://github.com/GPUOpen-LibrariesAndSDKs/V-EZ.git
+	url = https://github.com/AttilioProvenzano/V-EZ.git
 [submodule "third_party/stb"]
 	path = third_party/stb
 	url = https://github.com/nothings/stb.git

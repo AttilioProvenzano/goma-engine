@@ -427,7 +427,6 @@ void main() {
 }
 )";
 
-        // TODO preamble based on textures/vertex input format
         auto pipeline_res = backend_->GetGraphicsPipeline(
             {vert, ShaderSourceType::Source, GetVertexShaderPreamble(mesh)},
             {frag, ShaderSourceType::Source,
@@ -437,10 +436,8 @@ void main() {
         }
         backend_->BindGraphicsPipeline(*pipeline_res.value());
 
-        // TODO support no index buffer
         backend_->BindVertexInputFormat(*mesh.vertex_input_format);
         BindMeshBuffers(mesh);
-        backend_->BindIndexBuffer(*mesh.buffers.index);
 
         auto diffuse_binding = material.textures.find(TextureType::Diffuse);
         if (diffuse_binding != material.textures.end() &&
@@ -465,12 +462,12 @@ void main() {
         ds_state.depthWriteEnable = VK_TRUE;
         vezCmdSetDepthStencilState(&ds_state);
 
-        VezRasterizationState raster_state = {};
-        raster_state.cullMode = VK_CULL_MODE_BACK_BIT;
-        raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        vezCmdSetRasterizationState(&raster_state);
-
-        backend_->DrawIndexed(static_cast<uint32_t>(mesh.indices.size()));
+        if (!mesh.indices.empty()) {
+            backend_->BindIndexBuffer(*mesh.buffers.index);
+            backend_->DrawIndexed(static_cast<uint32_t>(mesh.indices.size()));
+        } else {
+            backend_->Draw(static_cast<uint32_t>(mesh.vertices.size()));
+        }
     });
 
     backend_->FinishFrame();

@@ -76,8 +76,20 @@ class Backend {
     virtual result<void> BindIndexBuffer(const Buffer& index_buffer,
                                          size_t offset = 0,
                                          bool short_indices = false) = 0;
+
     virtual result<void> BindVertexInputFormat(
         VertexInputFormat vertex_input_format) = 0;
+    virtual result<void> BindDepthStencilState(
+        const DepthStencilState& state) = 0;
+    virtual result<void> BindColorBlendState(const ColorBlendState& state) = 0;
+    virtual result<void> BindMultisampleState(
+        const MultisampleState& state) = 0;
+    virtual result<void> BindInputAssemblyState(
+        const InputAssemblyState& state) = 0;
+    virtual result<void> BindRasterizationState(
+        const RasterizationState& state) = 0;
+    virtual result<void> BindViewportState(uint32_t viewport_count) = 0;
+
     virtual result<void> BindGraphicsPipeline(Pipeline pipeline) = 0;
     virtual result<void> Draw(uint32_t vertex_count,
                               uint32_t instance_count = 1,

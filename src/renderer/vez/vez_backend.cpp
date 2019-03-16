@@ -526,6 +526,110 @@ result<void> VezBackend::BindVertexInputFormat(
     return outcome::success();
 }
 
+result<void> VezBackend::BindDepthStencilState(const DepthStencilState& state) {
+    VezDepthStencilState vez_state = {};
+    vez_state.depthTestEnable = state.depth_test;
+    vez_state.depthWriteEnable = state.depth_write;
+    vez_state.depthBoundsTestEnable = state.depth_bounds;
+    vez_state.depthCompareOp = static_cast<VkCompareOp>(state.depth_compare);
+    vez_state.stencilTestEnable = state.stencil_test;
+    vez_state.front = {static_cast<VkStencilOp>(state.front.fail_op),
+                       static_cast<VkStencilOp>(state.front.pass_op),
+                       static_cast<VkStencilOp>(state.front.depth_fail_op),
+                       static_cast<VkCompareOp>(state.front.compare_op)};
+    vez_state.back = {static_cast<VkStencilOp>(state.back.fail_op),
+                      static_cast<VkStencilOp>(state.back.pass_op),
+                      static_cast<VkStencilOp>(state.back.depth_fail_op),
+                      static_cast<VkCompareOp>(state.back.compare_op)};
+
+    vezCmdSetDepthStencilState(&vez_state);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindColorBlendState(const ColorBlendState& state) {
+    VezColorBlendState vez_state = {};
+    vez_state.logicOpEnable = state.color_blend;
+    vez_state.logicOp = static_cast<VkLogicOp>(state.logic_op);
+
+    if (!state.attachments.empty()) {
+        std::vector<VezColorBlendAttachmentState> vez_attachments;
+        for (const auto& attachment : state.attachments) {
+            vez_attachments.push_back(
+                {attachment.color_blend,
+                 static_cast<VkBlendFactor>(attachment.src_color_blend_factor),
+                 static_cast<VkBlendFactor>(attachment.dst_color_blend_factor),
+                 static_cast<VkBlendOp>(attachment.color_blend_op),
+                 static_cast<VkBlendFactor>(attachment.src_alpha_blend_factor),
+                 static_cast<VkBlendFactor>(attachment.dst_alpha_blend_factor),
+                 static_cast<VkBlendOp>(attachment.alpha_blend_op),
+                 static_cast<VkColorComponentFlags>(
+                     attachment.color_write_mask)});
+        }
+
+        vez_state.attachmentCount =
+            static_cast<uint32_t>(vez_attachments.size());
+        vez_state.pAttachments = vez_attachments.data();
+
+        vezCmdSetColorBlendState(&vez_state);
+    } else {
+        vezCmdSetColorBlendState(&vez_state);
+    }
+
+    return outcome::success();
+}
+
+result<void> VezBackend::BindMultisampleState(const MultisampleState& state) {
+    VezMultisampleState vez_state = {};
+
+    // Reduce state.samples to a power of 2
+    uint32_t samples_po2 = std::min(state.samples, 64U);
+    uint32_t mask = 64;
+    while (mask) {
+        if (samples_po2 & mask) {
+            samples_po2 = mask;
+            break;
+        }
+        mask >>= 1;
+    }
+
+    vez_state.rasterizationSamples =
+        static_cast<VkSampleCountFlagBits>(samples_po2);
+    vez_state.sampleShadingEnable = state.sample_shading;
+    vez_state.minSampleShading = state.min_sample_shading;
+
+    vezCmdSetMultisampleState(&vez_state);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindInputAssemblyState(
+    const InputAssemblyState& state) {
+    VezInputAssemblyState vez_state = {};
+    vez_state.topology = static_cast<VkPrimitiveTopology>(state.topology);
+    vez_state.primitiveRestartEnable = state.primitive_restart;
+
+    vezCmdSetInputAssemblyState(&vez_state);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindRasterizationState(
+    const RasterizationState& state) {
+    VezRasterizationState vez_state = {};
+    vez_state.depthBiasEnable = state.depth_bias;
+    vez_state.depthClampEnable = state.depth_clamp;
+    vez_state.cullMode = static_cast<VkCullModeFlags>(state.cull_mode);
+    vez_state.frontFace = static_cast<VkFrontFace>(state.front_face);
+    vez_state.polygonMode = static_cast<VkPolygonMode>(state.polygon_mode);
+    vez_state.rasterizerDiscardEnable = state.rasterizer_discard;
+
+    vezCmdSetRasterizationState(&vez_state);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindViewportState(uint32_t viewport_count) {
+    vezCmdSetViewportState(viewport_count);
+    return outcome::success();
+}
+
 result<void> VezBackend::Draw(uint32_t vertex_count, uint32_t instance_count,
                               uint32_t first_vertex, uint32_t first_instance) {
     vezCmdDraw(vertex_count, instance_count, first_vertex, first_instance);

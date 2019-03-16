@@ -70,9 +70,22 @@ class VezBackend : public Backend {
     virtual result<void> BindIndexBuffer(const Buffer& index_buffer,
                                          uint64_t offset = 0,
                                          bool short_indices = false) override;
-    virtual result<void> BindGraphicsPipeline(Pipeline pipeline) override;
+
     virtual result<void> BindVertexInputFormat(
         VertexInputFormat vertex_input_format) override;
+    virtual result<void> BindDepthStencilState(
+        const DepthStencilState& state) override;
+    virtual result<void> BindColorBlendState(
+        const ColorBlendState& state) override;
+    virtual result<void> BindMultisampleState(
+        const MultisampleState& state) override;
+    virtual result<void> BindInputAssemblyState(
+        const InputAssemblyState& state) override;
+    virtual result<void> BindRasterizationState(
+        const RasterizationState& state) override;
+    virtual result<void> BindViewportState(uint32_t viewport_count) override;
+
+    virtual result<void> BindGraphicsPipeline(Pipeline pipeline) override;
     virtual result<void> Draw(uint32_t vertex_count,
                               uint32_t instance_count = 1,
                               uint32_t first_vertex = 0,

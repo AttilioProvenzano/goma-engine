@@ -455,12 +455,8 @@ void main() {
                 {vp * scene->GetCachedModel(mesh_node).value()});
         }
 
-        // TODO backend functions to set state
-        VezDepthStencilState ds_state = {};
-        ds_state.depthTestEnable = VK_TRUE;
-        ds_state.depthCompareOp = VK_COMPARE_OP_LESS;
-        ds_state.depthWriteEnable = VK_TRUE;
-        vezCmdSetDepthStencilState(&ds_state);
+        backend_->BindDepthStencilState(DepthStencilState{});
+        backend_->BindRasterizationState(RasterizationState{});
 
         if (!mesh.indices.empty()) {
             backend_->BindIndexBuffer(*mesh.buffers.index);

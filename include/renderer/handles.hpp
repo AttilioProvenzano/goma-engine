@@ -303,9 +303,9 @@ enum class FrontFace { CounterClockwise = 0, Clockwise = 1 };
 struct RasterizationState {
     bool depth_clamp = false;
     bool rasterizer_discard = false;
-    PolygonMode polygon_mode;
-    CullMode cull_mode;
-    FrontFace front_face;
+    PolygonMode polygon_mode = PolygonMode::Fill;
+    CullMode cull_mode = CullMode::Back;
+    FrontFace front_face = FrontFace::CounterClockwise;
     bool depth_bias = false;
 };
 

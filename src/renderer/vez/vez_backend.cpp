@@ -630,6 +630,62 @@ result<void> VezBackend::BindViewportState(uint32_t viewport_count) {
     return outcome::success();
 }
 
+result<void> VezBackend::SetDepthBias(float constant_factor, float clamp,
+                                      float slope_factor) {
+    vezCmdSetDepthBias(constant_factor, clamp, slope_factor);
+    return outcome::success();
+}
+
+result<void> VezBackend::SetDepthBounds(float min, float max) {
+    vezCmdSetDepthBounds(min, max);
+    return outcome::success();
+}
+
+result<void> VezBackend::SetStencil(StencilFace face, uint32_t reference,
+                                    uint32_t write_mask,
+                                    uint32_t compare_mask) {
+    vezCmdSetStencilReference(static_cast<VkStencilFaceFlags>(face), reference);
+    vezCmdSetStencilWriteMask(static_cast<VkStencilFaceFlags>(face),
+                              write_mask);
+    vezCmdSetStencilCompareMask(static_cast<VkStencilFaceFlags>(face),
+                                compare_mask);
+    return outcome::success();
+}
+
+result<void> VezBackend::SetBlendConstants(
+    const std::array<float, 4>& blend_constants) {
+    vezCmdSetBlendConstants(blend_constants.data());
+    return outcome::success();
+}
+
+result<void> VezBackend::SetViewport(const std::vector<Viewport> viewports,
+                                     uint32_t first_viewport) {
+    std::vector<VkViewport> viewports_vez;
+    for (const auto& viewport : viewports) {
+        viewports_vez.push_back({viewport.x, viewport.y, viewport.width,
+                                 viewport.height, viewport.min_depth,
+                                 viewport.max_depth});
+    }
+
+    vezCmdSetViewport(first_viewport,
+                      static_cast<uint32_t>(viewports_vez.size()),
+                      viewports_vez.data());
+    return outcome::success();
+}
+
+result<void> VezBackend::SetScissor(const std::vector<Scissor> scissors,
+                                    uint32_t first_scissor) {
+    std::vector<VkRect2D> scissors_vez;
+    for (const auto& scissor : scissors) {
+        scissors_vez.push_back(
+            {{scissor.x, scissor.y}, {scissor.width, scissor.height}});
+    }
+
+    vezCmdSetScissor(first_scissor, static_cast<uint32_t>(scissors_vez.size()),
+                     scissors_vez.data());
+    return outcome::success();
+}
+
 result<void> VezBackend::Draw(uint32_t vertex_count, uint32_t instance_count,
                               uint32_t first_vertex, uint32_t first_instance) {
     vezCmdDraw(vertex_count, instance_count, first_vertex, first_instance);

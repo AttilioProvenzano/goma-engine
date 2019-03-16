@@ -85,6 +85,19 @@ class VezBackend : public Backend {
         const RasterizationState& state) override;
     virtual result<void> BindViewportState(uint32_t viewport_count) override;
 
+    virtual result<void> SetDepthBias(float constant_factor, float clamp,
+                                      float slope_factor) override;
+    virtual result<void> SetDepthBounds(float min, float max) override;
+    virtual result<void> SetStencil(StencilFace face, uint32_t reference,
+                                    uint32_t write_mask,
+                                    uint32_t compare_mask) override;
+    virtual result<void> SetBlendConstants(
+        const std::array<float, 4>& blend_constants) override;
+    virtual result<void> SetViewport(const std::vector<Viewport> viewports,
+                                     uint32_t first_viewport = 0) override;
+    virtual result<void> SetScissor(const std::vector<Scissor> scissors,
+                                    uint32_t first_scissor = 0) override;
+
     virtual result<void> BindGraphicsPipeline(Pipeline pipeline) override;
     virtual result<void> Draw(uint32_t vertex_count,
                               uint32_t instance_count = 1,

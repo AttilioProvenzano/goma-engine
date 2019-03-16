@@ -90,6 +90,19 @@ class Backend {
         const RasterizationState& state) = 0;
     virtual result<void> BindViewportState(uint32_t viewport_count) = 0;
 
+    virtual result<void> SetDepthBias(float constant_factor, float clamp,
+                                      float slope_factor) = 0;
+    virtual result<void> SetDepthBounds(float min, float max) = 0;
+    virtual result<void> SetStencil(StencilFace face, uint32_t reference,
+                                    uint32_t write_mask,
+                                    uint32_t compare_mask) = 0;
+    virtual result<void> SetBlendConstants(
+        const std::array<float, 4>& blend_constants) = 0;
+    virtual result<void> SetViewport(const std::vector<Viewport> viewports,
+                                     uint32_t first_viewport = 0) = 0;
+    virtual result<void> SetScissor(const std::vector<Scissor> scissors,
+                                    uint32_t first_scissor = 0) = 0;
+
     virtual result<void> BindGraphicsPipeline(Pipeline pipeline) = 0;
     virtual result<void> Draw(uint32_t vertex_count,
                               uint32_t instance_count = 1,

@@ -44,6 +44,22 @@ struct Buffer {
     Buffer(VkBuffer vez_) : vez(vez_), valid(true) {}
 };
 
+struct Viewport {
+    float width;
+    float height;
+    float x = 0.0f;
+    float y = 0.0f;
+    float min_depth = 0.0f;
+    float max_depth = 1.0f;
+};
+
+struct Scissor {
+    uint32_t width;
+    uint32_t height;
+    int32_t x = 0.0f;
+    int32_t y = 0.0f;
+};
+
 struct VertexInputFormat {
     const VezVertexInputFormat vez = VK_NULL_HANDLE;
     bool valid = false;
@@ -158,6 +174,8 @@ enum class CompareOp {
     GreaterOrEqual = 6,
     Always = 7
 };
+
+enum class StencilFace { Front = 1, Back = 2, FrontAndBack = 3 };
 
 enum class StencilOp {
     Keep = 0,

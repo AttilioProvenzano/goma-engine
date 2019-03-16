@@ -56,8 +56,8 @@ struct Viewport {
 struct Scissor {
     uint32_t width;
     uint32_t height;
-    int32_t x = 0.0f;
-    int32_t y = 0.0f;
+    int32_t x = 0;
+    int32_t y = 0;
 };
 
 struct VertexInputFormat {

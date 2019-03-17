@@ -676,26 +676,37 @@ result<void> Renderer::BindMeshBuffers(const Mesh& mesh) {
 }
 
 result<void> Renderer::BindMaterialTextures(const Material& material) {
-    uint32_t binding = 0;
-    auto bind = [&](std::shared_ptr<Image> image) {
-        if (image && image->valid) {
-            backend_->BindTexture(*image, binding);
-        }
-        binding++;
-    };
+    Scene* scene = engine_->scene();
+    if (!scene) {
+        return Error::NoSceneLoaded;
+    }
 
-    bind(material.texture_images.diffuse);
-    bind(material.texture_images.specular);
-    bind(material.texture_images.ambient);
-    bind(material.texture_images.emissive);
-    bind(material.texture_images.metallic_roughness);
-    bind(material.texture_images.height);
-    bind(material.texture_images.normal);
-    bind(material.texture_images.shininess);
-    bind(material.texture_images.opacity);
-    bind(material.texture_images.displacement);
-    bind(material.texture_images.light);
-    bind(material.texture_images.reflection);
+    uint32_t binding_id = 0;
+
+    const std::vector<TextureType> texture_types = {
+        TextureType::Diffuse,           TextureType::Specular,
+        TextureType::Ambient,           TextureType::Emissive,
+        TextureType::MetallicRoughness, TextureType::HeightMap,
+        TextureType::NormalMap,         TextureType::Shininess,
+        TextureType::Opacity,           TextureType::Displacement,
+        TextureType::LightMap,          TextureType::Reflection};
+
+    for (const auto& texture_type : texture_types) {
+        auto binding = material.texture_bindings.find(texture_type);
+
+        if (binding != material.texture_bindings.end() &&
+            !binding->second.empty()) {
+            auto texture_res =
+                scene->GetAttachment<Texture>(binding->second[0].index);
+            if (texture_res) {
+                auto& texture = texture_res.value();
+                if (texture->image && texture->image->valid) {
+                    backend_->BindTexture(*texture->image, binding_id);
+                }
+            }
+        }
+        binding_id++;
+    }
 
     return outcome::success();
 }

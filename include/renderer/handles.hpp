@@ -1,7 +1,5 @@
 #pragma once
 
-#include "scene/attachments/material.hpp"
-
 #define VK_NO_PROTOTYPES
 #include "VEZ.h"
 
@@ -79,6 +77,33 @@ enum class Format {
 };
 
 enum class FilterType { Nearest, Linear };
+
+
+enum class TextureType {
+    Diffuse,  // also Albedo for PBR
+    Specular,
+    Ambient,
+    Emissive,
+    MetallicRoughness,
+    HeightMap,
+    NormalMap,
+    Shininess,
+    Opacity,
+    Displacement,
+    LightMap,  // also OcclusionMap
+    Reflection,
+};
+
+enum class TextureOp {
+    Multiply,
+    Add,
+    Subtract,
+    Divide,
+    SmoothAdd,  // (T1 + T2) - (T1 * T2)
+    SignedAdd   // T1 + (T2 - 0.5)
+};
+
+enum class TextureWrappingMode { Repeat, MirroredRepeat, ClampToEdge, Decal };
 
 struct SamplerDesc {
     FilterType filter_type = FilterType::Nearest;

@@ -1,10 +1,12 @@
 #pragma once
 
 #include "scene/gen_index.hpp"
+#include "renderer/handles.hpp"
 
 #include <glm/glm.hpp>
 
 #include <array>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 

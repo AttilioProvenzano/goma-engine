@@ -3,6 +3,7 @@
 #include "engine.hpp"
 #include "renderer/vez/vez_backend.hpp"
 #include "scene/attachments/camera.hpp"
+#include "scene/attachments/material.hpp"
 #include "scene/attachments/mesh.hpp"
 
 #include <stack>

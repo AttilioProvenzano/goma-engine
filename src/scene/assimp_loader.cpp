@@ -321,8 +321,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                         scene.get(), ai_material, base_path, texture_type, j);
 
                     if (tex_binding.has_value()) {
-                        material.textures[texture_type.second].push_back(
-                            std::move(tex_binding.value()));
+                        material.texture_bindings[texture_type.second]
+                            .push_back(std::move(tex_binding.value()));
                     }
                 }
 

@@ -440,8 +440,9 @@ void main() {
         backend_->BindVertexInputFormat(*mesh.vertex_input_format);
         BindMeshBuffers(mesh);
 
-        auto diffuse_binding = material.textures.find(TextureType::Diffuse);
-        if (diffuse_binding != material.textures.end() &&
+        auto diffuse_binding =
+            material.texture_bindings.find(TextureType::Diffuse);
+        if (diffuse_binding != material.texture_bindings.end() &&
             !diffuse_binding->second.empty()) {
             auto texture_res =
                 scene->GetAttachment<Texture>(diffuse_binding->second[0].index);
@@ -572,7 +573,8 @@ const char* Renderer::GetFragmentShaderPreamble(
 
 const char* Renderer::GetFragmentShaderPreamble(const Material& material) {
     auto check_type = [&](TextureType type) {
-        return material.textures.find(type) != material.textures.end();
+        return material.texture_bindings.find(type) !=
+               material.texture_bindings.end();
     };
 
     return GetFragmentShaderPreamble(FragmentShaderPreambleDesc{

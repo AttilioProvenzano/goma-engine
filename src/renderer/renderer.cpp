@@ -516,18 +516,7 @@ void main() {
 
         backend_->BindVertexInputFormat(*mesh.vertex_input_format);
         BindMeshBuffers(mesh);
-
-        auto diffuse_binding =
-            material.texture_bindings.find(TextureType::Diffuse);
-        if (diffuse_binding != material.texture_bindings.end() &&
-            !diffuse_binding->second.empty()) {
-            auto texture_res =
-                scene->GetAttachment<Texture>(diffuse_binding->second[0].index);
-            if (texture_res) {
-                auto& texture = texture_res.value();
-                backend_->BindTextures({*texture->image});
-            }
-        }
+        BindMaterialTextures(material);
 
         for (auto& mesh_node : *nodes_result.value()) {
             backend_->BindVertexUniforms(

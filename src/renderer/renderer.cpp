@@ -294,7 +294,7 @@ result<void> Renderer::Render() {
     scene->ForEach<Texture>([&](auto id, auto _, Texture& texture) {
         // TODO compressed textures
         if (!texture.compressed) {
-            // TODO mipmaps
+            // TODO mipmaps (also samplers)
             TextureDesc tex_desc{texture.width, texture.height};
             auto image_res = backend_->CreateTexture(
                 texture.path.c_str(), tex_desc, texture.data.data());
@@ -563,7 +563,7 @@ const char* Renderer::GetFragmentShaderPreamble(
             preamble += "#define HAS_LIGHT_MAP\n";
         }
         if (desc.has_reflection_map) {
-            preamble += "#define HAS_REFLECTIONS_MAP\n";
+            preamble += "#define HAS_REFLECTION_MAP\n";
         }
 
         fs_preamble_map_[desc.int_repr] = std::move(preamble);

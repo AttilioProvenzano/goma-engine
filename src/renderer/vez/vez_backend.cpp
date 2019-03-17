@@ -460,6 +460,21 @@ result<void> VezBackend::BindUniformBuffer(const Buffer& buffer,
     return outcome::success();
 }
 
+result<void> VezBackend::BindTexture(const Image& image, uint32_t binding,
+                                     const SamplerDesc* sampler_override) {
+    VkSampler sampler_ovr = VK_NULL_HANDLE;
+    if (sampler_override != nullptr) {
+        OUTCOME_TRY(s, GetSampler(*sampler_override));
+        sampler_ovr = s;
+    }
+
+    vezCmdBindImageView(image.vez.image_view,
+                        sampler_override ? sampler_ovr : image.vez.sampler, 0,
+                        binding, 0);
+
+    return outcome::success();
+}
+
 result<void> VezBackend::BindTextures(const std::vector<Image>& images,
                                       uint32_t first_binding,
                                       const SamplerDesc* sampler_override) {

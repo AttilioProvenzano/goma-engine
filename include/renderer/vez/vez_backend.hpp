@@ -58,6 +58,9 @@ class VezBackend : public Backend {
                                            uint64_t offset, uint64_t size,
                                            uint32_t binding,
                                            uint32_t array_index = 0) override;
+    virtual result<void> BindTexture(
+        const Image& image, uint32_t binding = 0,
+        const SamplerDesc* sampler_override = nullptr) override;
     virtual result<void> BindTextures(
         const std::vector<Image>& images, uint32_t first_binding = 0,
         const SamplerDesc* sampler_override = nullptr) override;

@@ -609,4 +609,29 @@ result<void> Renderer::BindMeshBuffers(const Mesh& mesh) {
     return outcome::success();
 }
 
+result<void> Renderer::BindMaterialTextures(const Material& material) {
+    uint32_t binding = 0;
+    auto bind = [&](std::shared_ptr<Image> image) {
+        if (image && image->valid) {
+            backend_->BindTexture(*image, binding);
+        }
+        binding++;
+    };
+
+    bind(material.texture_images.diffuse);
+    bind(material.texture_images.specular);
+    bind(material.texture_images.ambient);
+    bind(material.texture_images.emissive);
+    bind(material.texture_images.metallic_roughness);
+    bind(material.texture_images.height);
+    bind(material.texture_images.normal);
+    bind(material.texture_images.shininess);
+    bind(material.texture_images.opacity);
+    bind(material.texture_images.displacement);
+    bind(material.texture_images.light);
+    bind(material.texture_images.reflection);
+
+    return outcome::success();
+}
+
 }  // namespace goma

@@ -291,16 +291,43 @@ result<void> Renderer::Render() {
     });
 
     // Upload textures
-    scene->ForEach<Texture>([&](auto id, auto _, Texture& texture) {
-        // TODO compressed textures
-        if (!texture.compressed) {
-            // TODO mipmaps (also samplers)
-            TextureDesc tex_desc{texture.width, texture.height};
-            auto image_res = backend_->CreateTexture(
-                texture.path.c_str(), tex_desc, texture.data.data());
+    scene->ForEach<Material>([&](auto id, auto _, Material& material) {
+        const std::vector<TextureType> texture_types = {
+            TextureType::Diffuse,           TextureType::Specular,
+            TextureType::Ambient,           TextureType::Emissive,
+            TextureType::MetallicRoughness, TextureType::HeightMap,
+            TextureType::NormalMap,         TextureType::Shininess,
+            TextureType::Opacity,           TextureType::Displacement,
+            TextureType::LightMap,          TextureType::Reflection};
 
-            if (image_res) {
-                texture.image = image_res.value();
+        for (const auto& texture_type : texture_types) {
+            auto binding =
+                material.texture_bindings.find(texture_type);
+
+            if (binding != material.texture_bindings.end() &&
+                !binding->second.empty()) {
+                auto texture_res =
+                    scene->GetAttachment<Texture>(binding->second[0].index);
+                if (texture_res) {
+                    auto& texture = texture_res.value();
+
+                    // Upload texture if necessary
+                    if (!texture->image || !texture->image->valid)
+                    {
+                        // TODO compressed textures
+                        if (!texture->compressed) {
+                            // TODO mipmaps (also samplers)
+                            TextureDesc tex_desc{texture->width, texture->height};
+                            auto image_res = backend_->CreateTexture(
+                                texture->path.c_str(), tex_desc,
+                                texture->data.data());
+
+                            if (image_res) {
+                                texture->image = image_res.value();
+                            }
+                        }
+                    }
+                }
             }
         }
     });

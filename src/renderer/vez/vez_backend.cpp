@@ -64,9 +64,15 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(
 
 namespace goma {
 
-VezBackend::VezBackend(Engine* engine) : Backend(engine) {}
+VezBackend::VezBackend(Engine* engine, const Config& config = {})
+    : Backend(engine, config) {}
 
 VezBackend::~VezBackend() { TeardownContext(); }
+
+result<void> VezBackend::SetBuffering(Buffering buffering) {
+    config_.buffering = buffering;
+    return outcome::success();
+}
 
 result<void> VezBackend::InitContext() {
     VK_CHECK(volkInitialize());

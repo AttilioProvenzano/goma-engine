@@ -15,8 +15,9 @@ namespace goma {
 
 class VezBackend : public Backend {
   public:
-    VezBackend(Engine* engine = nullptr);
+    VezBackend(Engine* engine = nullptr, const Config& config = {});
     virtual ~VezBackend() override;
+    virtual result<void> SetBuffering(Buffering buffering);
 
     virtual result<void> InitContext() override;
     virtual result<void> InitSurface(Platform* platform) override;

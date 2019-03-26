@@ -19,10 +19,24 @@ struct VertexUniforms {
 
 struct FragmentUniforms {};
 
+enum class Buffering { Double, Triple };
+
+typedef std::function<result<void>(RenderPassDesc, Framebuffer)> RenderPassFn;
+
 class Backend {
   public:
-    Backend(Engine* engine = nullptr) : engine_(engine) {}
+    struct Config {
+        Buffering buffering = Buffering::Triple;
+    };
+
+    Backend(Engine* engine = nullptr, const Config& config = {})
+        : engine_(engine), config_(config) {}
     virtual ~Backend() = default;
+
+    const Config& config() { return config_; }
+    virtual result<void> SetBuffering(Buffering buffering) {
+        return Error::ConfigNotSupported;
+    }
 
     virtual result<void> InitContext() = 0;
     virtual result<void> InitSurface(Platform* platform) = 0;
@@ -124,6 +138,7 @@ class Backend {
 
   protected:
     Engine* engine_ = nullptr;
+    Config config_ = {};
 };
 
 }  // namespace goma

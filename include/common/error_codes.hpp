@@ -28,6 +28,7 @@ enum class Error {
     BufferCannotBeMapped = 19,
     NoSceneLoaded = 20,
     NoMainCamera = 21,
+    ConfigNotSupported = 22,
 };
 
 }
@@ -97,6 +98,8 @@ class GomaError_category : public std::error_category {
                 return "no scene loaded";
             case goma::Error::NoMainCamera:
                 return "no main camera";
+            case goma::Error::ConfigNotSupported:
+                return "configuration item not supported";
             default:
                 return "unknown error";
         }

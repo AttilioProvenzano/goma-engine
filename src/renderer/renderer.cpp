@@ -36,8 +36,6 @@ result<void> Renderer::Render() {
         return Error::NoSceneLoaded;
     }
 
-    backend_->SetupFrames(3);
-
     // TODO culling
     // TODO ordering
 
@@ -301,8 +299,7 @@ result<void> Renderer::Render() {
             TextureType::LightMap,          TextureType::Reflection};
 
         for (const auto& texture_type : texture_types) {
-            auto binding =
-                material.texture_bindings.find(texture_type);
+            auto binding = material.texture_bindings.find(texture_type);
 
             if (binding != material.texture_bindings.end() &&
                 !binding->second.empty()) {
@@ -312,12 +309,12 @@ result<void> Renderer::Render() {
                     auto& texture = texture_res.value();
 
                     // Upload texture if necessary
-                    if (!texture->image || !texture->image->valid)
-                    {
+                    if (!texture->image || !texture->image->valid) {
                         // TODO compressed textures
                         if (!texture->compressed) {
                             // TODO mipmaps (also samplers)
-                            TextureDesc tex_desc{texture->width, texture->height};
+                            TextureDesc tex_desc{texture->width,
+                                                 texture->height};
                             auto image_res = backend_->CreateTexture(
                                 texture->path.c_str(), tex_desc,
                                 texture->data.data());
@@ -367,34 +364,23 @@ result<void> Renderer::Render() {
 
     glm::mat4 vp = proj * view;
 
-    // Ensure framebuffers are created for all frames
-    backend_->SetupFrames(3);
+    RenderPassFn forward_pass = [&](RenderPassDesc rp, FramebufferDesc fb,
+                                    FrameIndex frame_id) {
+        // Render meshes
+        scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+            auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
+            if (!nodes_result || !nodes_result.value()) {
+                return;
+            }
 
-    if (framebuffers_.size() < 3) {
-        FramebufferDesc fb_desc = {800, 600};
-        for (uint32_t i = 0; i < 3; i++) {
-            framebuffers_.push_back(
-                backend_->CreateFramebuffer(i, "fb", fb_desc).value());
-        }
-    }
+            auto material_result =
+                scene->GetAttachment<Material>(mesh.material);
+            if (!material_result) {
+                return;
+            }
+            auto& material = *material_result.value();
 
-    auto frame_id = backend_->StartFrame().value();
-    backend_->StartRenderPass(framebuffers_[frame_id], {});
-
-    // Render meshes
-    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
-        auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
-        if (!nodes_result || !nodes_result.value()) {
-            return;
-        }
-
-        auto material_result = scene->GetAttachment<Material>(mesh.material);
-        if (!material_result) {
-            return;
-        }
-        auto& material = *material_result.value();
-
-        static const char* vert = R"(
+            static const char* vert = R"(
 #version 450
 
 #ifdef HAS_POSITIONS
@@ -441,7 +427,7 @@ void main() {
 }
 )";
 
-        static const char* frag = R"(
+            static const char* frag = R"(
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
@@ -505,37 +491,41 @@ void main() {
 }
 )";
 
-        auto pipeline_res = backend_->GetGraphicsPipeline(
-            {vert, ShaderSourceType::Source, GetVertexShaderPreamble(mesh)},
-            {frag, ShaderSourceType::Source,
-             GetFragmentShaderPreamble(material)});
-        if (!pipeline_res) {
-            return;
-        }
-        backend_->BindGraphicsPipeline(*pipeline_res.value());
+            auto pipeline_res = backend_->GetGraphicsPipeline(
+                {vert, ShaderSourceType::Source, GetVertexShaderPreamble(mesh)},
+                {frag, ShaderSourceType::Source,
+                 GetFragmentShaderPreamble(material)});
+            if (!pipeline_res) {
+                return;
+            }
 
-        backend_->BindVertexInputFormat(*mesh.vertex_input_format);
-        BindMeshBuffers(mesh);
-        BindMaterialTextures(material);
+            backend_->BindGraphicsPipeline(*pipeline_res.value());
 
-        for (auto& mesh_node : *nodes_result.value()) {
-            backend_->BindVertexUniforms(
-                {vp * scene->GetCachedModel(mesh_node).value()});
-        }
+            backend_->BindVertexInputFormat(*mesh.vertex_input_format);
+            BindMeshBuffers(mesh);
+            BindMaterialTextures(material);
 
-        backend_->BindDepthStencilState(DepthStencilState{});
-        backend_->BindRasterizationState(RasterizationState{});
+            for (auto& mesh_node : *nodes_result.value()) {
+                backend_->BindVertexUniforms(
+                    {vp * scene->GetCachedModel(mesh_node).value()});
+            }
 
-        if (!mesh.indices.empty()) {
-            backend_->BindIndexBuffer(*mesh.buffers.index);
-            backend_->DrawIndexed(static_cast<uint32_t>(mesh.indices.size()));
-        } else {
-            backend_->Draw(static_cast<uint32_t>(mesh.vertices.size()));
-        }
-    });
+            backend_->BindDepthStencilState(DepthStencilState{});
+            backend_->BindRasterizationState(RasterizationState{});
 
-    backend_->FinishFrame();
-    backend_->PresentImage("color");
+            if (!mesh.indices.empty()) {
+                backend_->BindIndexBuffer(*mesh.buffers.index);
+                backend_->DrawIndexed(
+                    static_cast<uint32_t>(mesh.indices.size()));
+            } else {
+                backend_->Draw(static_cast<uint32_t>(mesh.vertices.size()));
+            }
+        });
+
+        return outcome::success();
+    };
+
+    backend_->RenderFrame({std::move(forward_pass)}, "color");
 
     return outcome::success();
 }

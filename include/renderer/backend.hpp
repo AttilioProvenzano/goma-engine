@@ -3,11 +3,14 @@
 #include "renderer/handles.hpp"
 #include "platform/platform.hpp"
 #include "scene/attachments/mesh.hpp"
+#include "common/error_codes.hpp"
 
 #include <outcome.hpp>
 namespace outcome = OUTCOME_V2_NAMESPACE;
 using outcome::result;
+
 #include <vector>
+#include <functional>
 
 namespace goma {
 
@@ -21,7 +24,9 @@ struct FragmentUniforms {};
 
 enum class Buffering { Double, Triple };
 
-typedef std::function<result<void>(RenderPassDesc, Framebuffer)> RenderPassFn;
+typedef size_t FrameIndex;
+typedef std::function<result<void>(RenderPassDesc, FramebufferDesc, FrameIndex)>
+    RenderPassFn;
 
 class Backend {
   public:
@@ -49,9 +54,6 @@ class Backend {
         const char* name, const TextureDesc& texture_desc,
         void* initial_contents = nullptr) = 0;
     virtual result<std::shared_ptr<Image>> GetTexture(const char* name) = 0;
-    virtual result<Framebuffer> CreateFramebuffer(size_t frame_index,
-                                                  const char* name,
-                                                  FramebufferDesc fb_desc) = 0;
     virtual result<std::shared_ptr<Buffer>> CreateVertexBuffer(
         const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
         bool gpu_stored = true, void* initial_contents = nullptr) = 0;
@@ -65,10 +67,9 @@ class Backend {
     virtual result<void> UpdateBuffer(const Buffer& buffer, uint64_t offset,
                                       uint64_t size, void* contents) = 0;
 
-    virtual result<void> SetupFrames(uint32_t frames) = 0;
-    virtual result<size_t> StartFrame(uint32_t threads = 1) = 0;
-    virtual result<void> StartRenderPass(Framebuffer fb,
-                                         RenderPassDesc rp_desc) = 0;
+    virtual result<void> SetRenderPlan(const RenderPlan& render_plan) = 0;
+    virtual result<void> RenderFrame(std::vector<RenderPassFn> render_pass_fns,
+                                     const char* present_image) = 0;
 
     virtual result<void> BindVertexUniforms(
         const VertexUniforms& vertex_uniforms) = 0;
@@ -130,15 +131,13 @@ class Backend {
                                      uint32_t first_index = 0,
                                      uint32_t vertex_offset = 0,
                                      uint32_t first_instance = 0) = 0;
-    virtual result<void> FinishFrame() = 0;
-    virtual result<void> PresentImage(
-        const char* present_image_name = "color") = 0;
 
     virtual result<void> TeardownContext() = 0;
 
   protected:
     Engine* engine_ = nullptr;
     Config config_ = {};
+    std::unique_ptr<RenderPlan> render_plan_;
 };
 
 }  // namespace goma

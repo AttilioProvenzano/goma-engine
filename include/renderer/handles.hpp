@@ -4,6 +4,7 @@
 #include "VEZ.h"
 
 #include <array>
+#include <map>
 #include <vector>
 
 namespace goma {
@@ -78,7 +79,6 @@ enum class Format {
 
 enum class FilterType { Nearest, Linear };
 
-
 enum class TextureType {
     Diffuse,  // also Albedo for PBR
     Specular,
@@ -137,19 +137,24 @@ struct FramebufferColorImageDesc {
     SamplerDesc sampler = {};
 };
 
-enum class DepthImageType { None, Depth, DepthStencil };
+enum class DepthImageType { Depth, DepthStencil };
 
 struct FramebufferDepthImageDesc {
     std::string name = "depth";
     DepthImageType depth_type = DepthImageType::DepthStencil;
 };
 
+enum class FramebufferSize { Absolute, RelativeToSwapchain };
+
 struct FramebufferDesc {
-    uint32_t width;
-    uint32_t height;
-    std::vector<FramebufferColorImageDesc> color_images = {
-        FramebufferColorImageDesc()};
-    FramebufferDepthImageDesc depth_image = {};
+    std::string name = "frame";
+
+    float width = 1.0f;
+    float height = 1.0f;
+    FramebufferSize framebuffer_size = FramebufferSize::RelativeToSwapchain;
+
+    std::vector<std::string> color_images = {"color"};
+    std::string depth_image = "depth";  // empty string means no depth
 };
 
 struct ColorAttachmentDesc {
@@ -167,8 +172,27 @@ struct DepthAttachmentDesc {
 };
 
 struct RenderPassDesc {
+    std::string name = "forward";
     std::vector<ColorAttachmentDesc> color_attachments = {{}};
     DepthAttachmentDesc depth_attachment = {};
+};
+
+struct RenderPlan {
+    std::map<std::string, FramebufferColorImageDesc> color_images = {
+        std::make_pair("color", FramebufferColorImageDesc())};
+    std::map<std::string, FramebufferDepthImageDesc> depth_images = {
+        std::make_pair("depth", FramebufferDepthImageDesc())};
+
+    std::map<std::string, RenderPassDesc> render_passes = {
+        std::make_pair("forward", RenderPassDesc())};
+    std::map<std::string, FramebufferDesc> framebuffers = {
+        std::make_pair("frame", FramebufferDesc())};
+
+    struct SequenceElement {
+        std::string rp_name;
+        std::string fb_name;
+    };
+    std::vector<SequenceElement> render_sequence = {{"forward", "frame"}};
 };
 
 struct VertexInputBindingDesc {

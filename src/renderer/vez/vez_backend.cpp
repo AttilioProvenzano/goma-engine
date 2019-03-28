@@ -64,7 +64,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(
 
 namespace goma {
 
-VezBackend::VezBackend(Engine* engine, const Config& config = {})
+VezBackend::VezBackend(Engine* engine, const Config& config)
     : Backend(engine, config) {}
 
 VezBackend::~VezBackend() { TeardownContext(); }
@@ -232,37 +232,65 @@ result<std::shared_ptr<Image>> VezBackend::GetTexture(const char* name) {
     return Error::NotFound;
 }
 
-result<Framebuffer> VezBackend::CreateFramebuffer(size_t frame_index,
+result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
                                                   const char* name,
                                                   FramebufferDesc fb_desc) {
     assert(context_.device &&
            "Context must be initialized before creating a framebuffer");
     VkDevice device = context_.device;
 
-    auto hash = GetFramebufferHash(frame_index, name);
+    auto hash = GetFramebufferHash(frame_id, name);
     auto result = context_.framebuffer_cache.find(hash);
     if (result != context_.framebuffer_cache.end()) {
         vezDestroyFramebuffer(context_.device, result->second);
     }
 
     std::vector<VkImageView> attachments;
-    for (auto& image_desc : fb_desc.color_images) {
-        OUTCOME_TRY(image,
-                    CreateFramebufferImage(frame_index, image_desc,
-                                           fb_desc.width, fb_desc.height));
-        attachments.push_back(image->vez.image_view);
+    for (auto& image_name : fb_desc.color_images) {
+        auto image_desc_res = render_plan_->color_images.find(image_name);
+        if (image_desc_res != render_plan_->color_images.end()) {
+            OUTCOME_TRY(
+                image, CreateFramebufferImage(frame_id,
+                                              image_desc_res->second, fb_desc));
+            attachments.push_back(image->vez.image_view);
+        } else {
+            LOGE(
+                "Color image \"%s\" not found when creating framebuffer "
+                "\"%s\".",
+                image_name.c_str(), fb_desc.name.c_str());
+            return Error::NotFound;
+        }
     }
 
-    if (fb_desc.depth_image.depth_type != DepthImageType::None) {
-        OUTCOME_TRY(image,
-                    CreateFramebufferImage(frame_index, fb_desc.depth_image,
-                                           fb_desc.width, fb_desc.height));
-        attachments.push_back(image->vez.image_view);
+    if (fb_desc.depth_image != "") {
+        auto depth_image_desc_res =
+            render_plan_->depth_images.find(fb_desc.depth_image);
+        if (depth_image_desc_res != render_plan_->depth_images.end()) {
+            OUTCOME_TRY(
+                image, CreateFramebufferImage(
+                           frame_id, depth_image_desc_res->second, fb_desc));
+            attachments.push_back(image->vez.image_view);
+        }
+    }
+
+    // TODO abstract into a helper function
+    uint32_t width, height;
+    if (fb_desc.framebuffer_size == FramebufferSize::RelativeToSwapchain) {
+        // TODO Ensure we have the latest surface size (e.g. when recreating the
+        // swapchain)
+        width = static_cast<uint32_t>(
+            round(fb_desc.width * context_.capabilities.currentExtent.width));
+        height = static_cast<uint32_t>(
+            round(fb_desc.height * context_.capabilities.currentExtent.height));
+    } else {
+        // FramebufferSize::Absolute
+        width = static_cast<uint32_t>(round(fb_desc.width));
+        height = static_cast<uint32_t>(round(fb_desc.height));
     }
 
     VezFramebufferCreateInfo fb_info = {};
-    fb_info.width = fb_desc.width;
-    fb_info.height = fb_desc.height;
+    fb_info.width = width;
+    fb_info.height = height;
     fb_info.layers = 1;
     fb_info.attachmentCount = static_cast<uint32_t>(attachments.size());
     fb_info.pAttachments = attachments.data();
@@ -271,6 +299,21 @@ result<Framebuffer> VezBackend::CreateFramebuffer(size_t frame_index,
     VK_CHECK(vezCreateFramebuffer(device, &fb_info, &framebuffer));
     context_.framebuffer_cache[hash] = framebuffer;
     return {framebuffer};
+}
+
+result<Framebuffer> VezBackend::GetFramebuffer(FrameIndex frame_id,
+                                               const char* name) {
+    assert(context_.device &&
+           "Context must be initialized before getting a framebuffer");
+    VkDevice device = context_.device;
+
+    auto hash = GetFramebufferHash(frame_id, name);
+    auto result = context_.framebuffer_cache.find(hash);
+    if (result != context_.framebuffer_cache.end()) {
+        return result->second;
+    }
+
+    return Error::NotFound;
 }
 
 result<std::shared_ptr<Buffer>> VezBackend::CreateVertexBuffer(
@@ -336,109 +379,78 @@ result<void> VezBackend::UpdateBuffer(const Buffer& buffer, uint64_t offset,
     return outcome::success();
 }
 
-result<void> VezBackend::SetupFrames(uint32_t frames) {
-    if (frames > context_.per_frame.size()) {
-        context_.per_frame.resize(frames);
+result<void> VezBackend::SetRenderPlan(const RenderPlan& render_plan) {
+    // Teardown any existing render plan
+    for (auto framebuffer : context_.framebuffer_cache) {
+        vezDestroyFramebuffer(context_.device, framebuffer.second);
     }
+
+    for (auto image : context_.fb_image_cache) {
+        vezDestroyImageView(context_.device, image.second->vez.image_view);
+        vezDestroyImage(context_.device, image.second->vez.image);
+    }
+
+    // Copy the render plan into render_plan
+    render_plan_ = std::make_unique<RenderPlan>(render_plan);
     return outcome::success();
 }
 
-result<size_t> VezBackend::StartFrame(uint32_t threads) {
-    assert(context_.device &&
-           "Context must be initialized before starting a frame");
-    VkDevice device = context_.device;
-
-    if (context_.per_frame.empty()) {
-        // Set up triple buffering by default
-        SetupFrames(3);
+result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
+                                     const char* present_image) {
+    if (!render_plan_) {
+        // Set a default render plan
+        SetRenderPlan({});
     }
 
-    if (threads == 0) {
-        threads = 1;
+    auto image_id = StartFrame().value();
+
+    for (size_t i = 0; i < render_plan_->render_sequence.size(); i++) {
+        auto& render_seq_entry = render_plan_->render_sequence[i];
+
+        auto& rp_desc_result =
+            render_plan_->render_passes.find(render_seq_entry.rp_name);
+        if (rp_desc_result == render_plan_->render_passes.end()) {
+            LOGE("Invalid render pass \"%s\"!",
+                 render_seq_entry.rp_name.c_str());
+            return Error::NotFound;
+        }
+
+        auto& fb_desc_result =
+            render_plan_->framebuffers.find(render_seq_entry.fb_name);
+        if (fb_desc_result == render_plan_->framebuffers.end()) {
+            LOGE("Invalid framebuffer \"%s\"!",
+                 render_seq_entry.fb_name.c_str());
+            return Error::NotFound;
+        }
+
+        auto fb_result =
+            GetFramebuffer(image_id, fb_desc_result->first.c_str());
+
+        if (!fb_result) {
+            auto fb_create_result =
+                CreateFramebuffer(image_id, fb_desc_result->first.c_str(),
+                                  fb_desc_result->second);
+            StartRenderPass(fb_create_result.value(), rp_desc_result->second);
+        } else {
+            StartRenderPass(fb_result.value(), rp_desc_result->second);
+        }
+
+        if (i < render_pass_fns.size()) {
+            render_pass_fns[i](rp_desc_result->second, fb_desc_result->second,
+                               image_id);
+        } else if (render_pass_fns.size() == 1) {
+            render_pass_fns[0](rp_desc_result->second, fb_desc_result->second,
+                               image_id);
+        } else {
+            LOGE("Skipping render pass \"%s\", no function provided.",
+                 rp_desc_result->first.c_str());
+            continue;
+        }
     }
 
-    auto& per_frame = context_.per_frame[context_.current_frame];
-    if (per_frame.presentation_fence != VK_NULL_HANDLE) {
-        vezWaitForFences(context_.device, 1, &per_frame.presentation_fence,
-                         VK_TRUE, UINT64_MAX);
-        vezDestroyFence(context_.device, per_frame.presentation_fence);
-        per_frame.presentation_fence = VK_NULL_HANDLE;
-    }
+    FinishFrame();
+    PresentImage("color");
 
-    auto command_buffer_count = per_frame.command_buffers.size();
-    if (threads > command_buffer_count) {
-        VkQueue graphics_queue = VK_NULL_HANDLE;
-        vezGetDeviceGraphicsQueue(device, 0, &graphics_queue);
-
-        VezCommandBufferAllocateInfo cmd_info = {};
-        cmd_info.commandBufferCount =
-            static_cast<uint32_t>(threads - command_buffer_count);
-        cmd_info.queue = graphics_queue;
-
-        per_frame.command_buffers.resize(threads);
-        VK_CHECK(vezAllocateCommandBuffers(
-            context_.device, &cmd_info,
-            &per_frame.command_buffers[command_buffer_count]));
-    }
-
-    per_frame.command_buffer_active.resize(threads);
-    for (auto& active : per_frame.command_buffer_active) {
-        active = false;
-    }
-
-    return context_.current_frame;
-}
-
-result<void> VezBackend::StartRenderPass(Framebuffer fb,
-                                         RenderPassDesc rp_desc) {
-    assert(context_.device &&
-           "Context must be initialized before starting a render pass");
-    VkDevice device = context_.device;
-
-    // Ensure there is a valid command buffer for the current thread
-    OUTCOME_TRY(GetActiveCommandBuffer());
-
-    if (rp_in_progress_) {
-        vezCmdEndRenderPass();
-    };
-    rp_in_progress_ = false;
-
-    size_t total_attachments = rp_desc.depth_attachment.active
-                                   ? rp_desc.color_attachments.size() + 1
-                                   : rp_desc.color_attachments.size();
-
-    std::vector<VezAttachmentInfo> attach_infos;
-    attach_infos.reserve(total_attachments);
-
-    for (auto attachment : rp_desc.color_attachments) {
-        attach_infos.push_back(
-            {attachment.clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
-                              : VK_ATTACHMENT_LOAD_OP_LOAD,
-             attachment.store ? VK_ATTACHMENT_STORE_OP_STORE
-                              : VK_ATTACHMENT_STORE_OP_DONT_CARE,
-             {attachment.clear_color[0], attachment.clear_color[1],
-              attachment.clear_color[2], attachment.clear_color[3]}});
-    }
-
-    if (rp_desc.depth_attachment.active) {
-        VezAttachmentInfo depth_info = {
-            rp_desc.depth_attachment.clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
-                                           : VK_ATTACHMENT_LOAD_OP_LOAD,
-            rp_desc.depth_attachment.store ? VK_ATTACHMENT_STORE_OP_STORE
-                                           : VK_ATTACHMENT_STORE_OP_DONT_CARE};
-        depth_info.clearValue.depthStencil = {
-            rp_desc.depth_attachment.clear_depth,
-            rp_desc.depth_attachment.clear_stencil};
-        attach_infos.push_back(depth_info);
-    }
-
-    VezRenderPassBeginInfo rp_info = {};
-    rp_info.framebuffer = fb.vez;
-    rp_info.attachmentCount = static_cast<uint32_t>(attach_infos.size());
-    rp_info.pAttachments = attach_infos.data();
-
-    vezCmdBeginRenderPass(&rp_info);
-    rp_in_progress_ = true;
     return outcome::success();
 }
 
@@ -723,6 +735,106 @@ result<void> VezBackend::DrawIndexed(uint32_t index_count,
     return outcome::success();
 }
 
+result<size_t> VezBackend::StartFrame(uint32_t threads) {
+    assert(context_.device &&
+           "Context must be initialized before starting a frame");
+    VkDevice device = context_.device;
+
+    uint32_t buffering = config_.buffering == Buffering::Triple ? 3 : 2;
+    context_.current_frame = (context_.current_frame + 1) % buffering;
+    if (context_.current_frame >= context_.per_frame.size()) {
+        context_.per_frame.resize(context_.current_frame + 1);
+    }
+
+    if (threads == 0) {
+        threads = 1;
+    }
+
+    auto& per_frame = context_.per_frame[context_.current_frame];
+    if (per_frame.presentation_fence != VK_NULL_HANDLE) {
+        vezWaitForFences(context_.device, 1, &per_frame.presentation_fence,
+                         VK_TRUE, UINT64_MAX);
+        vezDestroyFence(context_.device, per_frame.presentation_fence);
+        per_frame.presentation_fence = VK_NULL_HANDLE;
+    }
+
+    auto command_buffer_count = per_frame.command_buffers.size();
+    if (threads > command_buffer_count) {
+        VkQueue graphics_queue = VK_NULL_HANDLE;
+        vezGetDeviceGraphicsQueue(device, 0, &graphics_queue);
+
+        VezCommandBufferAllocateInfo cmd_info = {};
+        cmd_info.commandBufferCount =
+            static_cast<uint32_t>(threads - command_buffer_count);
+        cmd_info.queue = graphics_queue;
+
+        per_frame.command_buffers.resize(threads);
+        VK_CHECK(vezAllocateCommandBuffers(
+            context_.device, &cmd_info,
+            &per_frame.command_buffers[command_buffer_count]));
+    }
+
+    per_frame.command_buffer_active.resize(threads);
+    for (auto& active : per_frame.command_buffer_active) {
+        active = false;
+    }
+
+    return context_.current_frame;
+}
+
+result<void> VezBackend::StartRenderPass(Framebuffer fb,
+                                         RenderPassDesc rp_desc) {
+    assert(context_.device &&
+           "Context must be initialized before starting a render pass");
+    VkDevice device = context_.device;
+
+    // Ensure there is a valid command buffer for the current thread
+    OUTCOME_TRY(GetActiveCommandBuffer());
+
+    if (rp_in_progress_) {
+        vezCmdEndRenderPass();
+    };
+    rp_in_progress_ = false;
+
+    size_t total_attachments = rp_desc.depth_attachment.active
+                                   ? rp_desc.color_attachments.size() + 1
+                                   : rp_desc.color_attachments.size();
+
+    std::vector<VezAttachmentInfo> attach_infos;
+    attach_infos.reserve(total_attachments);
+
+    for (auto attachment : rp_desc.color_attachments) {
+        attach_infos.push_back(
+            {attachment.clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
+                              : VK_ATTACHMENT_LOAD_OP_LOAD,
+             attachment.store ? VK_ATTACHMENT_STORE_OP_STORE
+                              : VK_ATTACHMENT_STORE_OP_DONT_CARE,
+             {attachment.clear_color[0], attachment.clear_color[1],
+              attachment.clear_color[2], attachment.clear_color[3]}});
+    }
+
+    if (rp_desc.depth_attachment.active) {
+        VezAttachmentInfo depth_info = {
+            rp_desc.depth_attachment.clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
+                                           : VK_ATTACHMENT_LOAD_OP_LOAD,
+            rp_desc.depth_attachment.store ? VK_ATTACHMENT_STORE_OP_STORE
+                                           : VK_ATTACHMENT_STORE_OP_DONT_CARE};
+        depth_info.clearValue.depthStencil = {
+            rp_desc.depth_attachment.clear_depth,
+            rp_desc.depth_attachment.clear_stencil};
+        attach_infos.push_back(depth_info);
+    }
+
+    VezRenderPassBeginInfo rp_info = {};
+    rp_info.framebuffer = fb.vez;
+    rp_info.attachmentCount = static_cast<uint32_t>(attach_infos.size());
+    rp_info.pAttachments = attach_infos.data();
+
+    vezCmdBeginRenderPass(&rp_info);
+    rp_in_progress_ = true;
+    return outcome::success();
+}
+
 result<void> VezBackend::FinishFrame() {
     VkDevice device = context_.device;
 
@@ -775,8 +887,6 @@ result<void> VezBackend::PresentImage(const char* present_image_name) {
 
     VK_CHECK(vezQueuePresent(graphics_queue, &present_info));
 
-    context_.current_frame =
-        (context_.current_frame + 1) % context_.per_frame.size();
     return outcome::success();
 };
 
@@ -1009,7 +1119,7 @@ result<VezSwapchain> VezBackend::CreateSwapchain(VkSurfaceKHR surface) {
 
     VezSwapchainCreateInfo swapchain_info = {};
     swapchain_info.surface = surface;
-    swapchain_info.tripleBuffer = VK_TRUE;
+    swapchain_info.tripleBuffer = VK_TRUE;  // TODO configurable
     swapchain_info.format = {VK_FORMAT_R8G8B8A8_UNORM,
                              VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 
@@ -1152,9 +1262,9 @@ result<std::shared_ptr<Buffer>> VezBackend::GetBuffer(
 }
 
 result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
-    size_t frame_index, const FramebufferColorImageDesc& image_desc,
-    uint32_t width, uint32_t height) {
-    auto hash = GetFramebufferImageHash(frame_index, image_desc.name.c_str());
+    FrameIndex frame_id, const FramebufferColorImageDesc& image_desc,
+    const FramebufferDesc& fb_desc) {
+    auto hash = GetFramebufferImageHash(frame_id, image_desc.name.c_str());
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         vezDestroyImageView(context_.device, result->second->vez.image_view);
@@ -1162,6 +1272,20 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
     }
 
     VkFormat format = GetVkFormat(image_desc.format);
+
+    uint32_t width, height;
+    if (fb_desc.framebuffer_size == FramebufferSize::RelativeToSwapchain) {
+        // TODO Ensure we have the latest surface size (e.g. when recreating the
+        // swapchain)
+        width = static_cast<uint32_t>(
+            round(fb_desc.width * context_.capabilities.currentExtent.width));
+        height = static_cast<uint32_t>(
+            round(fb_desc.height * context_.capabilities.currentExtent.height));
+    } else {
+        // FramebufferSize::Absolute
+        width = static_cast<uint32_t>(round(fb_desc.width));
+        height = static_cast<uint32_t>(round(fb_desc.height));
+    }
 
     VezImageCreateInfo image_info = {};
     image_info.extent = {width, height, 1};
@@ -1183,9 +1307,9 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
 }
 
 result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
-    size_t frame_index, const FramebufferDepthImageDesc& image_desc,
-    uint32_t width, uint32_t height) {
-    auto hash = GetFramebufferImageHash(frame_index, image_desc.name.c_str());
+    FrameIndex frame_id, const FramebufferDepthImageDesc& image_desc,
+    const FramebufferDesc& fb_desc) {
+    auto hash = GetFramebufferImageHash(frame_id, image_desc.name.c_str());
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         vezDestroyImageView(context_.device, result->second->vez.image_view);
@@ -1203,6 +1327,20 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
         default:
             format = VK_FORMAT_D32_SFLOAT_S8_UINT;
             break;
+    }
+
+    uint32_t width, height;
+    if (fb_desc.framebuffer_size == FramebufferSize::RelativeToSwapchain) {
+        // TODO Ensure we have the latest surface size (e.g. when recreating the
+        // swapchain)
+        width = static_cast<uint32_t>(
+            round(fb_desc.width * context_.capabilities.currentExtent.width));
+        height = static_cast<uint32_t>(
+            round(fb_desc.height * context_.capabilities.currentExtent.height));
+    } else {
+        // FramebufferSize::Absolute
+        width = static_cast<uint32_t>(round(fb_desc.width));
+        height = static_cast<uint32_t>(round(fb_desc.height));
     }
 
     VezImageCreateInfo image_info = {};
@@ -1224,8 +1362,8 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
 }
 
 result<std::shared_ptr<Image>> VezBackend::GetFramebufferImage(
-    size_t frame_index, const char* name) {
-    auto hash = GetFramebufferImageHash(frame_index, name);
+    FrameIndex frame_id, const char* name) {
+    auto hash = GetFramebufferImageHash(frame_id, name);
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         return result->second;
@@ -1356,6 +1494,7 @@ result<void> VezBackend::GetActiveCommandBuffer(uint32_t thread) {
         per_frame.command_buffer_active[thread] = true;
 
         // TODO separate scissor and viewport (also more details)
+        // TODO remove from here, they are now separate
         VkRect2D scissor = {{}, {800, 600}};
         vezCmdSetScissor(0, 1, &scissor);
 
@@ -1459,14 +1598,14 @@ VezContext::ImageHash VezBackend::GetTextureHash(const char* name) {
     return {sdbm_hash(name)};
 }
 
-VezContext::ImageHash VezBackend::GetFramebufferImageHash(size_t frame_index,
+VezContext::ImageHash VezBackend::GetFramebufferImageHash(FrameIndex frame_id,
                                                           const char* name) {
-    return {frame_index, sdbm_hash(name)};
+    return {frame_id, sdbm_hash(name)};
 }
 
-VezContext::FramebufferHash VezBackend::GetFramebufferHash(size_t frame_index,
+VezContext::FramebufferHash VezBackend::GetFramebufferHash(FrameIndex frame_id,
                                                            const char* name) {
-    return {frame_index, sdbm_hash(name)};
+    return {frame_id, sdbm_hash(name)};
 }
 
 VezContext::SamplerHash VezBackend::GetSamplerHash(

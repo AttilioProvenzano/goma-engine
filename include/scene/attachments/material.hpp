@@ -1,10 +1,12 @@
 #pragma once
 
 #include "scene/gen_index.hpp"
+#include "renderer/handles.hpp"
 
 #include <glm/glm.hpp>
 
 #include <array>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -12,47 +14,21 @@ namespace goma {
 
 struct Texture;
 
-enum class TextureType {
-    Diffuse,  // also Albedo for PBR
-    Specular,
-    Ambient,
-    Emissive,
-    MetallicRoughness,
-    HeightMap,
-    NormalMap,
-    Shininess,
-    Opacity,
-    Displacement,
-    LightMap,  // also OcclusionMap
-    Reflection,
-};
-
-enum class TextureOp {
-    Multiply,
-    Add,
-    Subtract,
-    Divide,
-    SmoothAdd,  // (T1 + T2) - (T1 * T2)
-    SignedAdd   // T1 + (T2 - 0.5)
-};
-
-enum class TextureWrappingMode { Repeat, MirroredRepeat, ClampToEdge, Decal };
-
 struct TextureBinding {
     AttachmentIndex<Texture> index;
     uint32_t uv_index = 0;
     float blend = 1.0f;
     std::array<TextureWrappingMode, 3> wrapping = {TextureWrappingMode::Repeat,
-                                                   TextureWrappingMode::Repeat,
-                                                   TextureWrappingMode::Repeat};
+        TextureWrappingMode::Repeat,
+        TextureWrappingMode::Repeat};
 };
 
 typedef std::unordered_map<TextureType, std::vector<TextureBinding>>
-    MaterialTextureMap;
+    TextureBindingMap;
 
 struct Material {
     std::string name;
-    MaterialTextureMap textures;
+    TextureBindingMap texture_bindings;
 
     glm::vec3 diffuse_color = glm::vec3(0.0f);
     glm::vec3 specular_color = glm::vec3(0.0f);

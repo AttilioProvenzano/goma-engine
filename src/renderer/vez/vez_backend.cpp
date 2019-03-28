@@ -64,9 +64,15 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(
 
 namespace goma {
 
-VezBackend::VezBackend(Engine* engine) : Backend(engine) {}
+VezBackend::VezBackend(Engine* engine, const Config& config)
+    : Backend(engine, config) {}
 
 VezBackend::~VezBackend() { TeardownContext(); }
+
+result<void> VezBackend::SetBuffering(Buffering buffering) {
+    config_.buffering = buffering;
+    return outcome::success();
+}
 
 result<void> VezBackend::InitContext() {
     VK_CHECK(volkInitialize());
@@ -226,37 +232,65 @@ result<std::shared_ptr<Image>> VezBackend::GetTexture(const char* name) {
     return Error::NotFound;
 }
 
-result<Framebuffer> VezBackend::CreateFramebuffer(size_t frame_index,
+result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
                                                   const char* name,
                                                   FramebufferDesc fb_desc) {
     assert(context_.device &&
            "Context must be initialized before creating a framebuffer");
     VkDevice device = context_.device;
 
-    auto hash = GetFramebufferHash(frame_index, name);
+    auto hash = GetFramebufferHash(frame_id, name);
     auto result = context_.framebuffer_cache.find(hash);
     if (result != context_.framebuffer_cache.end()) {
         vezDestroyFramebuffer(context_.device, result->second);
     }
 
     std::vector<VkImageView> attachments;
-    for (auto& image_desc : fb_desc.color_images) {
-        OUTCOME_TRY(image,
-                    CreateFramebufferImage(frame_index, image_desc,
-                                           fb_desc.width, fb_desc.height));
-        attachments.push_back(image->vez.image_view);
+    for (auto& image_name : fb_desc.color_images) {
+        auto image_desc_res = render_plan_->color_images.find(image_name);
+        if (image_desc_res != render_plan_->color_images.end()) {
+            OUTCOME_TRY(
+                image, CreateFramebufferImage(frame_id,
+                                              image_desc_res->second, fb_desc));
+            attachments.push_back(image->vez.image_view);
+        } else {
+            LOGE(
+                "Color image \"%s\" not found when creating framebuffer "
+                "\"%s\".",
+                image_name.c_str(), fb_desc.name.c_str());
+            return Error::NotFound;
+        }
     }
 
-    if (fb_desc.depth_image.depth_type != DepthImageType::None) {
-        OUTCOME_TRY(image,
-                    CreateFramebufferImage(frame_index, fb_desc.depth_image,
-                                           fb_desc.width, fb_desc.height));
-        attachments.push_back(image->vez.image_view);
+    if (fb_desc.depth_image != "") {
+        auto depth_image_desc_res =
+            render_plan_->depth_images.find(fb_desc.depth_image);
+        if (depth_image_desc_res != render_plan_->depth_images.end()) {
+            OUTCOME_TRY(
+                image, CreateFramebufferImage(
+                           frame_id, depth_image_desc_res->second, fb_desc));
+            attachments.push_back(image->vez.image_view);
+        }
+    }
+
+    // TODO abstract into a helper function
+    uint32_t width, height;
+    if (fb_desc.framebuffer_size == FramebufferSize::RelativeToSwapchain) {
+        // TODO Ensure we have the latest surface size (e.g. when recreating the
+        // swapchain)
+        width = static_cast<uint32_t>(
+            round(fb_desc.width * context_.capabilities.currentExtent.width));
+        height = static_cast<uint32_t>(
+            round(fb_desc.height * context_.capabilities.currentExtent.height));
+    } else {
+        // FramebufferSize::Absolute
+        width = static_cast<uint32_t>(round(fb_desc.width));
+        height = static_cast<uint32_t>(round(fb_desc.height));
     }
 
     VezFramebufferCreateInfo fb_info = {};
-    fb_info.width = fb_desc.width;
-    fb_info.height = fb_desc.height;
+    fb_info.width = width;
+    fb_info.height = height;
     fb_info.layers = 1;
     fb_info.attachmentCount = static_cast<uint32_t>(attachments.size());
     fb_info.pAttachments = attachments.data();
@@ -265,6 +299,21 @@ result<Framebuffer> VezBackend::CreateFramebuffer(size_t frame_index,
     VK_CHECK(vezCreateFramebuffer(device, &fb_info, &framebuffer));
     context_.framebuffer_cache[hash] = framebuffer;
     return {framebuffer};
+}
+
+result<Framebuffer> VezBackend::GetFramebuffer(FrameIndex frame_id,
+                                               const char* name) {
+    assert(context_.device &&
+           "Context must be initialized before getting a framebuffer");
+    VkDevice device = context_.device;
+
+    auto hash = GetFramebufferHash(frame_id, name);
+    auto result = context_.framebuffer_cache.find(hash);
+    if (result != context_.framebuffer_cache.end()) {
+        return result->second;
+    }
+
+    return Error::NotFound;
 }
 
 result<std::shared_ptr<Buffer>> VezBackend::CreateVertexBuffer(
@@ -330,10 +379,359 @@ result<void> VezBackend::UpdateBuffer(const Buffer& buffer, uint64_t offset,
     return outcome::success();
 }
 
-result<void> VezBackend::SetupFrames(uint32_t frames) {
-    if (frames > context_.per_frame.size()) {
-        context_.per_frame.resize(frames);
+result<void> VezBackend::SetRenderPlan(const RenderPlan& render_plan) {
+    // Teardown any existing render plan
+    for (auto framebuffer : context_.framebuffer_cache) {
+        vezDestroyFramebuffer(context_.device, framebuffer.second);
     }
+
+    for (auto image : context_.fb_image_cache) {
+        vezDestroyImageView(context_.device, image.second->vez.image_view);
+        vezDestroyImage(context_.device, image.second->vez.image);
+    }
+
+    // Copy the render plan into render_plan
+    render_plan_ = std::make_unique<RenderPlan>(render_plan);
+    return outcome::success();
+}
+
+result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
+                                     const char* present_image) {
+    if (!render_plan_) {
+        // Set a default render plan
+        SetRenderPlan({});
+    }
+
+    auto image_id = StartFrame().value();
+
+    for (size_t i = 0; i < render_plan_->render_sequence.size(); i++) {
+        auto& render_seq_entry = render_plan_->render_sequence[i];
+
+        auto& rp_desc_result =
+            render_plan_->render_passes.find(render_seq_entry.rp_name);
+        if (rp_desc_result == render_plan_->render_passes.end()) {
+            LOGE("Invalid render pass \"%s\"!",
+                 render_seq_entry.rp_name.c_str());
+            return Error::NotFound;
+        }
+
+        auto& fb_desc_result =
+            render_plan_->framebuffers.find(render_seq_entry.fb_name);
+        if (fb_desc_result == render_plan_->framebuffers.end()) {
+            LOGE("Invalid framebuffer \"%s\"!",
+                 render_seq_entry.fb_name.c_str());
+            return Error::NotFound;
+        }
+
+        auto fb_result =
+            GetFramebuffer(image_id, fb_desc_result->first.c_str());
+
+        if (!fb_result) {
+            auto fb_create_result =
+                CreateFramebuffer(image_id, fb_desc_result->first.c_str(),
+                                  fb_desc_result->second);
+            StartRenderPass(fb_create_result.value(), rp_desc_result->second);
+        } else {
+            StartRenderPass(fb_result.value(), rp_desc_result->second);
+        }
+
+        if (i < render_pass_fns.size()) {
+            render_pass_fns[i](rp_desc_result->second, fb_desc_result->second,
+                               image_id);
+        } else if (render_pass_fns.size() == 1) {
+            render_pass_fns[0](rp_desc_result->second, fb_desc_result->second,
+                               image_id);
+        } else {
+            LOGE("Skipping render pass \"%s\", no function provided.",
+                 rp_desc_result->first.c_str());
+            continue;
+        }
+    }
+
+    FinishFrame();
+    PresentImage("color");
+
+    return outcome::success();
+}
+
+result<void> VezBackend::BindVertexUniforms(
+    const VertexUniforms& vertex_uniforms) {
+    vezCmdPushConstants(
+        0, static_cast<uint32_t>(std::min(sizeof(vertex_uniforms), 128ULL)),
+        &vertex_uniforms);
+    return outcome::success();
+};
+
+result<void> VezBackend::BindFragmentUniforms(
+    const FragmentUniforms& fragment_uniforms) {
+    vezCmdPushConstants(
+        128, static_cast<uint32_t>(std::min(sizeof(fragment_uniforms), 128ULL)),
+        &fragment_uniforms);
+    return outcome::success();
+};
+
+result<void> VezBackend::BindUniformBuffer(const Buffer& buffer,
+                                           uint64_t offset, uint64_t size,
+                                           uint32_t binding,
+                                           uint32_t array_index) {
+    vezCmdBindBuffer(buffer.vez, offset, size, 0, binding, array_index);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindTexture(const Image& image, uint32_t binding,
+                                     const SamplerDesc* sampler_override) {
+    VkSampler sampler_ovr = VK_NULL_HANDLE;
+    if (sampler_override != nullptr) {
+        OUTCOME_TRY(s, GetSampler(*sampler_override));
+        sampler_ovr = s;
+    }
+
+    vezCmdBindImageView(image.vez.image_view,
+                        sampler_override ? sampler_ovr : image.vez.sampler, 0,
+                        binding, 0);
+
+    return outcome::success();
+}
+
+result<void> VezBackend::BindTextures(const std::vector<Image>& images,
+                                      uint32_t first_binding,
+                                      const SamplerDesc* sampler_override) {
+    VkSampler sampler_ovr = VK_NULL_HANDLE;
+    if (sampler_override != nullptr) {
+        OUTCOME_TRY(s, GetSampler(*sampler_override));
+        sampler_ovr = s;
+    }
+
+    for (const auto& image : images) {
+        vezCmdBindImageView(image.vez.image_view,
+                            sampler_override ? sampler_ovr : image.vez.sampler,
+                            0, first_binding, 0);
+    }
+    return outcome::success();
+}
+
+result<void> VezBackend::BindVertexBuffer(const Buffer& vertex_buffer,
+                                          uint32_t binding, size_t offset) {
+    vezCmdBindVertexBuffers(binding, 1, &vertex_buffer.vez, &offset);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindVertexBuffers(
+    const std::vector<Buffer>& vertex_buffers, uint32_t first_binding,
+    std::vector<size_t> offsets) {
+    std::vector<VkDeviceSize> vk_offsets;
+    vk_offsets.reserve(vertex_buffers.size());
+
+    for (const auto& o : offsets) {
+        vk_offsets.push_back(static_cast<VkDeviceSize>(o));
+    }
+    vk_offsets.resize(vertex_buffers.size(), 0);
+
+    std::vector<VkBuffer> buffers;
+    buffers.reserve(vertex_buffers.size());
+
+    for (const auto& vb : vertex_buffers) {
+        buffers.push_back(vb.vez);
+    }
+
+    vezCmdBindVertexBuffers(first_binding,
+                            static_cast<uint32_t>(buffers.size()),
+                            buffers.data(), vk_offsets.data());
+    return outcome::success();
+}
+
+result<void> VezBackend::BindIndexBuffer(const Buffer& index_buffer,
+                                         uint64_t offset, bool short_indices) {
+    vezCmdBindIndexBuffer(
+        index_buffer.vez, static_cast<VkDeviceSize>(offset),
+        short_indices ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindGraphicsPipeline(Pipeline pipeline) {
+    vezCmdBindPipeline(pipeline.vez);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindVertexInputFormat(
+    VertexInputFormat vertex_input_format) {
+    vezCmdSetVertexInputFormat(vertex_input_format.vez);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindDepthStencilState(const DepthStencilState& state) {
+    VezDepthStencilState vez_state = {};
+    vez_state.depthTestEnable = state.depth_test;
+    vez_state.depthWriteEnable = state.depth_write;
+    vez_state.depthBoundsTestEnable = state.depth_bounds;
+    vez_state.depthCompareOp = static_cast<VkCompareOp>(state.depth_compare);
+    vez_state.stencilTestEnable = state.stencil_test;
+    vez_state.front = {static_cast<VkStencilOp>(state.front.fail_op),
+                       static_cast<VkStencilOp>(state.front.pass_op),
+                       static_cast<VkStencilOp>(state.front.depth_fail_op),
+                       static_cast<VkCompareOp>(state.front.compare_op)};
+    vez_state.back = {static_cast<VkStencilOp>(state.back.fail_op),
+                      static_cast<VkStencilOp>(state.back.pass_op),
+                      static_cast<VkStencilOp>(state.back.depth_fail_op),
+                      static_cast<VkCompareOp>(state.back.compare_op)};
+
+    vezCmdSetDepthStencilState(&vez_state);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindColorBlendState(const ColorBlendState& state) {
+    VezColorBlendState vez_state = {};
+    vez_state.logicOpEnable = state.color_blend;
+    vez_state.logicOp = static_cast<VkLogicOp>(state.logic_op);
+
+    if (!state.attachments.empty()) {
+        std::vector<VezColorBlendAttachmentState> vez_attachments;
+        for (const auto& attachment : state.attachments) {
+            vez_attachments.push_back(
+                {attachment.color_blend,
+                 static_cast<VkBlendFactor>(attachment.src_color_blend_factor),
+                 static_cast<VkBlendFactor>(attachment.dst_color_blend_factor),
+                 static_cast<VkBlendOp>(attachment.color_blend_op),
+                 static_cast<VkBlendFactor>(attachment.src_alpha_blend_factor),
+                 static_cast<VkBlendFactor>(attachment.dst_alpha_blend_factor),
+                 static_cast<VkBlendOp>(attachment.alpha_blend_op),
+                 static_cast<VkColorComponentFlags>(
+                     attachment.color_write_mask)});
+        }
+
+        vez_state.attachmentCount =
+            static_cast<uint32_t>(vez_attachments.size());
+        vez_state.pAttachments = vez_attachments.data();
+
+        vezCmdSetColorBlendState(&vez_state);
+    } else {
+        vezCmdSetColorBlendState(&vez_state);
+    }
+
+    return outcome::success();
+}
+
+result<void> VezBackend::BindMultisampleState(const MultisampleState& state) {
+    VezMultisampleState vez_state = {};
+
+    // Reduce state.samples to a power of 2
+    uint32_t samples_po2 = std::min(state.samples, 64U);
+    uint32_t mask = 64;
+    while (mask) {
+        if (samples_po2 & mask) {
+            samples_po2 = mask;
+            break;
+        }
+        mask >>= 1;
+    }
+
+    vez_state.rasterizationSamples =
+        static_cast<VkSampleCountFlagBits>(samples_po2);
+    vez_state.sampleShadingEnable = state.sample_shading;
+    vez_state.minSampleShading = state.min_sample_shading;
+
+    vezCmdSetMultisampleState(&vez_state);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindInputAssemblyState(
+    const InputAssemblyState& state) {
+    VezInputAssemblyState vez_state = {};
+    vez_state.topology = static_cast<VkPrimitiveTopology>(state.topology);
+    vez_state.primitiveRestartEnable = state.primitive_restart;
+
+    vezCmdSetInputAssemblyState(&vez_state);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindRasterizationState(
+    const RasterizationState& state) {
+    VezRasterizationState vez_state = {};
+    vez_state.depthBiasEnable = state.depth_bias;
+    vez_state.depthClampEnable = state.depth_clamp;
+    vez_state.cullMode = static_cast<VkCullModeFlags>(state.cull_mode);
+    vez_state.frontFace = static_cast<VkFrontFace>(state.front_face);
+    vez_state.polygonMode = static_cast<VkPolygonMode>(state.polygon_mode);
+    vez_state.rasterizerDiscardEnable = state.rasterizer_discard;
+
+    vezCmdSetRasterizationState(&vez_state);
+    return outcome::success();
+}
+
+result<void> VezBackend::BindViewportState(uint32_t viewport_count) {
+    vezCmdSetViewportState(viewport_count);
+    return outcome::success();
+}
+
+result<void> VezBackend::SetDepthBias(float constant_factor, float clamp,
+                                      float slope_factor) {
+    vezCmdSetDepthBias(constant_factor, clamp, slope_factor);
+    return outcome::success();
+}
+
+result<void> VezBackend::SetDepthBounds(float min, float max) {
+    vezCmdSetDepthBounds(min, max);
+    return outcome::success();
+}
+
+result<void> VezBackend::SetStencil(StencilFace face, uint32_t reference,
+                                    uint32_t write_mask,
+                                    uint32_t compare_mask) {
+    vezCmdSetStencilReference(static_cast<VkStencilFaceFlags>(face), reference);
+    vezCmdSetStencilWriteMask(static_cast<VkStencilFaceFlags>(face),
+                              write_mask);
+    vezCmdSetStencilCompareMask(static_cast<VkStencilFaceFlags>(face),
+                                compare_mask);
+    return outcome::success();
+}
+
+result<void> VezBackend::SetBlendConstants(
+    const std::array<float, 4>& blend_constants) {
+    vezCmdSetBlendConstants(blend_constants.data());
+    return outcome::success();
+}
+
+result<void> VezBackend::SetViewport(const std::vector<Viewport> viewports,
+                                     uint32_t first_viewport) {
+    std::vector<VkViewport> viewports_vez;
+    for (const auto& viewport : viewports) {
+        viewports_vez.push_back({viewport.x, viewport.y, viewport.width,
+                                 viewport.height, viewport.min_depth,
+                                 viewport.max_depth});
+    }
+
+    vezCmdSetViewport(first_viewport,
+                      static_cast<uint32_t>(viewports_vez.size()),
+                      viewports_vez.data());
+    return outcome::success();
+}
+
+result<void> VezBackend::SetScissor(const std::vector<Scissor> scissors,
+                                    uint32_t first_scissor) {
+    std::vector<VkRect2D> scissors_vez;
+    for (const auto& scissor : scissors) {
+        scissors_vez.push_back(
+            {{scissor.x, scissor.y}, {scissor.width, scissor.height}});
+    }
+
+    vezCmdSetScissor(first_scissor, static_cast<uint32_t>(scissors_vez.size()),
+                     scissors_vez.data());
+    return outcome::success();
+}
+
+result<void> VezBackend::Draw(uint32_t vertex_count, uint32_t instance_count,
+                              uint32_t first_vertex, uint32_t first_instance) {
+    vezCmdDraw(vertex_count, instance_count, first_vertex, first_instance);
+    return outcome::success();
+}
+
+result<void> VezBackend::DrawIndexed(uint32_t index_count,
+                                     uint32_t instance_count,
+                                     uint32_t first_index,
+                                     uint32_t vertex_offset,
+                                     uint32_t first_instance) {
+    vezCmdDrawIndexed(index_count, instance_count, first_index, vertex_offset,
+                      first_instance);
     return outcome::success();
 }
 
@@ -342,9 +740,10 @@ result<size_t> VezBackend::StartFrame(uint32_t threads) {
            "Context must be initialized before starting a frame");
     VkDevice device = context_.device;
 
-    if (context_.per_frame.empty()) {
-        // Set up triple buffering by default
-        SetupFrames(3);
+    uint32_t buffering = config_.buffering == Buffering::Triple ? 3 : 2;
+    context_.current_frame = (context_.current_frame + 1) % buffering;
+    if (context_.current_frame >= context_.per_frame.size()) {
+        context_.per_frame.resize(context_.current_frame + 1);
     }
 
     if (threads == 0) {
@@ -436,112 +835,6 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
     return outcome::success();
 }
 
-result<void> VezBackend::BindVertexUniforms(
-    const VertexUniforms& vertex_uniforms) {
-    vezCmdPushConstants(
-        0, static_cast<uint32_t>(std::min(sizeof(vertex_uniforms), 128ULL)),
-        &vertex_uniforms);
-    return outcome::success();
-};
-
-result<void> VezBackend::BindFragmentUniforms(
-    const FragmentUniforms& fragment_uniforms) {
-    vezCmdPushConstants(
-        128, static_cast<uint32_t>(std::min(sizeof(fragment_uniforms), 128ULL)),
-        &fragment_uniforms);
-    return outcome::success();
-};
-
-result<void> VezBackend::BindUniformBuffer(const Buffer& buffer,
-                                           uint64_t offset, uint64_t size,
-                                           uint32_t binding,
-                                           uint32_t array_index) {
-    vezCmdBindBuffer(buffer.vez, offset, size, 0, binding, array_index);
-    return outcome::success();
-}
-
-result<void> VezBackend::BindTextures(const std::vector<Image>& images,
-                                      uint32_t first_binding,
-                                      const SamplerDesc* sampler_override) {
-    VkSampler sampler_ovr = VK_NULL_HANDLE;
-    if (sampler_override != nullptr) {
-        OUTCOME_TRY(s, GetSampler(*sampler_override));
-        sampler_ovr = s;
-    }
-
-    for (const auto& image : images) {
-        vezCmdBindImageView(image.vez.image_view,
-                            sampler_override ? sampler_ovr : image.vez.sampler,
-                            0, first_binding, 0);
-    }
-    return outcome::success();
-}
-
-result<void> VezBackend::BindVertexBuffer(const Buffer& vertex_buffer,
-                                          uint32_t binding, size_t offset) {
-    vezCmdBindVertexBuffers(binding, 1, &vertex_buffer.vez, &offset);
-    return outcome::success();
-}
-
-result<void> VezBackend::BindVertexBuffers(
-    const std::vector<Buffer>& vertex_buffers, uint32_t first_binding,
-    std::vector<size_t> offsets) {
-    std::vector<VkDeviceSize> vk_offsets;
-    vk_offsets.reserve(vertex_buffers.size());
-
-    for (const auto& o : offsets) {
-        vk_offsets.push_back(static_cast<VkDeviceSize>(o));
-    }
-    vk_offsets.resize(vertex_buffers.size(), 0);
-
-    std::vector<VkBuffer> buffers;
-    buffers.reserve(vertex_buffers.size());
-
-    for (const auto& vb : vertex_buffers) {
-        buffers.push_back(vb.vez);
-    }
-
-    vezCmdBindVertexBuffers(first_binding,
-                            static_cast<uint32_t>(buffers.size()),
-                            buffers.data(), vk_offsets.data());
-    return outcome::success();
-}
-
-result<void> VezBackend::BindIndexBuffer(const Buffer& index_buffer,
-                                         uint64_t offset, bool short_indices) {
-    vezCmdBindIndexBuffer(
-        index_buffer.vez, static_cast<VkDeviceSize>(offset),
-        short_indices ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
-    return outcome::success();
-}
-
-result<void> VezBackend::BindGraphicsPipeline(Pipeline pipeline) {
-    vezCmdBindPipeline(pipeline.vez);
-    return outcome::success();
-}
-
-result<void> VezBackend::BindVertexInputFormat(
-    VertexInputFormat vertex_input_format) {
-    vezCmdSetVertexInputFormat(vertex_input_format.vez);
-    return outcome::success();
-}
-
-result<void> VezBackend::Draw(uint32_t vertex_count, uint32_t instance_count,
-                              uint32_t first_vertex, uint32_t first_instance) {
-    vezCmdDraw(vertex_count, instance_count, first_vertex, first_instance);
-    return outcome::success();
-}
-
-result<void> VezBackend::DrawIndexed(uint32_t index_count,
-                                     uint32_t instance_count,
-                                     uint32_t first_index,
-                                     uint32_t vertex_offset,
-                                     uint32_t first_instance) {
-    vezCmdDrawIndexed(index_count, instance_count, first_index, vertex_offset,
-                      first_instance);
-    return outcome::success();
-}
-
 result<void> VezBackend::FinishFrame() {
     VkDevice device = context_.device;
 
@@ -594,8 +887,6 @@ result<void> VezBackend::PresentImage(const char* present_image_name) {
 
     VK_CHECK(vezQueuePresent(graphics_queue, &present_info));
 
-    context_.current_frame =
-        (context_.current_frame + 1) % context_.per_frame.size();
     return outcome::success();
 };
 
@@ -828,7 +1119,7 @@ result<VezSwapchain> VezBackend::CreateSwapchain(VkSurfaceKHR surface) {
 
     VezSwapchainCreateInfo swapchain_info = {};
     swapchain_info.surface = surface;
-    swapchain_info.tripleBuffer = VK_TRUE;
+    swapchain_info.tripleBuffer = VK_TRUE;  // TODO configurable
     swapchain_info.format = {VK_FORMAT_R8G8B8A8_UNORM,
                              VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 
@@ -971,9 +1262,9 @@ result<std::shared_ptr<Buffer>> VezBackend::GetBuffer(
 }
 
 result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
-    size_t frame_index, const FramebufferColorImageDesc& image_desc,
-    uint32_t width, uint32_t height) {
-    auto hash = GetFramebufferImageHash(frame_index, image_desc.name.c_str());
+    FrameIndex frame_id, const FramebufferColorImageDesc& image_desc,
+    const FramebufferDesc& fb_desc) {
+    auto hash = GetFramebufferImageHash(frame_id, image_desc.name.c_str());
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         vezDestroyImageView(context_.device, result->second->vez.image_view);
@@ -981,6 +1272,20 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
     }
 
     VkFormat format = GetVkFormat(image_desc.format);
+
+    uint32_t width, height;
+    if (fb_desc.framebuffer_size == FramebufferSize::RelativeToSwapchain) {
+        // TODO Ensure we have the latest surface size (e.g. when recreating the
+        // swapchain)
+        width = static_cast<uint32_t>(
+            round(fb_desc.width * context_.capabilities.currentExtent.width));
+        height = static_cast<uint32_t>(
+            round(fb_desc.height * context_.capabilities.currentExtent.height));
+    } else {
+        // FramebufferSize::Absolute
+        width = static_cast<uint32_t>(round(fb_desc.width));
+        height = static_cast<uint32_t>(round(fb_desc.height));
+    }
 
     VezImageCreateInfo image_info = {};
     image_info.extent = {width, height, 1};
@@ -1002,9 +1307,9 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
 }
 
 result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
-    size_t frame_index, const FramebufferDepthImageDesc& image_desc,
-    uint32_t width, uint32_t height) {
-    auto hash = GetFramebufferImageHash(frame_index, image_desc.name.c_str());
+    FrameIndex frame_id, const FramebufferDepthImageDesc& image_desc,
+    const FramebufferDesc& fb_desc) {
+    auto hash = GetFramebufferImageHash(frame_id, image_desc.name.c_str());
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         vezDestroyImageView(context_.device, result->second->vez.image_view);
@@ -1022,6 +1327,20 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
         default:
             format = VK_FORMAT_D32_SFLOAT_S8_UINT;
             break;
+    }
+
+    uint32_t width, height;
+    if (fb_desc.framebuffer_size == FramebufferSize::RelativeToSwapchain) {
+        // TODO Ensure we have the latest surface size (e.g. when recreating the
+        // swapchain)
+        width = static_cast<uint32_t>(
+            round(fb_desc.width * context_.capabilities.currentExtent.width));
+        height = static_cast<uint32_t>(
+            round(fb_desc.height * context_.capabilities.currentExtent.height));
+    } else {
+        // FramebufferSize::Absolute
+        width = static_cast<uint32_t>(round(fb_desc.width));
+        height = static_cast<uint32_t>(round(fb_desc.height));
     }
 
     VezImageCreateInfo image_info = {};
@@ -1043,8 +1362,8 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
 }
 
 result<std::shared_ptr<Image>> VezBackend::GetFramebufferImage(
-    size_t frame_index, const char* name) {
-    auto hash = GetFramebufferImageHash(frame_index, name);
+    FrameIndex frame_id, const char* name) {
+    auto hash = GetFramebufferImageHash(frame_id, name);
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         return result->second;
@@ -1175,6 +1494,7 @@ result<void> VezBackend::GetActiveCommandBuffer(uint32_t thread) {
         per_frame.command_buffer_active[thread] = true;
 
         // TODO separate scissor and viewport (also more details)
+        // TODO remove from here, they are now separate
         VkRect2D scissor = {{}, {800, 600}};
         vezCmdSetScissor(0, 1, &scissor);
 
@@ -1278,14 +1598,14 @@ VezContext::ImageHash VezBackend::GetTextureHash(const char* name) {
     return {sdbm_hash(name)};
 }
 
-VezContext::ImageHash VezBackend::GetFramebufferImageHash(size_t frame_index,
+VezContext::ImageHash VezBackend::GetFramebufferImageHash(FrameIndex frame_id,
                                                           const char* name) {
-    return {frame_index, sdbm_hash(name)};
+    return {frame_id, sdbm_hash(name)};
 }
 
-VezContext::FramebufferHash VezBackend::GetFramebufferHash(size_t frame_index,
+VezContext::FramebufferHash VezBackend::GetFramebufferHash(FrameIndex frame_id,
                                                            const char* name) {
-    return {frame_index, sdbm_hash(name)};
+    return {frame_id, sdbm_hash(name)};
 }
 
 VezContext::SamplerHash VezBackend::GetSamplerHash(

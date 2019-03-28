@@ -15,8 +15,9 @@ namespace goma {
 
 class VezBackend : public Backend {
   public:
-    VezBackend(Engine* engine = nullptr);
+    VezBackend(Engine* engine = nullptr, const Config& config = {});
     virtual ~VezBackend() override;
+    virtual result<void> SetBuffering(Buffering buffering);
 
     virtual result<void> InitContext() override;
     virtual result<void> InitSurface(Platform* platform) override;
@@ -30,8 +31,6 @@ class VezBackend : public Backend {
         void* initial_contents = nullptr) override;
     virtual result<std::shared_ptr<Image>> GetTexture(
         const char* name) override;
-    virtual result<Framebuffer> CreateFramebuffer(
-        size_t frame_index, const char* name, FramebufferDesc fb_desc) override;
     virtual result<std::shared_ptr<Buffer>> CreateVertexBuffer(
         const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
         bool gpu_stored = true, void* initial_contents = nullptr) override;
@@ -45,10 +44,9 @@ class VezBackend : public Backend {
     virtual result<void> UpdateBuffer(const Buffer& buffer, uint64_t offset,
                                       uint64_t size, void* contents) override;
 
-    virtual result<void> SetupFrames(uint32_t frames) override;
-    virtual result<size_t> StartFrame(uint32_t threads = 1) override;
-    virtual result<void> StartRenderPass(Framebuffer fb,
-                                         RenderPassDesc rp_desc) override;
+    virtual result<void> SetRenderPlan(const RenderPlan& render_plan) override;
+    virtual result<void> RenderFrame(std::vector<RenderPassFn> render_pass_fns,
+                                     const char* present_image) override;
 
     virtual result<void> BindVertexUniforms(
         const VertexUniforms& vertex_uniforms) override;
@@ -58,6 +56,9 @@ class VezBackend : public Backend {
                                            uint64_t offset, uint64_t size,
                                            uint32_t binding,
                                            uint32_t array_index = 0) override;
+    virtual result<void> BindTexture(
+        const Image& image, uint32_t binding = 0,
+        const SamplerDesc* sampler_override = nullptr) override;
     virtual result<void> BindTextures(
         const std::vector<Image>& images, uint32_t first_binding = 0,
         const SamplerDesc* sampler_override = nullptr) override;
@@ -70,9 +71,35 @@ class VezBackend : public Backend {
     virtual result<void> BindIndexBuffer(const Buffer& index_buffer,
                                          uint64_t offset = 0,
                                          bool short_indices = false) override;
-    virtual result<void> BindGraphicsPipeline(Pipeline pipeline) override;
+
     virtual result<void> BindVertexInputFormat(
         VertexInputFormat vertex_input_format) override;
+    virtual result<void> BindDepthStencilState(
+        const DepthStencilState& state) override;
+    virtual result<void> BindColorBlendState(
+        const ColorBlendState& state) override;
+    virtual result<void> BindMultisampleState(
+        const MultisampleState& state) override;
+    virtual result<void> BindInputAssemblyState(
+        const InputAssemblyState& state) override;
+    virtual result<void> BindRasterizationState(
+        const RasterizationState& state) override;
+    virtual result<void> BindViewportState(uint32_t viewport_count) override;
+
+    virtual result<void> SetDepthBias(float constant_factor, float clamp,
+                                      float slope_factor) override;
+    virtual result<void> SetDepthBounds(float min, float max) override;
+    virtual result<void> SetStencil(StencilFace face, uint32_t reference,
+                                    uint32_t write_mask,
+                                    uint32_t compare_mask) override;
+    virtual result<void> SetBlendConstants(
+        const std::array<float, 4>& blend_constants) override;
+    virtual result<void> SetViewport(const std::vector<Viewport> viewports,
+                                     uint32_t first_viewport = 0) override;
+    virtual result<void> SetScissor(const std::vector<Scissor> scissors,
+                                    uint32_t first_scissor = 0) override;
+
+    virtual result<void> BindGraphicsPipeline(Pipeline pipeline) override;
     virtual result<void> Draw(uint32_t vertex_count,
                               uint32_t instance_count = 1,
                               uint32_t first_vertex = 0,
@@ -82,9 +109,6 @@ class VezBackend : public Backend {
                                      uint32_t first_index = 0,
                                      uint32_t vertex_offset = 0,
                                      uint32_t first_instance = 0) override;
-    virtual result<void> FinishFrame() override;
-    virtual result<void> PresentImage(
-        const char* present_image_name = "color") override;
 
     virtual result<void> TeardownContext() override;
 
@@ -106,14 +130,6 @@ class VezBackend : public Backend {
         VezMemoryFlagsBits storage, VkBufferUsageFlags usage,
         void* initial_contents = nullptr);
     result<std::shared_ptr<Buffer>> GetBuffer(VezContext::BufferHash hash);
-    result<std::shared_ptr<Image>> CreateFramebufferImage(
-        size_t frame_index, const FramebufferColorImageDesc& desc,
-        uint32_t width, uint32_t height);
-    result<std::shared_ptr<Image>> CreateFramebufferImage(
-        size_t frame_index, const FramebufferDepthImageDesc& desc,
-        uint32_t width, uint32_t height);
-    result<std::shared_ptr<Image>> GetFramebufferImage(size_t frame_index,
-                                                       const char* name);
     result<VkSampler> GetSampler(const SamplerDesc& sampler_desc);
 
   private:
@@ -127,6 +143,23 @@ class VezBackend : public Backend {
     result<void> GetActiveCommandBuffer(uint32_t thread = 0);
     VkFormat GetVkFormat(Format format);
 
+    result<Framebuffer> CreateFramebuffer(FrameIndex frame_id, const char* name,
+                                          FramebufferDesc fb_desc);
+    result<Framebuffer> GetFramebuffer(FrameIndex frame_id, const char* name);
+    result<std::shared_ptr<Image>> CreateFramebufferImage(
+        FrameIndex frame_id, const FramebufferColorImageDesc& desc,
+        const FramebufferDesc& fb_desc);
+    result<std::shared_ptr<Image>> CreateFramebufferImage(
+        FrameIndex frame_id, const FramebufferDepthImageDesc& desc,
+        const FramebufferDesc& fb_desc);
+    result<std::shared_ptr<Image>> GetFramebufferImage(FrameIndex frame_id,
+                                                       const char* name);
+
+    result<size_t> StartFrame(uint32_t threads = 1);
+    result<void> StartRenderPass(Framebuffer fb, RenderPassDesc rp_desc);
+    result<void> FinishFrame();
+    result<void> PresentImage(const char* present_image_name);
+
     VezContext::BufferHash GetBufferHash(const char* name);
     VezContext::BufferHash GetMeshBufferHash(const AttachmentIndex<Mesh>& mesh,
                                              const char* name);
@@ -137,10 +170,10 @@ class VezBackend : public Backend {
                                                      VkShaderModule fs);
     VezContext::VertexInputFormatHash GetVertexInputFormatHash(
         const VertexInputFormatDesc& desc);
-    VezContext::ImageHash GetFramebufferImageHash(size_t frame_index,
+    VezContext::ImageHash GetFramebufferImageHash(FrameIndex frame_id,
                                                   const char* name);
     VezContext::ImageHash GetTextureHash(const char* name);
-    VezContext::FramebufferHash GetFramebufferHash(size_t frame_index,
+    VezContext::FramebufferHash GetFramebufferHash(FrameIndex frame_id,
                                                    const char* name);
     VezContext::SamplerHash GetSamplerHash(const SamplerDesc& sampler_desc);
 };

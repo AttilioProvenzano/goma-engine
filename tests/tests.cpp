@@ -102,7 +102,7 @@ TEST(SceneTest, CanCreateATexture) {
 TEST(AssimpLoaderTest, CanLoadAModel) {
     AssimpLoader loader;
     auto result =
-        loader.ReadSceneFromFile("../assets/models/Duck/glTF/Duck.gltf");
+        loader.ReadSceneFromFile("../../../assets/models/Duck/glTF/Duck.gltf");
     ASSERT_TRUE(result) << result.error().message();
 
     // Extract the unique_ptr from the result wrapper
@@ -220,22 +220,18 @@ void main() {
     ASSERT_TRUE(create_pipeline_result)
         << create_pipeline_result.error().message();
 
-    FramebufferDesc fb_desc = {800, 600};
-    auto create_fb_result = vez.CreateFramebuffer(0, "fb", fb_desc);
-
-    vez.SetupFrames(
-        1);  // TODO crashes if we don't call SetupFrames before StartFrames
-    vez.StartFrame();
-    vez.StartRenderPass(create_fb_result.value(), {});
-    vez.BindGraphicsPipeline(*create_pipeline_result.value());
-    vez.BindVertexInputFormat(*vertex_input_format_result.value());
-    vez.BindVertexBuffers(
-        {*create_pos_buffer_result.value(), *create_uv_buffer_result.value()});
-    vez.BindIndexBuffer(*create_index_buffer_result.value());
-    vez.BindTextures({*create_texture_result.value()});
-    vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
-    vez.FinishFrame();
-    vez.PresentImage("color");
+    vez.RenderFrame(
+        {[&](RenderPassDesc rp, FramebufferDesc fb, FrameIndex frame_id) {
+            vez.BindGraphicsPipeline(*create_pipeline_result.value());
+            vez.BindVertexInputFormat(*vertex_input_format_result.value());
+            vez.BindVertexBuffers({*create_pos_buffer_result.value(),
+                                   *create_uv_buffer_result.value()});
+            vez.BindIndexBuffer(*create_index_buffer_result.value());
+            vez.BindTextures({*create_texture_result.value()});
+            vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
+            return outcome::success();
+        }},
+        "color");
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
@@ -249,7 +245,7 @@ TEST_F(VezBackendTest, RenderModel) {
 
     AssimpLoader loader;
     auto result =
-        loader.ReadSceneFromFile("../assets/models/Duck/glTF/Duck.gltf");
+        loader.ReadSceneFromFile("../../../assets/models/Duck/glTF/Duck.gltf");
     ASSERT_TRUE(result) << result.error().message();
 
     // Extract the unique_ptr from the result wrapper
@@ -446,52 +442,45 @@ while (camera_node != scene->GetRootNode()) {
 
     auto mvp_buffer = create_unif_buffer_result.value();
 
-    vez.SetupFrames(3);
-
-    FramebufferDesc fb_desc = {800, 600};
-    std::vector<Framebuffer> fbs;
-    fbs.push_back(vez.CreateFramebuffer(0, "fb", fb_desc).value());
-    fbs.push_back(vez.CreateFramebuffer(1, "fb", fb_desc).value());
-    fbs.push_back(vez.CreateFramebuffer(2, "fb", fb_desc).value());
-
     for (size_t i = 0; i < 100; i++) {
-        auto frame_id = vez.StartFrame().value();
-        vez.StartRenderPass(fbs[frame_id], {});
-        vez.BindGraphicsPipeline(*create_pipeline_result.value());
+        vez.RenderFrame(
+            {[&](RenderPassDesc rp, FramebufferDesc fb, FrameIndex frame_id) {
+                vez.BindGraphicsPipeline(*create_pipeline_result.value());
 
-        model = glm::rotate(model, glm::radians(2.0f), camera->up);
-        glm::mat4 mvp = proj * view * model;
-        vez.UpdateBuffer(*mvp_buffer, frame_id * unif_offset, sizeof(mvp),
-                         &mvp);
+                model = glm::rotate(model, glm::radians(2.0f), camera->up);
+                glm::mat4 mvp = proj * view * model;
+                vez.UpdateBuffer(*mvp_buffer, frame_id * unif_offset,
+                                 sizeof(mvp), &mvp);
 
-        vez.BindUniformBuffer(*mvp_buffer, frame_id * unif_offset, sizeof(mvp),
-                              1, 0);
-        vez.BindVertexInputFormat(*vertex_input_format_result.value());
-        vez.BindVertexBuffers({*create_pos_buffer_result.value(),
-                               *create_uv_buffer_result.value()});
-        vez.BindIndexBuffer(*create_index_buffer_result.value());
-        vez.BindTextures({*create_texture_result.value()});
+                vez.BindUniformBuffer(*mvp_buffer, frame_id * unif_offset,
+                                      sizeof(mvp), 1, 0);
+                vez.BindVertexInputFormat(*vertex_input_format_result.value());
+                vez.BindVertexBuffers({*create_pos_buffer_result.value(),
+                                       *create_uv_buffer_result.value()});
+                vez.BindIndexBuffer(*create_index_buffer_result.value());
+                vez.BindTextures({*create_texture_result.value()});
 
-        VezDepthStencilState ds_state = {};
-        ds_state.depthTestEnable = VK_TRUE;
-        ds_state.depthCompareOp = VK_COMPARE_OP_LESS;
-        ds_state.depthWriteEnable = VK_TRUE;
-        vezCmdSetDepthStencilState(&ds_state);
+                VezDepthStencilState ds_state = {};
+                ds_state.depthTestEnable = VK_TRUE;
+                ds_state.depthCompareOp = VK_COMPARE_OP_LESS;
+                ds_state.depthWriteEnable = VK_TRUE;
+                vezCmdSetDepthStencilState(&ds_state);
 
-        VezRasterizationState raster_state = {};
-        raster_state.cullMode = VK_CULL_MODE_BACK_BIT;
-        raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        vezCmdSetRasterizationState(&raster_state);
+                VezRasterizationState raster_state = {};
+                raster_state.cullMode = VK_CULL_MODE_BACK_BIT;
+                raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+                vezCmdSetRasterizationState(&raster_state);
 
-        vez.DrawIndexed(static_cast<uint32_t>(mesh->indices.size()));
-        vez.FinishFrame();
-        vez.PresentImage("color");
+                vez.DrawIndexed(static_cast<uint32_t>(mesh->indices.size()));
+                return outcome::success();
+            }},
+            "color");
     }
 }
 
 TEST(RendererTest, RenderDuck) {
     Engine e;
-    e.LoadScene("../assets/models/Duck/glTF/Duck.gltf");
+    e.LoadScene("../../../assets/models/Duck/glTF/Duck.gltf");
     auto res = e.renderer()->Render();
 
     ASSERT_TRUE(res) << res.error().message();
@@ -501,7 +490,7 @@ TEST(RendererTest, RenderDuck) {
 
 TEST(RendererTest, RenderLantern) {
     Engine e;
-    e.LoadScene("../assets/models/Lantern/glTF/Lantern.gltf");
+    e.LoadScene("../../../assets/models/Lantern/glTF/Lantern.gltf");
     auto res = e.renderer()->Render();
 
     ASSERT_TRUE(res) << res.error().message();
@@ -511,7 +500,7 @@ TEST(RendererTest, RenderLantern) {
 
 TEST(RendererTest, RenderSponza) {
     Engine e;
-    e.LoadScene("../assets/models/Sponza/glTF/Sponza.gltf");
+    e.LoadScene("../../../assets/models/Sponza/glTF/Sponza.gltf");
     auto res = e.renderer()->Render();
 
     ASSERT_TRUE(res) << res.error().message();

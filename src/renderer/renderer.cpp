@@ -3,6 +3,7 @@
 #include "engine.hpp"
 #include "renderer/vez/vez_backend.hpp"
 #include "scene/attachments/camera.hpp"
+#include "scene/attachments/material.hpp"
 #include "scene/attachments/mesh.hpp"
 
 #include <stack>
@@ -34,8 +35,6 @@ result<void> Renderer::Render() {
     if (!scene) {
         return Error::NoSceneLoaded;
     }
-
-    backend_->SetupFrames(3);
 
     // TODO culling
     // TODO ordering
@@ -290,16 +289,42 @@ result<void> Renderer::Render() {
     });
 
     // Upload textures
-    scene->ForEach<Texture>([&](auto id, auto _, Texture& texture) {
-        // TODO compressed textures
-        if (!texture.compressed) {
-            // TODO mipmaps
-            TextureDesc tex_desc{texture.width, texture.height};
-            auto image_res = backend_->CreateTexture(
-                texture.path.c_str(), tex_desc, texture.data.data());
+    scene->ForEach<Material>([&](auto id, auto _, Material& material) {
+        const std::vector<TextureType> texture_types = {
+            TextureType::Diffuse,           TextureType::Specular,
+            TextureType::Ambient,           TextureType::Emissive,
+            TextureType::MetallicRoughness, TextureType::HeightMap,
+            TextureType::NormalMap,         TextureType::Shininess,
+            TextureType::Opacity,           TextureType::Displacement,
+            TextureType::LightMap,          TextureType::Reflection};
 
-            if (image_res) {
-                texture.image = image_res.value();
+        for (const auto& texture_type : texture_types) {
+            auto binding = material.texture_bindings.find(texture_type);
+
+            if (binding != material.texture_bindings.end() &&
+                !binding->second.empty()) {
+                auto texture_res =
+                    scene->GetAttachment<Texture>(binding->second[0].index);
+                if (texture_res) {
+                    auto& texture = texture_res.value();
+
+                    // Upload texture if necessary
+                    if (!texture->image || !texture->image->valid) {
+                        // TODO compressed textures
+                        if (!texture->compressed) {
+                            // TODO mipmaps (also samplers)
+                            TextureDesc tex_desc{texture->width,
+                                                 texture->height};
+                            auto image_res = backend_->CreateTexture(
+                                texture->path.c_str(), tex_desc,
+                                texture->data.data());
+
+                            if (image_res) {
+                                texture->image = image_res.value();
+                            }
+                        }
+                    }
+                }
             }
         }
     });
@@ -339,34 +364,23 @@ result<void> Renderer::Render() {
 
     glm::mat4 vp = proj * view;
 
-    // Ensure framebuffers are created for all frames
-    backend_->SetupFrames(3);
+    RenderPassFn forward_pass = [&](RenderPassDesc rp, FramebufferDesc fb,
+                                    FrameIndex frame_id) {
+        // Render meshes
+        scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+            auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
+            if (!nodes_result || !nodes_result.value()) {
+                return;
+            }
 
-    if (framebuffers_.size() < 3) {
-        FramebufferDesc fb_desc = {800, 600};
-        for (uint32_t i = 0; i < 3; i++) {
-            framebuffers_.push_back(
-                backend_->CreateFramebuffer(i, "fb", fb_desc).value());
-        }
-    }
+            auto material_result =
+                scene->GetAttachment<Material>(mesh.material);
+            if (!material_result) {
+                return;
+            }
+            auto& material = *material_result.value();
 
-    auto frame_id = backend_->StartFrame().value();
-    backend_->StartRenderPass(framebuffers_[frame_id], {});
-
-    // Render meshes
-    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
-        auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
-        if (!nodes_result || !nodes_result.value()) {
-            return;
-        }
-
-        auto material_result = scene->GetAttachment<Material>(mesh.material);
-        if (!material_result) {
-            return;
-        }
-        auto& material = *material_result.value();
-
-        static const char* vert = R"(
+            static const char* vert = R"(
 #version 450
 
 #ifdef HAS_POSITIONS
@@ -413,68 +427,105 @@ void main() {
 }
 )";
 
-        static const char* frag = R"(
+            static const char* frag = R"(
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-layout(set = 0, binding = 0) uniform sampler2D mainTexture;
+#ifdef HAS_DIFFUSE_MAP
+layout(set = 0, binding = 0) uniform sampler2D diffuseTex;
+#endif
+
+#ifdef HAS_SPECULAR_MAP
+layout(set = 0, binding = 1) uniform sampler2D specularTex;
+#endif
+
+#ifdef HAS_AMBIENT_MAP
+layout(set = 0, binding = 2) uniform sampler2D ambientTex;
+#endif
+
+#ifdef HAS_EMISSIVE_MAP
+layout(set = 0, binding = 3) uniform sampler2D emissiveTex;
+#endif
+
+#ifdef HAS_METALLIC_ROUGHNESS_MAP
+layout(set = 0, binding = 4) uniform sampler2D metallicRoughnessTex;
+#endif
+
+#ifdef HAS_HEIGHT_MAP
+layout(set = 0, binding = 5) uniform sampler2D heightTex;
+#endif
+
+#ifdef HAS_NORMAL_MAP
+layout(set = 0, binding = 6) uniform sampler2D normalTex;
+#endif
+
+#ifdef HAS_SHININESS_MAP
+layout(set = 0, binding = 7) uniform sampler2D shininessTex;
+#endif
+
+#ifdef HAS_OPACITY_MAP
+layout(set = 0, binding = 8) uniform sampler2D opacityTex;
+#endif
+
+#ifdef HAS_DISPLACEMENT_MAP
+layout(set = 0, binding = 9) uniform sampler2D displacementTex;
+#endif
+
+#ifdef HAS_LIGHT_MAP
+layout(set = 0, binding = 10) uniform sampler2D lightTex;
+#endif
+
+#ifdef HAS_REFLECTION_MAP
+layout(set = 0, binding = 11) uniform sampler2D reflectionTex;
+#endif
 
 layout(location = 0) in vec2 inUVs;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    outColor = texture(mainTexture, vec2(1.0, -1.0) * inUVs);
+#ifdef HAS_NORMAL_MAP
+    outColor = texture(normalTex, vec2(1.0, -1.0) * inUVs);
+#else
+    outColor = texture(diffuseTex, vec2(1.0, -1.0) * inUVs);
+#endif
 }
 )";
 
-        // TODO preamble based on textures/vertex input format
-        auto pipeline_res = backend_->GetGraphicsPipeline(
-            {vert, ShaderSourceType::Source, GetVertexShaderPreamble(mesh)},
-            {frag, ShaderSourceType::Source,
-             GetFragmentShaderPreamble(material)});
-        if (!pipeline_res) {
-            return;
-        }
-        backend_->BindGraphicsPipeline(*pipeline_res.value());
-
-        // TODO support no index buffer
-        backend_->BindVertexInputFormat(*mesh.vertex_input_format);
-        BindMeshBuffers(mesh);
-        backend_->BindIndexBuffer(*mesh.buffers.index);
-
-        auto diffuse_binding = material.textures.find(TextureType::Diffuse);
-        if (diffuse_binding != material.textures.end() &&
-            !diffuse_binding->second.empty()) {
-            auto texture_res =
-                scene->GetAttachment<Texture>(diffuse_binding->second[0].index);
-            if (texture_res) {
-                auto& texture = texture_res.value();
-                backend_->BindTextures({*texture->image});
+            auto pipeline_res = backend_->GetGraphicsPipeline(
+                {vert, ShaderSourceType::Source, GetVertexShaderPreamble(mesh)},
+                {frag, ShaderSourceType::Source,
+                 GetFragmentShaderPreamble(material)});
+            if (!pipeline_res) {
+                return;
             }
-        }
 
-        for (auto& mesh_node : *nodes_result.value()) {
-            backend_->BindVertexUniforms(
-                {vp * scene->GetCachedModel(mesh_node).value()});
-        }
+            backend_->BindGraphicsPipeline(*pipeline_res.value());
 
-        // TODO backend functions to set state
-        VezDepthStencilState ds_state = {};
-        ds_state.depthTestEnable = VK_TRUE;
-        ds_state.depthCompareOp = VK_COMPARE_OP_LESS;
-        ds_state.depthWriteEnable = VK_TRUE;
-        vezCmdSetDepthStencilState(&ds_state);
+            backend_->BindVertexInputFormat(*mesh.vertex_input_format);
+            BindMeshBuffers(mesh);
+            BindMaterialTextures(material);
 
-        VezRasterizationState raster_state = {};
-        raster_state.cullMode = VK_CULL_MODE_BACK_BIT;
-        raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        vezCmdSetRasterizationState(&raster_state);
+            for (auto& mesh_node : *nodes_result.value()) {
+                backend_->BindVertexUniforms(
+                    {vp * scene->GetCachedModel(mesh_node).value()});
+            }
 
-        backend_->DrawIndexed(static_cast<uint32_t>(mesh.indices.size()));
-    });
+            backend_->BindDepthStencilState(DepthStencilState{});
+            backend_->BindRasterizationState(RasterizationState{});
 
-    backend_->FinishFrame();
-    backend_->PresentImage("color");
+            if (!mesh.indices.empty()) {
+                backend_->BindIndexBuffer(*mesh.buffers.index);
+                backend_->DrawIndexed(
+                    static_cast<uint32_t>(mesh.indices.size()));
+            } else {
+                backend_->Draw(static_cast<uint32_t>(mesh.vertices.size()));
+            }
+        });
+
+        return outcome::success();
+    };
+
+    backend_->RenderFrame({std::move(forward_pass)}, "color");
 
     return outcome::success();
 }
@@ -568,7 +619,7 @@ const char* Renderer::GetFragmentShaderPreamble(
             preamble += "#define HAS_LIGHT_MAP\n";
         }
         if (desc.has_reflection_map) {
-            preamble += "#define HAS_REFLECTIONS_MAP\n";
+            preamble += "#define HAS_REFLECTION_MAP\n";
         }
 
         fs_preamble_map_[desc.int_repr] = std::move(preamble);
@@ -578,7 +629,8 @@ const char* Renderer::GetFragmentShaderPreamble(
 
 const char* Renderer::GetFragmentShaderPreamble(const Material& material) {
     auto check_type = [&](TextureType type) {
-        return material.textures.find(type) != material.textures.end();
+        return material.texture_bindings.find(type) !=
+               material.texture_bindings.end();
     };
 
     return GetFragmentShaderPreamble(FragmentShaderPreambleDesc{
@@ -609,6 +661,42 @@ result<void> Renderer::BindMeshBuffers(const Mesh& mesh) {
     bind(mesh.buffers.uv0);
     bind(mesh.buffers.uv1);
     bind(mesh.buffers.uvw);
+
+    return outcome::success();
+}
+
+result<void> Renderer::BindMaterialTextures(const Material& material) {
+    Scene* scene = engine_->scene();
+    if (!scene) {
+        return Error::NoSceneLoaded;
+    }
+
+    uint32_t binding_id = 0;
+
+    const std::vector<TextureType> texture_types = {
+        TextureType::Diffuse,           TextureType::Specular,
+        TextureType::Ambient,           TextureType::Emissive,
+        TextureType::MetallicRoughness, TextureType::HeightMap,
+        TextureType::NormalMap,         TextureType::Shininess,
+        TextureType::Opacity,           TextureType::Displacement,
+        TextureType::LightMap,          TextureType::Reflection};
+
+    for (const auto& texture_type : texture_types) {
+        auto binding = material.texture_bindings.find(texture_type);
+
+        if (binding != material.texture_bindings.end() &&
+            !binding->second.empty()) {
+            auto texture_res =
+                scene->GetAttachment<Texture>(binding->second[0].index);
+            if (texture_res) {
+                auto& texture = texture_res.value();
+                if (texture->image && texture->image->valid) {
+                    backend_->BindTexture(*texture->image, binding_id);
+                }
+            }
+        }
+        binding_id++;
+    }
 
     return outcome::success();
 }

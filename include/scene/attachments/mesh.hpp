@@ -1,11 +1,14 @@
 #pragma once
 
-#include <renderer/handles.hpp>
+#include "scene/gen_index.hpp"
+#include "renderer/handles.hpp"
 
 #include <glm/glm.hpp>
 #include <memory>
 
 namespace goma {
+
+struct Material;
 
 struct Box {
     glm::vec3 min = glm::vec3(0.0f);

@@ -3,11 +3,14 @@
 #include "renderer/handles.hpp"
 #include "platform/platform.hpp"
 #include "scene/attachments/mesh.hpp"
+#include "common/error_codes.hpp"
 
 #include <outcome.hpp>
 namespace outcome = OUTCOME_V2_NAMESPACE;
 using outcome::result;
+
 #include <vector>
+#include <functional>
 
 namespace goma {
 
@@ -19,10 +22,26 @@ struct VertexUniforms {
 
 struct FragmentUniforms {};
 
+enum class Buffering { Double, Triple };
+
+typedef size_t FrameIndex;
+typedef std::function<result<void>(RenderPassDesc, FramebufferDesc, FrameIndex)>
+    RenderPassFn;
+
 class Backend {
   public:
-    Backend(Engine* engine = nullptr) : engine_(engine) {}
+    struct Config {
+        Buffering buffering = Buffering::Triple;
+    };
+
+    Backend(Engine* engine = nullptr, const Config& config = {})
+        : engine_(engine), config_(config) {}
     virtual ~Backend() = default;
+
+    const Config& config() { return config_; }
+    virtual result<void> SetBuffering(Buffering buffering) {
+        return Error::ConfigNotSupported;
+    }
 
     virtual result<void> InitContext() = 0;
     virtual result<void> InitSurface(Platform* platform) = 0;
@@ -35,9 +54,6 @@ class Backend {
         const char* name, const TextureDesc& texture_desc,
         void* initial_contents = nullptr) = 0;
     virtual result<std::shared_ptr<Image>> GetTexture(const char* name) = 0;
-    virtual result<Framebuffer> CreateFramebuffer(size_t frame_index,
-                                                  const char* name,
-                                                  FramebufferDesc fb_desc) = 0;
     virtual result<std::shared_ptr<Buffer>> CreateVertexBuffer(
         const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
         bool gpu_stored = true, void* initial_contents = nullptr) = 0;
@@ -51,10 +67,9 @@ class Backend {
     virtual result<void> UpdateBuffer(const Buffer& buffer, uint64_t offset,
                                       uint64_t size, void* contents) = 0;
 
-    virtual result<void> SetupFrames(uint32_t frames) = 0;
-    virtual result<size_t> StartFrame(uint32_t threads = 1) = 0;
-    virtual result<void> StartRenderPass(Framebuffer fb,
-                                         RenderPassDesc rp_desc) = 0;
+    virtual result<void> SetRenderPlan(const RenderPlan& render_plan) = 0;
+    virtual result<void> RenderFrame(std::vector<RenderPassFn> render_pass_fns,
+                                     const char* present_image) = 0;
 
     virtual result<void> BindVertexUniforms(
         const VertexUniforms& vertex_uniforms) = 0;
@@ -64,6 +79,9 @@ class Backend {
                                            uint64_t offset, uint64_t size,
                                            uint32_t binding,
                                            uint32_t array_index = 0) = 0;
+    virtual result<void> BindTexture(
+        const Image& image, uint32_t binding = 0,
+        const SamplerDesc* sampler_override = nullptr) = 0;
     virtual result<void> BindTextures(
         const std::vector<Image>& images, uint32_t first_binding = 0,
         const SamplerDesc* sampler_override = nullptr) = 0;
@@ -76,8 +94,33 @@ class Backend {
     virtual result<void> BindIndexBuffer(const Buffer& index_buffer,
                                          size_t offset = 0,
                                          bool short_indices = false) = 0;
+
     virtual result<void> BindVertexInputFormat(
         VertexInputFormat vertex_input_format) = 0;
+    virtual result<void> BindDepthStencilState(
+        const DepthStencilState& state) = 0;
+    virtual result<void> BindColorBlendState(const ColorBlendState& state) = 0;
+    virtual result<void> BindMultisampleState(
+        const MultisampleState& state) = 0;
+    virtual result<void> BindInputAssemblyState(
+        const InputAssemblyState& state) = 0;
+    virtual result<void> BindRasterizationState(
+        const RasterizationState& state) = 0;
+    virtual result<void> BindViewportState(uint32_t viewport_count) = 0;
+
+    virtual result<void> SetDepthBias(float constant_factor, float clamp,
+                                      float slope_factor) = 0;
+    virtual result<void> SetDepthBounds(float min, float max) = 0;
+    virtual result<void> SetStencil(StencilFace face, uint32_t reference,
+                                    uint32_t write_mask,
+                                    uint32_t compare_mask) = 0;
+    virtual result<void> SetBlendConstants(
+        const std::array<float, 4>& blend_constants) = 0;
+    virtual result<void> SetViewport(const std::vector<Viewport> viewports,
+                                     uint32_t first_viewport = 0) = 0;
+    virtual result<void> SetScissor(const std::vector<Scissor> scissors,
+                                    uint32_t first_scissor = 0) = 0;
+
     virtual result<void> BindGraphicsPipeline(Pipeline pipeline) = 0;
     virtual result<void> Draw(uint32_t vertex_count,
                               uint32_t instance_count = 1,
@@ -88,14 +131,13 @@ class Backend {
                                      uint32_t first_index = 0,
                                      uint32_t vertex_offset = 0,
                                      uint32_t first_instance = 0) = 0;
-    virtual result<void> FinishFrame() = 0;
-    virtual result<void> PresentImage(
-        const char* present_image_name = "color") = 0;
 
     virtual result<void> TeardownContext() = 0;
 
   protected:
     Engine* engine_ = nullptr;
+    Config config_ = {};
+    std::unique_ptr<RenderPlan> render_plan_;
 };
 
 }  // namespace goma

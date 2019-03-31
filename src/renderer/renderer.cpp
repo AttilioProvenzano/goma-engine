@@ -512,7 +512,7 @@ layout(location = 0) in vec2 inUVs;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-#ifdef HAS_NORMAL_MAP
+#ifdef false
     outColor = texture(normalTex, vec2(1.0, -1.0) * inUVs);
 #else
     outColor = texture(diffuseTex, vec2(1.0, -1.0) * inUVs);

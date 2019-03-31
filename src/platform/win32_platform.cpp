@@ -21,7 +21,11 @@ result<void> Win32Platform::InitWindow() {
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
     window_ = glfwCreateWindow(800, 600, "Goma Engine", nullptr, nullptr);
+    glfwSetInputMode(window_, GLFW_STICKY_KEYS, 1);
+    glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     if (!window_) {
         glfwTerminate();
         return Error::GlfwWindowCreationFailed;

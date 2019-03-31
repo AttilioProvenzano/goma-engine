@@ -535,8 +535,8 @@ void main() {
             BindMaterialTextures(material);
 
             for (auto& mesh_node : *nodes_result.value()) {
-                backend_->BindVertexUniforms(
-                    {vp * scene->GetCachedModel(mesh_node).value()});
+                glm::mat4 mvp = vp * scene->GetCachedModel(mesh_node).value();
+                backend_->BindVertexUniforms({std::move(mvp)});
             }
 
             backend_->BindDepthStencilState(DepthStencilState{});

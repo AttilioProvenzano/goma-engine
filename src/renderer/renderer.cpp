@@ -303,14 +303,84 @@ result<void> Renderer::Render() {
         }
 
         auto new_camera_id = new_camera_res.value();
+        // Create a node for the new camera
+        auto camera_node = scene->CreateNode(scene->GetRootNode()).value();
+        scene->Attach<Camera>(new_camera_id, camera_node);
+
         camera_res = scene->GetAttachment<Camera>(new_camera_id);
         if (!camera_res) {
             return Error::NoMainCamera;
         }
     }
 
-    // TODO proper camera transform
-    // (also move cached transform to a function)
+    // Get the camera node (TODO main camera index)
+    glm::mat4 view = glm::mat4(1.0f);
+    auto camera_nodes = scene->GetAttachedNodes<Camera>({0});
+
+    if (camera_nodes && camera_nodes.value()->size() > 0) {
+        auto camera_node = *camera_nodes.value()->begin();
+
+        // Update transform based on input
+        auto transform = scene->GetTransform(camera_node).value();
+        auto input_state = engine_->platform()->GetInputState();
+        const auto& keypresses = input_state.keypresses;
+
+        auto has_key = [&keypresses](KeyInput key) {
+            return keypresses.find(key) != keypresses.end();
+        };
+
+        // TODO delta time!
+        float delta_time = 0.016f;
+
+        // https://stackoverflow.com/questions/9857398/quaternion-camera-how-do-i-make-it-rotate-correctly
+        if (has_key(KeyInput::Up)) {
+            transform->rotation =
+                transform->rotation *
+                glm::quat(glm::vec3(-1.0f * delta_time, 0.0f, 0.0f));
+        }
+        if (has_key(KeyInput::Down)) {
+            transform->rotation =
+                transform->rotation *
+                glm::quat(glm::vec3(1.0f * delta_time, 0.0f, 0.0f));
+        }
+        if (has_key(KeyInput::Left)) {
+            transform->rotation =
+                glm::quat(glm::vec3(0.0f, 1.0f * delta_time, 0.0f)) *
+                transform->rotation;
+        }
+        if (has_key(KeyInput::Right)) {
+            transform->rotation =
+                glm::quat(glm::vec3(0.0f, -1.0f * delta_time, 0.0f)) *
+                transform->rotation;
+        }
+
+        if (has_key(KeyInput::W)) {
+            transform->position += transform->rotation *
+                                   glm::vec3(0.0f, 0.0f, -300.0f * delta_time);
+        }
+        if (has_key(KeyInput::S)) {
+            transform->position += transform->rotation *
+                                   glm::vec3(0.0f, 0.0f, 300.0f * delta_time);
+        }
+        if (has_key(KeyInput::A)) {
+            transform->position += transform->rotation *
+                                   glm::vec3(-300.0f * delta_time, 0.0f, 0.0f);
+        }
+        if (has_key(KeyInput::D)) {
+            transform->position += transform->rotation *
+                                   glm::vec3(300.0f * delta_time, 0.0f, 0.0f);
+        }
+
+        scene->InvalidateCachedModel(camera_node);
+        ComputeCachedModel(camera_node);  // TODO only if needed (also move
+                                          // in scene? also just on-demand?
+                                          // everything could be in scene)
+        auto cached_model = scene->GetCachedModel(camera_node).value();
+        view = glm::inverse(cached_model);
+    }
+
+    float aspect_ratio = float(engine_->platform()->GetWidth()) /
+                         engine_->platform()->GetHeight();
     auto& camera = camera_res.value();
     auto fovy =
         camera->h_fov / camera->aspect_ratio;  // TODO use proper aspect ratio

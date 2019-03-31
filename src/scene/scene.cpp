@@ -117,6 +117,15 @@ result<void> Scene::SetCachedModel(NodeIndex id, const glm::mat4& model) {
     return outcome::success();
 }
 
+result<void> Scene::InvalidateCachedModel(NodeIndex id) {
+    if (!ValidateNode(id)) {
+        return Error::InvalidNode;
+    }
+    nodes_[id.id].cached_model = std::unique_ptr<glm::mat4>();
+
+    return outcome::success();
+}
+
 result<void> Scene::DeleteNode(NodeIndex id) {
     // Root node cannot be deleted
     if (id.id == 0) {

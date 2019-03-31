@@ -33,6 +33,7 @@ class Scene {
     bool HasCachedModel(NodeIndex id);
     result<glm::mat4> GetCachedModel(NodeIndex id);
     result<void> SetCachedModel(NodeIndex id, const glm::mat4& model);
+    result<void> InvalidateCachedModel(NodeIndex id);
 
     template <typename T>
     result<AttachmentIndex<T>> CreateAttachment(const NodeIndex& node_id,

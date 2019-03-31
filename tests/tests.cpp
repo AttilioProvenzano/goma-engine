@@ -491,9 +491,12 @@ TEST(RendererTest, RenderDuck) {
 TEST(RendererTest, RenderLantern) {
     Engine e;
     e.LoadScene("../../../assets/models/Lantern/glTF/Lantern.gltf");
-    auto res = e.renderer()->Render();
 
-    ASSERT_TRUE(res) << res.error().message();
+    for (size_t i = 0; i < 300; i++) {
+        auto res = e.renderer()->Render();
+        ASSERT_TRUE(res) << res.error().message();
+        std::this_thread::sleep_for(std::chrono::milliseconds(8));
+    }
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
@@ -501,9 +504,11 @@ TEST(RendererTest, RenderLantern) {
 TEST(RendererTest, RenderSponza) {
     Engine e;
     e.LoadScene("../../../assets/models/Sponza/glTF/Sponza.gltf");
-    auto res = e.renderer()->Render();
 
-    ASSERT_TRUE(res) << res.error().message();
+    for (size_t i = 0; i < 300; i++) {
+        auto res = e.renderer()->Render();
+        ASSERT_TRUE(res) << res.error().message();
+    }
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }

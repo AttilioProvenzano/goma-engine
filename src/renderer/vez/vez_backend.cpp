@@ -249,9 +249,8 @@ result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
     for (auto& image_name : fb_desc.color_images) {
         auto image_desc_res = render_plan_->color_images.find(image_name);
         if (image_desc_res != render_plan_->color_images.end()) {
-            OUTCOME_TRY(
-                image, CreateFramebufferImage(frame_id,
-                                              image_desc_res->second, fb_desc));
+            OUTCOME_TRY(image, CreateFramebufferImage(
+                                   frame_id, image_desc_res->second, fb_desc));
             attachments.push_back(image->vez.image_view);
         } else {
             LOGE(
@@ -266,9 +265,9 @@ result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
         auto depth_image_desc_res =
             render_plan_->depth_images.find(fb_desc.depth_image);
         if (depth_image_desc_res != render_plan_->depth_images.end()) {
-            OUTCOME_TRY(
-                image, CreateFramebufferImage(
-                           frame_id, depth_image_desc_res->second, fb_desc));
+            OUTCOME_TRY(image,
+                        CreateFramebufferImage(
+                            frame_id, depth_image_desc_res->second, fb_desc));
             attachments.push_back(image->vez.image_view);
         }
     }

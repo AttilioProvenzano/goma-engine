@@ -36,6 +36,8 @@ class Renderer {
         uint32_t int_repr;
     };
 
+    result<void> ComputeCachedModel(NodeIndex node);
+
     std::map<uint32_t, std::string> vs_preamble_map_;
     const char* GetVertexShaderPreamble(const VertexShaderPreambleDesc& desc);
     const char* GetVertexShaderPreamble(const Mesh& mesh);

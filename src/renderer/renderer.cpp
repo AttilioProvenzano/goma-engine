@@ -244,47 +244,7 @@ result<void> Renderer::Render() {
         }
 
         for (auto& mesh_node : *nodes_result.value()) {
-            std::stack<NodeIndex> node_stack;
-
-            // Fill the stack with nodes for which we need
-            // to compute model matrix
-            auto current_node = mesh_node;
-            while (!scene->HasCachedModel(current_node)) {
-                node_stack.push(current_node);
-
-                auto parent = scene->GetParent(current_node);
-                if (!parent) {
-                    break;
-                } else {
-                    current_node = parent.value();
-                }
-            }
-
-            // Compute model matrices
-            auto current_model = glm::mat4(1.0f);
-            if (!node_stack.empty()) {
-                auto parent_res = scene->GetParent(node_stack.top());
-                if (parent_res.has_value()) {
-                    auto& parent = parent_res.value();
-                    if (scene->HasCachedModel(parent)) {
-                        current_model = scene->GetCachedModel(parent).value();
-                    }
-                }
-            }
-
-            while (!node_stack.empty()) {
-                auto node = node_stack.top();
-                node_stack.pop();
-
-                auto transform = scene->GetTransform(node).value();
-                current_model = glm::scale(current_model, transform->scale);
-                current_model =
-                    glm::mat4_cast(transform->rotation) * current_model;
-                current_model =
-                    glm::translate(current_model, transform->position);
-
-                scene->SetCachedModel(node, current_model);
-            }
+            ComputeCachedModel(mesh_node);
         }
     });
 
@@ -526,6 +486,55 @@ void main() {
     };
 
     backend_->RenderFrame({std::move(forward_pass)}, "color");
+
+    return outcome::success();
+}
+
+result<void> Renderer::ComputeCachedModel(NodeIndex node) {
+    Scene* scene = engine_->scene();
+    if (!scene) {
+        return Error::NoSceneLoaded;
+    }
+
+    std::stack<NodeIndex> node_stack;
+
+    // Fill the stack with nodes for which we need
+    // to compute model matrix
+    auto current_node = node;
+    while (!scene->HasCachedModel(current_node)) {
+        node_stack.push(current_node);
+
+        auto parent = scene->GetParent(current_node);
+        if (!parent) {
+            break;
+        } else {
+            current_node = parent.value();
+        }
+    }
+
+    // Compute model matrices
+    auto current_model = glm::mat4(1.0f);
+    if (!node_stack.empty()) {
+        auto parent_res = scene->GetParent(node_stack.top());
+        if (parent_res.has_value()) {
+            auto& parent = parent_res.value();
+            if (scene->HasCachedModel(parent)) {
+                current_model = scene->GetCachedModel(parent).value();
+            }
+        }
+    }
+
+    while (!node_stack.empty()) {
+        auto node = node_stack.top();
+        node_stack.pop();
+
+        auto transform = scene->GetTransform(node).value();
+        current_model = glm::scale(current_model, transform->scale);
+        current_model = glm::mat4_cast(transform->rotation) * current_model;
+        current_model = glm::translate(current_model, transform->position);
+
+        scene->SetCachedModel(node, current_model);
+    }
 
     return outcome::success();
 }

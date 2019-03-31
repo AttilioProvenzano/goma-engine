@@ -292,9 +292,10 @@ result<void> Renderer::Render() {
     // Get the VP matrix
     auto camera_res = scene->GetAttachment<Camera>({0});  // TODO main camera
     if (!camera_res) {
-        // TODO proper aspect ratio
+        // TODO potentially remove the camera aspect ratio
         Camera camera = {};
-        camera.aspect_ratio = 800.0f / 600.0f;
+        camera.aspect_ratio = float(engine_->platform()->GetWidth()) /
+                              engine_->platform()->GetHeight();
 
         auto new_camera_res =
             scene->CreateAttachment<Camera>(std::move(camera));
@@ -382,14 +383,12 @@ result<void> Renderer::Render() {
     float aspect_ratio = float(engine_->platform()->GetWidth()) /
                          engine_->platform()->GetHeight();
     auto& camera = camera_res.value();
-    auto fovy =
-        camera->h_fov / camera->aspect_ratio;  // TODO use proper aspect ratio
-    glm::mat4 view =
-        glm::lookAt(glm::vec3(0, 0, 3.0f), glm::vec3(0, 0, 0), camera->up);
-    //	    glm::lookAt(glm::vec3(0, 0, 0), glm::vec3(0, 0, -1.0f), camera->up);
-    glm::mat4 proj =
-        glm::perspective(glm::radians(camera->h_fov), camera->aspect_ratio,
-                         camera->near_plane, camera->far_plane);
+    auto fovy = camera->h_fov / aspect_ratio;
+
+    view *= glm::lookAt(camera->position, camera->position + camera->look_at,
+                        camera->up);
+    glm::mat4 proj = glm::perspective(glm::radians(camera->h_fov), aspect_ratio,
+                                      camera->near_plane, camera->far_plane);
     proj[1][1] *= -1;  // Vulkan-style projection
 
     glm::mat4 vp = proj * view;

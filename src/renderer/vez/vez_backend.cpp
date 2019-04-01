@@ -65,12 +65,19 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(
 namespace goma {
 
 VezBackend::VezBackend(Engine* engine, const Config& config)
-    : Backend(engine, config) {}
+    : Backend(engine, config) {
+    SetBuffering(config.buffering);
+}
 
 VezBackend::~VezBackend() { TeardownContext(); }
 
 result<void> VezBackend::SetBuffering(Buffering buffering) {
     config_.buffering = buffering;
+
+    uint32_t buf_size = config_.buffering == Buffering::Triple ? 3 : 2;
+    if (buf_size >= context_.per_frame.size()) {
+        context_.per_frame.resize(buf_size);
+    }
     return outcome::success();
 }
 
@@ -456,6 +463,9 @@ result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
 
     FinishFrame();
     PresentImage("color");
+
+    uint32_t buf_size = config_.buffering == Buffering::Triple ? 3 : 2;
+    context_.current_frame = (context_.current_frame + 1) % buf_size;
 
     return outcome::success();
 }

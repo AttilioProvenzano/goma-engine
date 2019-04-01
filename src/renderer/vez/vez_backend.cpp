@@ -196,11 +196,18 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
 
     VkFormat format = GetVkFormat(texture_desc.format);
 
+    uint32_t mip_levels = 1;
+    if (texture_desc.mipmapping) {
+        uint32_t min_dim = std::min(texture_desc.width, texture_desc.height);
+        mip_levels = static_cast<uint32_t>(floor(log2(min_dim) + 1));
+        mip_levels = std::max(1U, mip_levels);
+    }
+
     VezImageCreateInfo image_info = {};
     image_info.extent = {texture_desc.width, texture_desc.height, 1};
     image_info.imageType = VK_IMAGE_TYPE_2D;
     image_info.arrayLayers = texture_desc.array_layers;
-    image_info.mipLevels = texture_desc.mip_levels;
+    image_info.mipLevels = mip_levels;
     image_info.format = format;
     image_info.samples =
         static_cast<VkSampleCountFlagBits>(texture_desc.samples);
@@ -208,7 +215,7 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
     image_info.usage =
         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-    if (texture_desc.mip_levels > 1) {
+    if (mip_levels > 1) {
         // We need TRANSFER_SRC to generate mipmaps
         image_info.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     }

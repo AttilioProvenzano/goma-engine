@@ -140,6 +140,7 @@ class VezBackend : public Backend {
     result<VulkanImage> CreateImage(VezContext::ImageHash hash,
                                     VezImageCreateInfo image_info,
                                     void* initial_contents = nullptr);
+    result<void> GetSetupCommandBuffer();
     result<void> GetActiveCommandBuffer(uint32_t thread = 0);
     VkFormat GetVkFormat(Format format);
 

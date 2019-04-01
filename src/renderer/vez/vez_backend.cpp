@@ -746,17 +746,18 @@ result<size_t> VezBackend::StartFrame(uint32_t threads) {
            "Context must be initialized before starting a frame");
     VkDevice device = context_.device;
 
-    uint32_t buffering = config_.buffering == Buffering::Triple ? 3 : 2;
-    context_.current_frame = (context_.current_frame + 1) % buffering;
-    if (context_.current_frame >= context_.per_frame.size()) {
-        context_.per_frame.resize(context_.current_frame + 1);
-    }
-
     if (threads == 0) {
         threads = 1;
     }
 
     auto& per_frame = context_.per_frame[context_.current_frame];
+    if (per_frame.setup_fence != VK_NULL_HANDLE) {
+        vezWaitForFences(context_.device, 1, &per_frame.setup_fence, VK_TRUE,
+                         UINT64_MAX);
+        vezDestroyFence(context_.device, per_frame.setup_fence);
+        per_frame.setup_fence = VK_NULL_HANDLE;
+    }
+
     if (per_frame.presentation_fence != VK_NULL_HANDLE) {
         vezWaitForFences(context_.device, 1, &per_frame.presentation_fence,
                          VK_TRUE, UINT64_MAX);
@@ -902,6 +903,12 @@ result<void> VezBackend::TeardownContext() {
     }
 
     for (auto& per_frame : context_.per_frame) {
+        if (per_frame.setup_command_buffer != VK_NULL_HANDLE) {
+            vezFreeCommandBuffers(context_.device, 1,
+                                  &per_frame.setup_command_buffer);
+            per_frame.setup_command_buffer = VK_NULL_HANDLE;
+        }
+
         vezFreeCommandBuffers(
             context_.device,
             static_cast<uint32_t>(per_frame.command_buffers.size()),
@@ -1484,14 +1491,78 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
         sub_data_info.imageSubresource = layers;
 
         vezImageSubData(device, image, &sub_data_info, initial_contents);
+
+        if (image_info.mipLevels > 1) {
+            GetSetupCommandBuffer();
+
+            int32_t last_w = static_cast<int32_t>(image_info.extent.width);
+            int32_t last_h = static_cast<int32_t>(image_info.extent.height);
+
+            for (uint32_t i = 1; i < image_info.mipLevels; i++) {
+                int32_t w = std::max(1, last_w / 2);
+                int32_t h = std::max(1, last_h / 2);
+
+                VezImageBlit blit = {};
+                blit.srcSubresource = {i - 1, 0, 1};
+                blit.srcOffsets[1] = {last_w, last_h, 1};
+                blit.dstSubresource = {i, 0, 1};
+                blit.dstOffsets[1] = {w, h, 1};
+
+                vezCmdBlitImage(image, image, 1, &blit, VK_FILTER_LINEAR);
+
+                last_w = w;
+                last_h = h;
+            }
+        }
     }
 
     VulkanImage vulkan_image = {image, image_view};
     return vulkan_image;
 }
 
+result<void> VezBackend::GetSetupCommandBuffer() {
+    auto& per_frame = context_.per_frame[context_.current_frame];
+
+    if (per_frame.setup_command_buffer == VK_NULL_HANDLE) {
+        VkQueue graphics_queue = VK_NULL_HANDLE;
+        vezGetDeviceGraphicsQueue(context_.device, 0, &graphics_queue);
+
+        VezCommandBufferAllocateInfo cmd_info = {};
+        cmd_info.commandBufferCount = 1;
+        cmd_info.queue = graphics_queue;
+
+        VK_CHECK(vezAllocateCommandBuffers(context_.device, &cmd_info,
+                                           &per_frame.setup_command_buffer));
+    }
+
+    if (!per_frame.setup_command_buffer_active) {
+        VK_CHECK(
+            vezBeginCommandBuffer(per_frame.setup_command_buffer,
+                                  VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT));
+        per_frame.setup_command_buffer_active = true;
+    }
+
+    return outcome::success();
+}
+
 result<void> VezBackend::GetActiveCommandBuffer(uint32_t thread) {
     auto& per_frame = context_.per_frame[context_.current_frame];
+
+    if (per_frame.setup_command_buffer_active) {
+        per_frame.setup_command_buffer_active = false;
+        vezEndCommandBuffer();
+
+        // Submit the setup command buffer
+        VezSubmitInfo submit_info = {};
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &per_frame.setup_command_buffer;
+
+        VkQueue graphics_queue = VK_NULL_HANDLE;
+        vezGetDeviceGraphicsQueue(context_.device, 0, &graphics_queue);
+
+        VK_CHECK(vezQueueSubmit(graphics_queue, 1, &submit_info,
+                                &per_frame.setup_fence));
+    }
 
     if (!per_frame.command_buffer_active[thread]) {
         VK_CHECK(

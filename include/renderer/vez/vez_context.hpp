@@ -60,11 +60,15 @@ struct VezContext {
     FramebufferCache framebuffer_cache;
 
     struct PerFrame {
-        std::vector<VkCommandBuffer> command_buffers;
-        std::vector<bool> command_buffer_active;
+        std::vector<VkCommandBuffer> command_buffers = {};
+        std::vector<bool> command_buffer_active = {};
+
+        VkCommandBuffer setup_command_buffer = VK_NULL_HANDLE;
+        bool setup_command_buffer_active = false;
 
         VkSemaphore submission_semaphore = VK_NULL_HANDLE;
         VkFence presentation_fence = VK_NULL_HANDLE;
+        VkFence setup_fence = VK_NULL_HANDLE;
     };
     std::vector<PerFrame> per_frame;
     size_t current_frame = 0;

@@ -106,8 +106,8 @@ enum class TextureOp {
 enum class TextureWrappingMode { Repeat, MirroredRepeat, ClampToEdge, Decal };
 
 struct SamplerDesc {
-    FilterType filter_type = FilterType::Nearest;
-    FilterType mipmap_mode = FilterType::Nearest;
+    FilterType filter_type = FilterType::Linear;
+    FilterType mipmap_mode = FilterType::Linear;
 
     float min_lod = 0.0f;
     float max_lod = 1.0f;

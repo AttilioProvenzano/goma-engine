@@ -357,19 +357,19 @@ result<void> Renderer::Render() {
 
         if (has_key(KeyInput::W)) {
             transform->position += transform->rotation *
-                                   glm::vec3(0.0f, 0.0f, -300.0f * delta_time);
+                                   glm::vec3(0.0f, 0.0f, -10.0f * delta_time);
         }
         if (has_key(KeyInput::S)) {
             transform->position += transform->rotation *
-                                   glm::vec3(0.0f, 0.0f, 300.0f * delta_time);
+                                   glm::vec3(0.0f, 0.0f, 10.0f * delta_time);
         }
         if (has_key(KeyInput::A)) {
             transform->position += transform->rotation *
-                                   glm::vec3(-300.0f * delta_time, 0.0f, 0.0f);
+                                   glm::vec3(-10.0f * delta_time, 0.0f, 0.0f);
         }
         if (has_key(KeyInput::D)) {
             transform->position += transform->rotation *
-                                   glm::vec3(300.0f * delta_time, 0.0f, 0.0f);
+                                   glm::vec3(10.0f * delta_time, 0.0f, 0.0f);
         }
 
         scene->InvalidateCachedModel(camera_node);

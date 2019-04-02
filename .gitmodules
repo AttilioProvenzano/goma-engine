@@ -28,3 +28,6 @@
 [submodule "assets/models"]
 	path = assets/models
 	url = https://github.com/AttilioProvenzano/goma-models.git
+[submodule "third_party/spdlog"]
+	path = third_party/spdlog
+	url = https://github.com/gabime/spdlog.git

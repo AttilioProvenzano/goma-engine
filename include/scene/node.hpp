@@ -2,11 +2,7 @@
 
 #include "scene/gen_index.hpp"
 
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
-
-#include <set>
-#include <memory>
+#include "common/include.hpp"
 
 namespace goma {
 

@@ -4,14 +4,7 @@
 #include "scene/attachment.hpp"
 #include "scene/attachments/texture.hpp"
 
-#include <outcome.hpp>
-namespace outcome = OUTCOME_V2_NAMESPACE;
-using outcome::result;
-
-#include <queue>
-#include <typeindex>
-#include <map>
-#include <unordered_map>
+#include "common/include.hpp"
 
 template <typename T>
 using TypeMap = std::unordered_map<std::type_index, T>;

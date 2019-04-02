@@ -1,14 +1,7 @@
 #pragma once
 
-#define VK_NO_PROTOTYPES
-#include "VEZ.h"
-#include "volk.h"
-
-#include <outcome.hpp>
-namespace outcome = OUTCOME_V2_NAMESPACE;
-using outcome::result;
-
-#include <set>
+#include "common/include.hpp"
+#include "common/vez.hpp"
 
 namespace goma {
 

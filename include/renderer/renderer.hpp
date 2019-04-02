@@ -2,8 +2,7 @@
 
 #include "renderer/backend.hpp"
 
-#include <map>
-#include <memory>
+#include "common/include.hpp"
 
 namespace goma {
 

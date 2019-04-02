@@ -1,13 +1,9 @@
 #pragma once
 
-#define VK_NO_PROTOTYPES
-#include "VEZ.h"
-
 #include "renderer/handles.hpp"
 
-#include <vector>
-#include <map>
-#include <set>
+#include "common/include.hpp"
+#include "common/vez.hpp"
 
 namespace goma {
 

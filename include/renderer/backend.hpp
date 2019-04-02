@@ -3,14 +3,9 @@
 #include "renderer/handles.hpp"
 #include "platform/platform.hpp"
 #include "scene/attachments/mesh.hpp"
+
+#include "common/include.hpp"
 #include "common/error_codes.hpp"
-
-#include <outcome.hpp>
-namespace outcome = OUTCOME_V2_NAMESPACE;
-using outcome::result;
-
-#include <vector>
-#include <functional>
 
 namespace goma {
 

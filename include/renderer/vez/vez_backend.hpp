@@ -2,14 +2,10 @@
 
 #include "renderer/backend.hpp"
 #include "renderer/vez/vez_context.hpp"
+
+#include "common/include.hpp"
+#include "common/vez.hpp"
 #include "common/error_codes.hpp"
-
-#define VK_NO_PROTOTYPES
-#include "VEZ.h"
-#include "volk.h"
-
-#include <vector>
-#include <map>
 
 namespace goma {
 

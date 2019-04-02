@@ -1,8 +1,5 @@
 #pragma once
 
-#include <memory>
-#include <vector>
-
 #include "renderer/renderer.hpp"
 #include "platform/platform.hpp"
 #include "scene/scene.hpp"

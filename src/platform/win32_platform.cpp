@@ -6,8 +6,6 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
-#include <unordered_map>
-
 namespace goma {
 
 Win32Platform::~Win32Platform() {

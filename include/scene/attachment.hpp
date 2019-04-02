@@ -2,16 +2,7 @@
 
 #include "scene/gen_index.hpp"
 
-#include <outcome.hpp>
-namespace outcome = OUTCOME_V2_NAMESPACE;
-using outcome::result;
-
-#include <vector>
-#include <queue>
-#include <map>
-#include <set>
-#include <string>
-#include <functional>
+#include "common/include.hpp"
 
 namespace goma {
 

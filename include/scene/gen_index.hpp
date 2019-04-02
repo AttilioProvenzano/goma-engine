@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ostream>
+#include "common/include.hpp"
 
 namespace goma {
 

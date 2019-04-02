@@ -5,6 +5,8 @@
 
 #include "assimp/scene.h"
 
+#include "common/include.hpp"
+
 namespace goma {
 
 class AssimpLoader : public SceneLoader {

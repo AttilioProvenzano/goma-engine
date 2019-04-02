@@ -5,7 +5,6 @@
 #include "scene/attachments/camera.hpp"
 #include "scene/attachments/light.hpp"
 #include "scene/attachments/mesh.hpp"
-#include "common/error_codes.hpp"
 
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
@@ -19,7 +18,7 @@
 #define STBI_FAILURE_USERMSG
 #include "stb_image.h"
 
-#include <map>
+#include "common/error_codes.hpp"
 
 namespace goma {
 

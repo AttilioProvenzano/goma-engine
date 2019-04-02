@@ -2,6 +2,8 @@
 
 #include "scene/scene.hpp"
 
+#include "common/include.hpp"
+
 namespace goma {
 
 class SceneLoader {

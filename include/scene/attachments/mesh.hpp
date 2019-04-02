@@ -3,8 +3,7 @@
 #include "scene/gen_index.hpp"
 #include "renderer/handles.hpp"
 
-#include <glm/glm.hpp>
-#include <memory>
+#include "common/include.hpp"
 
 namespace goma {
 

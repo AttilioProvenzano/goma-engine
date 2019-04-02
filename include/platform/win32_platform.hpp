@@ -2,6 +2,8 @@
 
 #include "platform/platform.hpp"
 
+#include "common/include.hpp"
+
 struct GLFWwindow;
 
 namespace goma {

@@ -6,8 +6,6 @@
 #include "scene/attachments/material.hpp"
 #include "scene/attachments/mesh.hpp"
 
-#include <stack>
-
 #define LOG(prefix, format, ...) printf(prefix format "\n", __VA_ARGS__)
 #define LOGE(format, ...) LOG("** ERROR: ", format, __VA_ARGS__)
 #define LOGW(format, ...) LOG("* Warning: ", format, __VA_ARGS__)

@@ -4,8 +4,6 @@
 
 #include "Core/ShaderModule.h"  // from V-EZ
 
-#include <array>
-
 #define VK_CHECK(fn)                                                         \
     {                                                                        \
         VkResult _r = fn;                                                    \

@@ -2,11 +2,6 @@
 
 #include "common/error_codes.hpp"
 
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/string_cast.hpp>
-
-#include <ostream>
-
 namespace goma {
 
 std::ostream& operator<<(std::ostream& o, const goma::GenIndex& id) {

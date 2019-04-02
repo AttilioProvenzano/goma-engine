@@ -20,6 +20,8 @@ add_compile_definitions(NOMINMAX)
 set(PUBLIC_HEADERS
 	include/engine.hpp
 	include/common/error_codes.hpp
+	include/common/include.hpp
+	include/common/vez.hpp
 	include/renderer/renderer.hpp
 	include/renderer/handles.hpp
 	include/renderer/backend.hpp

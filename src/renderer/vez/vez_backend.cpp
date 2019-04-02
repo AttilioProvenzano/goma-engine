@@ -8,9 +8,9 @@
     {                                                                        \
         VkResult _r = fn;                                                    \
         if (_r != VK_SUCCESS) {                                              \
-            LOGE(                                                            \
-                "%s, line %d: In function %s, a Vulkan error occurred when " \
-                "running %s.",                                               \
+            spdlog::error(                                                   \
+                "{}, line {}: In function {}, a Vulkan error occurred when " \
+                "running {}.",                                               \
                 __FILE__, __LINE__, __func__, #fn);                          \
         };                                                                   \
         switch (_r) {                                                        \
@@ -40,21 +40,16 @@ uint64_t sdbm_hash(const char* str) {
     return hash;
 }
 
-#define LOG(prefix, format, ...) printf(prefix format "\n", __VA_ARGS__)
-#define LOGE(format, ...) LOG("** ERROR: ", format, __VA_ARGS__)
-#define LOGW(format, ...) LOG("* Warning: ", format, __VA_ARGS__)
-#define LOGI(format, ...) LOG("", format, __VA_ARGS__)
-
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(
     VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType,
     uint64_t object, size_t location, int32_t messageCode,
     const char* pLayerPrefix, const char* pMessage, void* pUserData) {
     if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
-        LOGE("%s - %s", pLayerPrefix, pMessage);
+        spdlog::error("{} - {}", pLayerPrefix, pMessage);
     } else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) {
-        LOGW("%s - %s", pLayerPrefix, pMessage);
+        spdlog::warn("{} - {}", pLayerPrefix, pMessage);
     } else {
-        LOGI("%s - %s", pLayerPrefix, pMessage);
+        spdlog::info("{} - {}", pLayerPrefix, pMessage);
     }
 
     return VK_FALSE;
@@ -265,10 +260,10 @@ result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
                                    frame_id, image_desc_res->second, fb_desc));
             attachments.push_back(image->vez.image_view);
         } else {
-            LOGE(
-                "Color image \"%s\" not found when creating framebuffer "
-                "\"%s\".",
-                image_name.c_str(), fb_desc.name.c_str());
+            spdlog::error(
+                "Color image \"{}\" not found when creating framebuffer "
+                "\"{}\".",
+                image_name, fb_desc.name);
             return Error::NotFound;
         }
     }
@@ -421,16 +416,16 @@ result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
         auto& rp_desc_result =
             render_plan_->render_passes.find(render_seq_entry.rp_name);
         if (rp_desc_result == render_plan_->render_passes.end()) {
-            LOGE("Invalid render pass \"%s\"!",
-                 render_seq_entry.rp_name.c_str());
+            spdlog::error("Invalid render pass \"{}\"!",
+                          render_seq_entry.rp_name);
             return Error::NotFound;
         }
 
         auto& fb_desc_result =
             render_plan_->framebuffers.find(render_seq_entry.fb_name);
         if (fb_desc_result == render_plan_->framebuffers.end()) {
-            LOGE("Invalid framebuffer \"%s\"!",
-                 render_seq_entry.fb_name.c_str());
+            spdlog::error("Invalid framebuffer \"{}\"!",
+                          render_seq_entry.fb_name);
             return Error::NotFound;
         }
 
@@ -453,8 +448,8 @@ result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
             render_pass_fns[0](rp_desc_result->second, fb_desc_result->second,
                                image_id);
         } else {
-            LOGE("Skipping render pass \"%s\", no function provided.",
-                 rp_desc_result->first.c_str());
+            spdlog::error("Skipping render pass \"{}\", no function provided.",
+                          rp_desc_result->first);
             continue;
         }
     }
@@ -1179,8 +1174,8 @@ result<VkShaderModule> VezBackend::GetVertexShaderModule(
         if (shader_compilation_result == VK_ERROR_INITIALIZATION_FAILED) {
             // The info log is stored in the V-EZ shader object
             auto vez_shader = reinterpret_cast<vez::ShaderModule*>(shader);
-            LOGE("Vertex shader compilation failed:\n%s",
-                 vez_shader->GetInfoLog().c_str());
+            spdlog::error("Vertex shader compilation failed:\n{}",
+                          vez_shader->GetInfoLog());
         }
         VK_CHECK(shader_compilation_result);
 
@@ -1216,8 +1211,8 @@ result<VkShaderModule> VezBackend::GetFragmentShaderModule(
         if (shader_compilation_result == VK_ERROR_INITIALIZATION_FAILED) {
             // The info log is stored in the V-EZ shader object
             auto vez_shader = reinterpret_cast<vez::ShaderModule*>(shader);
-            LOGE("Fragment shader compilation failed:\n%s",
-                 vez_shader->GetInfoLog().c_str());
+            spdlog::error("Fragment shader compilation failed:\n{}",
+                          vez_shader->GetInfoLog());
         }
         VK_CHECK(shader_compilation_result);
 

@@ -121,6 +121,7 @@ target_include_directories(goma-engine PUBLIC
 	include
 	third_party/glm
 	third_party/outcome/single-header
+	third_party/spdlog/include
 	third_party/stb
 	third_party/V-EZ/Source
 	third_party/Vulkan-Headers/include)

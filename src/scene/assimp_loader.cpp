@@ -9,11 +9,6 @@
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 
-#define LOG(prefix, format, ...) printf(prefix format "\n", __VA_ARGS__)
-#define LOGE(format, ...) LOG("** ERROR: ", format, __VA_ARGS__)
-#define LOGW(format, ...) LOG("* Warning: ", format, __VA_ARGS__)
-#define LOGI(format, ...) LOG("", format, __VA_ARGS__)
-
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_FAILURE_USERMSG
 #include "stb_image.h"
@@ -30,7 +25,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ReadSceneFromFile(
                                          aiProcess_TransformUVCoords);
 
     if (!ai_scene) {
-        LOGE("%s", importer.GetErrorString());
+        spdlog::error(importer.GetErrorString());
         return Error::SceneImportFailed;
     }
 
@@ -126,8 +121,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 auto m = mesh_result.value();
                 scene->RegisterAttachment<Mesh>(m, ai_mesh->mName.C_Str());
             } else {
-                LOGW("Mesh creation failed for mesh \"%s\".",
-                     ai_mesh->mName.C_Str());
+                spdlog::warn("Mesh creation failed for mesh \"{}\".",
+                             ai_mesh->mName.C_Str());
             }
         }
     }
@@ -182,8 +177,9 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
 
             if (!node_result.has_value()) {
                 const auto &error = node_result.error();
-                LOGE("Node conversion failed for node \"%s\". Error: %s",
-                     ai_node->mName.C_Str(), error.message().c_str());
+                spdlog::error(
+                    "Node conversion failed for node \"{}\". Error: {}",
+                    ai_node->mName.C_Str(), error.message());
                 continue;
             }
 
@@ -215,7 +211,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
             aiTexture *ai_texture = ai_scene->mTextures[i];
 
             if (ai_texture->mFilename.length == 0) {
-                LOGW("No filename specified for texture, skipping.");
+                spdlog::warn("No filename specified for texture, skipping.");
                 continue;
             }
 
@@ -226,8 +222,9 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                     ai_texture->mWidth, &width, &height, &n, 4);
 
                 if (!image_data) {
-                    LOGW("Decompressing \"%s\" failed with error: %s",
-                         ai_texture->mFilename.C_Str(), stbi_failure_reason());
+                    spdlog::warn("Decompressing \"{}\" failed with error: {}",
+                                 ai_texture->mFilename.C_Str(),
+                                 stbi_failure_reason());
 
                     // Decompression failed, store the compressed texture
                     std::vector<uint8_t> data;
@@ -243,8 +240,9 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                         scene->RegisterAttachment<Texture>(t, path);
                     } else {
                         const auto &error = texture.error();
-                        LOGW("Loading texture \"%s\" failed with error: %s",
-                             path.c_str(), error.message().c_str());
+                        spdlog::warn(
+                            "Loading texture \"{}\" failed with error: {}",
+                            path, error.message());
                     }
                 } else {
                     std::vector<uint8_t> data;
@@ -262,8 +260,9 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                         scene->RegisterAttachment<Texture>(t, path);
                     } else {
                         const auto &error = texture.error();
-                        LOGW("Loading texture \"%s\" failed with error: %s",
-                             path.c_str(), error.message().c_str());
+                        spdlog::warn(
+                            "Loading texture \"{}\" failed with error: {}",
+                            path, error.message());
                     }
                 }
 
@@ -284,8 +283,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                     scene->RegisterAttachment<Texture>(t, path);
                 } else {
                     const auto &error = texture.error();
-                    LOGW("Loading texture \"%s\" failed with error: %s",
-                         path.c_str(), error.message().c_str());
+                    spdlog::warn("Loading texture \"{}\" failed with error: {}",
+                                 path, error.message());
                 }
             }
         }
@@ -364,8 +363,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 scene->RegisterAttachment<Material>(
                     m, ai_material->GetName().C_Str());
             } else {
-                LOGW("Material creation failed for material \"%s\".",
-                     ai_material->GetName().C_Str());
+                spdlog::warn("Material creation failed for material \"{}\".",
+                             ai_material->GetName().C_Str());
             }
         }
     }
@@ -397,8 +396,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 auto c = camera_result.value();
                 scene->RegisterAttachment<Camera>(c, ai_camera->mName.C_Str());
             } else {
-                LOGW("Camera creation failed for camera \"%s\".",
-                     ai_camera->mName.C_Str());
+                spdlog::warn("Camera creation failed for camera \"{}\".",
+                             ai_camera->mName.C_Str());
             }
         }
     }
@@ -449,8 +448,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 auto l = light_result.value();
                 scene->RegisterAttachment<Light>(l, ai_light->mName.C_Str());
             } else {
-                LOGW("Light creation failed for light \"%s\".",
-                     ai_light->mName.C_Str());
+                spdlog::warn("Light creation failed for light \"{}\".",
+                             ai_light->mName.C_Str());
             }
         }
     }
@@ -477,7 +476,7 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
                             &uvindex, &blend, &op, mapmode);
 
     if (path.length == 0) {
-        LOGW("No path specified for texture, skipping.");
+        spdlog::warn("No path specified for texture, skipping.");
         return Error::NotFound;
     }
 
@@ -493,10 +492,8 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
         auto image_data = stbi_load(full_path.c_str(), &width, &height, &n, 4);
 
         if (!image_data) {
-            LOGW(
-                "Decompressing \"%s\" failed with error: "
-                "%s",
-                full_path.c_str(), stbi_failure_reason());
+            spdlog::warn("Decompressing \"{}\" failed with error: {}",
+                         full_path, stbi_failure_reason());
             return Error::DecompressionFailed;
         }
 
@@ -514,8 +511,8 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
             stbi_image_free(image_data);
         } else {
             const auto &error = texture_result.error();
-            LOGW("Loading texture \"%s\" failed with error: %s", path.C_Str(),
-                 error.message().c_str());
+            spdlog::warn("Loading texture \"{}\" failed with error: {}",
+                         path.C_Str(), error.message());
 
             stbi_image_free(image_data);
             return Error::LoadingFailed;

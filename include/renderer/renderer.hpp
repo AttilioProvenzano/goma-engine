@@ -18,8 +18,6 @@ class Renderer {
     Engine* engine_ = nullptr;
     std::unique_ptr<Backend> backend_;
 
-    std::vector<Framebuffer> framebuffers_;
-
     union VertexShaderPreambleDesc {
         struct {
             bool has_positions : 1;

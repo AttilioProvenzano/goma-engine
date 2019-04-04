@@ -316,7 +316,7 @@ result<void> Renderer::Render() {
 
         // Update transform based on input
         auto transform = scene->GetTransform(camera_node).value();
-        auto input_state = engine_->platform()->GetInputState();
+        auto input_state = engine_->input_system()->GetFrameInput();
         const auto& keypresses = input_state.keypresses;
 
         auto has_key = [&keypresses](KeyInput key) {

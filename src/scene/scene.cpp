@@ -120,6 +120,51 @@ result<void> Scene::SetCachedModel(NodeIndex id, const glm::mat4& model) {
     return outcome::success();
 }
 
+result<void> Scene::ComputeCachedModel(NodeIndex id) {
+    std::stack<NodeIndex> node_stack;
+
+    // Fill the stack with nodes for which we need
+    // to compute model matrix. Always push the current node.
+    auto current_node = id;
+    do {
+        node_stack.push(current_node);
+
+        auto parent = GetParent(current_node);
+        if (!parent) {
+            break;
+        } else {
+            current_node = parent.value();
+        }
+    } while (!HasCachedModel(current_node));
+
+    // Compute model matrices
+    auto current_model = glm::mat4(1.0f);
+    if (!node_stack.empty()) {
+        auto parent_res = GetParent(node_stack.top());
+        if (parent_res.has_value()) {
+            auto& parent = parent_res.value();
+            if (HasCachedModel(parent)) {
+                current_model = GetCachedModel(parent).value();
+            }
+        }
+    }
+
+    while (!node_stack.empty()) {
+        auto id = node_stack.top();
+        node_stack.pop();
+
+        auto transform = GetTransform(id).value();
+        current_model = glm::scale(current_model, transform.scale);
+        current_model = glm::mat4_cast(transform.rotation) * current_model;
+        current_model = glm::translate(current_model, transform.position);
+        SetTransform(id, transform);
+
+        SetCachedModel(id, current_model);
+    }
+
+    return outcome::success();
+}
+
 result<void> Scene::InvalidateCachedModel(NodeIndex id) {
     if (!ValidateNode(id)) {
         return Error::InvalidNode;

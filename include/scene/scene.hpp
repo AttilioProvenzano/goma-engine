@@ -24,9 +24,11 @@ class Scene {
     result<std::set<NodeIndex>> GetChildren(NodeIndex id);
     result<Transform> GetTransform(NodeIndex id);
     result<void> SetTransform(NodeIndex id, const Transform& transform);
+
     bool HasCachedModel(NodeIndex id);
     result<glm::mat4> GetCachedModel(NodeIndex id);
     result<void> SetCachedModel(NodeIndex id, const glm::mat4& model);
+    result<void> ComputeCachedModel(NodeIndex id);
     result<void> InvalidateCachedModel(NodeIndex id);
 
     template <typename T>

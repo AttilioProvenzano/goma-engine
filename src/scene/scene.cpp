@@ -82,11 +82,19 @@ result<std::set<NodeIndex>> Scene::GetChildren(NodeIndex id) {
     return nodes_[id.id].children;
 }
 
-result<Transform*> Scene::GetTransform(NodeIndex id) {
+result<Transform> Scene::GetTransform(NodeIndex id) {
     if (!ValidateNode(id)) {
         return Error::InvalidNode;
     }
-    return &nodes_[id.id].transform;
+    return nodes_[id.id].transform;
+}
+
+result<void> Scene::SetTransform(NodeIndex id, const Transform& transform) {
+    if (!ValidateNode(id)) {
+        return Error::InvalidNode;
+    }
+    nodes_[id.id].transform = transform;
+    return outcome::success();
 }
 
 bool Scene::HasCachedModel(NodeIndex id) {

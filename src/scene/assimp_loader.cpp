@@ -136,9 +136,10 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
 
         ai_root_node->mTransformation.Decompose(scale, rot, pos);
         auto root_transform = scene->GetTransform(scene->GetRootNode()).value();
-        root_transform->position = {pos.x, pos.y, pos.z};
-        root_transform->rotation = glm::quat(glm::vec3(rot.x, rot.y, rot.z));
-        root_transform->scale = {scale.x, scale.y, scale.z};
+        root_transform.position = {pos.x, pos.y, pos.z};
+        root_transform.rotation = glm::quat(glm::vec3(rot.x, rot.y, rot.z));
+        root_transform.scale = {scale.x, scale.y, scale.z};
+        scene->SetTransform(scene->GetRootNode(), root_transform);
 
         node_map[ai_root_node] = scene->GetRootNode();
         node_name_map[ai_root_node->mName.C_Str()] = scene->GetRootNode();

@@ -328,42 +328,43 @@ result<void> Renderer::Render() {
 
         // https://stackoverflow.com/questions/9857398/quaternion-camera-how-do-i-make-it-rotate-correctly
         if (has_key(KeyInput::Up)) {
-            transform->rotation =
-                transform->rotation *
+            transform.rotation =
+                transform.rotation *
                 glm::quat(glm::vec3(-1.0f * delta_time, 0.0f, 0.0f));
         }
         if (has_key(KeyInput::Down)) {
-            transform->rotation =
-                transform->rotation *
+            transform.rotation =
+                transform.rotation *
                 glm::quat(glm::vec3(1.0f * delta_time, 0.0f, 0.0f));
         }
         if (has_key(KeyInput::Left)) {
-            transform->rotation =
+            transform.rotation =
                 glm::quat(glm::vec3(0.0f, 1.0f * delta_time, 0.0f)) *
-                transform->rotation;
+                transform.rotation;
         }
         if (has_key(KeyInput::Right)) {
-            transform->rotation =
+            transform.rotation =
                 glm::quat(glm::vec3(0.0f, -1.0f * delta_time, 0.0f)) *
-                transform->rotation;
+                transform.rotation;
         }
 
         if (has_key(KeyInput::W)) {
-            transform->position += transform->rotation *
-                                   glm::vec3(0.0f, 0.0f, -10.0f * delta_time);
+            transform.position +=
+                transform.rotation * glm::vec3(0.0f, 0.0f, -10.0f * delta_time);
         }
         if (has_key(KeyInput::S)) {
-            transform->position += transform->rotation *
-                                   glm::vec3(0.0f, 0.0f, 10.0f * delta_time);
+            transform.position +=
+                transform.rotation * glm::vec3(0.0f, 0.0f, 10.0f * delta_time);
         }
         if (has_key(KeyInput::A)) {
-            transform->position += transform->rotation *
-                                   glm::vec3(-10.0f * delta_time, 0.0f, 0.0f);
+            transform.position +=
+                transform.rotation * glm::vec3(-10.0f * delta_time, 0.0f, 0.0f);
         }
         if (has_key(KeyInput::D)) {
-            transform->position += transform->rotation *
-                                   glm::vec3(10.0f * delta_time, 0.0f, 0.0f);
+            transform.position +=
+                transform.rotation * glm::vec3(10.0f * delta_time, 0.0f, 0.0f);
         }
+        scene->SetTransform(camera_node, transform);
 
         scene->InvalidateCachedModel(camera_node);
         ComputeCachedModel(camera_node);  // TODO only if needed (also move
@@ -591,9 +592,10 @@ result<void> Renderer::ComputeCachedModel(NodeIndex node) {
         node_stack.pop();
 
         auto transform = scene->GetTransform(node).value();
-        current_model = glm::scale(current_model, transform->scale);
-        current_model = glm::mat4_cast(transform->rotation) * current_model;
-        current_model = glm::translate(current_model, transform->position);
+        current_model = glm::scale(current_model, transform.scale);
+        current_model = glm::mat4_cast(transform.rotation) * current_model;
+        current_model = glm::translate(current_model, transform.position);
+        scene->SetTransform(node, transform);
 
         scene->SetCachedModel(node, current_model);
     }

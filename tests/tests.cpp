@@ -340,42 +340,23 @@ void main() {
     glm::mat4 model = glm::mat4(1.0f);
 
     auto transform = scene->GetTransform(node).value();
-    model = glm::scale(model, transform->scale);
-    model = glm::mat4_cast(transform->rotation) * model;
-    model = glm::translate(model, transform->position);
+    model = glm::scale(model, transform.scale);
+    model = glm::mat4_cast(transform.rotation) * model;
+    model = glm::translate(model, transform.position);
+    scene->SetTransform(node, transform);
 
     NodeIndex parent_node;
     while (node != scene->GetRootNode()) {
         parent_node = scene->GetParent(node).value();
+
         auto transform = scene->GetTransform(parent_node).value();
-        model = glm::scale(model, transform->scale);
-        model = glm::mat4_cast(transform->rotation) * model;
-        model = glm::translate(model, transform->position);
+        model = glm::scale(model, transform.scale);
+        model = glm::mat4_cast(transform.rotation) * model;
+        model = glm::translate(model, transform.position);
+        scene->SetTransform(parent_node, transform);
+
         node = parent_node;
     }
-
-    /*
-auto camera_nodes = scene->GetAttachedNodes<Camera>({0}).value();
-auto camera_node = *camera_nodes->begin();
-
-glm::mat4 camera_model = glm::mat4(1.0f);
-
-transform = scene->GetTransform(camera_node).value();
-camera_model = glm::scale(camera_model, transform->scale);
-camera_model = glm::mat4_cast(transform->rotation) * camera_model;
-camera_model = glm::translate(camera_model, transform->position);
-
-auto camera_parent_node = scene->GetParent(camera_node).value();
-while (camera_node != scene->GetRootNode()) {
-    auto camera_transform = scene->GetTransform(camera_parent_node).value();
-    camera_model = glm::scale(camera_model, camera_transform->scale);
-    camera_model =
-        glm::mat4_cast(camera_transform->rotation) * camera_model;
-    camera_model = glm::translate(camera_model, camera_transform->position);
-    camera_node = camera_parent_node;
-    camera_parent_node = scene->GetParent(camera_node).value();
-}
-    */
 
     // TODO check .end() - 1
     mesh->bounding_box = {

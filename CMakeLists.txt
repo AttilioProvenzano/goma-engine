@@ -22,6 +22,8 @@ set(PUBLIC_HEADERS
 	include/common/error_codes.hpp
 	include/common/include.hpp
 	include/common/vez.hpp
+	include/input/input.hpp
+	include/input/input_system.hpp
 	include/renderer/renderer.hpp
 	include/renderer/handles.hpp
 	include/renderer/backend.hpp
@@ -43,6 +45,7 @@ set(PUBLIC_HEADERS
 )
 set(SOURCES
 	src/engine.cpp
+	src/input/input_system.cpp
 	src/renderer/renderer.cpp
 	src/renderer/vez/vez_backend.cpp
 	src/scene/scene.cpp

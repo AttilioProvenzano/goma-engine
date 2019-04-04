@@ -12,10 +12,12 @@ class Win32Platform : public Platform {
   public:
     virtual ~Win32Platform() override;
 
-    virtual uint32_t GetWidth() override;
-    virtual uint32_t GetHeight() override;
+    virtual result<void> MainLoop(MainLoopFn inner_loop) override;
 
-    virtual InputState GetInputState() override;
+    virtual uint32_t GetWidth() const override;
+    virtual uint32_t GetHeight() const override;
+
+    virtual InputState GetInputState() const override;
 
     virtual result<void> InitWindow() override;
     virtual result<VkSurfaceKHR> CreateVulkanSurface(

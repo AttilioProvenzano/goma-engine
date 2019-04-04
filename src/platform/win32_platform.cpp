@@ -13,6 +13,25 @@ Win32Platform::~Win32Platform() {
     glfwTerminate();
 }
 
+result<void> Win32Platform::MainLoop(MainLoopFn inner_loop) {
+    if (!window_) {
+        InitWindow();
+    }
+
+    while (!glfwWindowShouldClose(window_)) {
+        glfwPollEvents();
+
+        if (inner_loop) {
+            auto should_terminate = inner_loop();
+            if (should_terminate) {
+                break;
+            }
+        };
+    }
+
+    return outcome::success();
+}
+
 result<void> Win32Platform::InitWindow() {
     if (!glfwInit()) {
         return Error::GlfwError;
@@ -46,23 +65,19 @@ result<VkSurfaceKHR> Win32Platform::CreateVulkanSurface(
     return surface;
 }
 
-uint32_t Win32Platform::GetWidth() {
+uint32_t Win32Platform::GetWidth() const {
     int width;
     glfwGetWindowSize(window_, &width, nullptr);
     return static_cast<uint32_t>(width);
 };
 
-uint32_t Win32Platform::GetHeight() {
+uint32_t Win32Platform::GetHeight() const {
     int height;
     glfwGetWindowSize(window_, nullptr, &height);
     return static_cast<uint32_t>(height);
 };
 
-InputState Win32Platform::GetInputState() {
-    // TODO move to a main loop with a lambda for the inner loop
-    // main loop will be platform-specific
-    glfwPollEvents();
-
+InputState Win32Platform::GetInputState() const {
     InputState state;
 
     static const std::unordered_map<int, KeyInput> glfw_to_key{

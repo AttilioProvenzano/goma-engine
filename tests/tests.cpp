@@ -473,8 +473,7 @@ TEST(RendererTest, RenderLantern) {
     Engine e;
     e.LoadScene("../../../assets/models/Lantern/glTF/Lantern.gltf");
 
-    // TODO stop on time instead of frame number
-    for (size_t i = 0; i < 1000; i++) {
+    for (size_t i = 0; i < 300; i++) {
         auto res = e.renderer()->Render();
         ASSERT_TRUE(res) << res.error().message();
         std::this_thread::sleep_for(std::chrono::milliseconds(8));
@@ -491,6 +490,19 @@ TEST(RendererTest, RenderSponza) {
         auto res = e.renderer()->Render();
         ASSERT_TRUE(res) << res.error().message();
     }
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
+TEST(EngineTest, RenderLantern) {
+    Engine e;
+    e.LoadScene("../../../assets/models/Lantern/glTF/Lantern.gltf");
+
+    auto res = e.MainLoop([&]() {
+        // Stop after 300 frames
+        return e.frame_count() > 300;
+    });
+    ASSERT_TRUE(res) << res.error().message();
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }

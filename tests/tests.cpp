@@ -507,6 +507,19 @@ TEST(EngineTest, RenderLantern) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
+TEST(EngineTest, RenderSponza) {
+    Engine e;
+    e.LoadScene("../../../assets/models/Sponza/glTF/Sponza.gltf");
+
+    auto res = e.MainLoop([&]() {
+        // Stop after 1000 frames
+        return e.frame_count() > 100000;
+    });
+    ASSERT_TRUE(res) << res.error().message();
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {

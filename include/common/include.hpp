@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/transform.hpp>
 
 #include <outcome.hpp>
 namespace outcome = OUTCOME_V2_NAMESPACE;

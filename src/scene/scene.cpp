@@ -154,11 +154,11 @@ result<void> Scene::ComputeCachedModel(NodeIndex id) {
         node_stack.pop();
 
         auto transform = GetTransform(id).value();
-        current_model = glm::scale(current_model, transform.scale);
-        current_model = glm::mat4_cast(transform.rotation) * current_model;
-        current_model = glm::translate(current_model, transform.position);
-        SetTransform(id, transform);
+        auto local_model = glm::translate(transform.position) *
+                           glm::mat4_cast(transform.rotation) *
+                           glm::scale(transform.scale);
 
+        current_model = current_model * local_model;
         SetCachedModel(id, current_model);
     }
 

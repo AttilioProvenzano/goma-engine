@@ -309,9 +309,11 @@ result<void> Renderer::Render() {
         }
     }
 
+    auto& camera = camera_res.value();
+
     // Get the camera node (TODO main camera index)
-    glm::mat4 view = glm::mat4(1.0f);
     auto camera_nodes = scene->GetAttachedNodes<Camera>({0});
+    glm::mat4 camera_transform = glm::mat4(1.0f);
 
     if (camera_nodes && camera_nodes.value()->size() > 0) {
         auto camera_node = *camera_nodes.value()->begin();
@@ -326,61 +328,67 @@ result<void> Renderer::Render() {
         };
 
         // TODO delta time!
-        float delta_time = 0.016f;
+        float delta_time = 0.16f;
 
         // https://stackoverflow.com/questions/9857398/quaternion-camera-how-do-i-make-it-rotate-correctly
         if (has_key(KeyInput::Up)) {
             transform.rotation =
                 transform.rotation *
-                glm::quat(glm::vec3(-1.0f * delta_time, 0.0f, 0.0f));
+                glm::quat(glm::cross(camera->look_at, camera->up) * delta_time);
         }
         if (has_key(KeyInput::Down)) {
             transform.rotation =
                 transform.rotation *
-                glm::quat(glm::vec3(1.0f * delta_time, 0.0f, 0.0f));
+                glm::quat(-glm::cross(camera->look_at, camera->up) *
+                          delta_time);
         }
         if (has_key(KeyInput::Left)) {
             transform.rotation =
-                glm::quat(glm::vec3(0.0f, 1.0f * delta_time, 0.0f)) *
-                transform.rotation;
+                glm::quat(camera->up * delta_time) * transform.rotation;
         }
         if (has_key(KeyInput::Right)) {
             transform.rotation =
-                glm::quat(glm::vec3(0.0f, -1.0f * delta_time, 0.0f)) *
-                transform.rotation;
+                glm::quat(-camera->up * delta_time) * transform.rotation;
         }
 
         if (has_key(KeyInput::W)) {
             transform.position +=
-                transform.rotation * glm::vec3(0.0f, 0.0f, -10.0f * delta_time);
+                transform.rotation * camera->look_at * delta_time;
         }
         if (has_key(KeyInput::S)) {
             transform.position +=
-                transform.rotation * glm::vec3(0.0f, 0.0f, 10.0f * delta_time);
+                transform.rotation * -camera->look_at * delta_time;
         }
         if (has_key(KeyInput::A)) {
-            transform.position +=
-                transform.rotation * glm::vec3(-10.0f * delta_time, 0.0f, 0.0f);
+            transform.position += transform.rotation *
+                                  -glm::cross(camera->look_at, camera->up) *
+                                  delta_time;
         }
         if (has_key(KeyInput::D)) {
-            transform.position +=
-                transform.rotation * glm::vec3(10.0f * delta_time, 0.0f, 0.0f);
+            transform.position += transform.rotation *
+                                  glm::cross(camera->look_at, camera->up) *
+                                  delta_time;
         }
         scene->SetTransform(camera_node, transform);
 
+        // TODO compute cached model returns the model
         scene->ComputeCachedModel(camera_node);
-        auto cached_model = scene->GetCachedModel(camera_node).value();
-        view = glm::inverse(cached_model);
+        camera_transform = scene->GetCachedModel(camera_node).value();
     }
 
     float aspect_ratio = float(engine_->platform()->GetWidth()) /
                          engine_->platform()->GetHeight();
-    auto& camera = camera_res.value();
     auto fovy = camera->h_fov / aspect_ratio;
 
-    view *= glm::lookAt(camera->position, camera->position + camera->look_at,
-                        camera->up);
-    glm::mat4 proj = glm::perspective(glm::radians(camera->h_fov), aspect_ratio,
+    // Compute position, look at and up vector in world space
+    glm::vec3 ws_pos = camera_transform * glm::vec4(camera->position, 1.0f);
+    glm::vec3 ws_look_at =
+        glm::normalize(camera_transform * glm::vec4(camera->look_at, 0.0f));
+    glm::vec3 ws_up =
+        glm::normalize(camera_transform * glm::vec4(camera->up, 0.0f));
+    glm::mat4 view = glm::lookAt(ws_pos, ws_pos + ws_look_at, ws_up);
+
+    glm::mat4 proj = glm::perspective(glm::radians(fovy), aspect_ratio,
                                       camera->near_plane, camera->far_plane);
     proj[1][1] *= -1;  // Vulkan-style projection
 

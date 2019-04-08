@@ -408,7 +408,7 @@ result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
         SetRenderPlan({});
     }
 
-    auto image_id = StartFrame().value();
+    auto frame_id = StartFrame().value();
 
     for (size_t i = 0; i < render_plan_->render_sequence.size(); i++) {
         auto& render_seq_entry = render_plan_->render_sequence[i];
@@ -430,11 +430,11 @@ result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
         }
 
         auto fb_result =
-            GetFramebuffer(image_id, fb_desc_result->first.c_str());
+            GetFramebuffer(frame_id, fb_desc_result->first.c_str());
 
         if (!fb_result) {
             auto fb_create_result =
-                CreateFramebuffer(image_id, fb_desc_result->first.c_str(),
+                CreateFramebuffer(frame_id, fb_desc_result->first.c_str(),
                                   fb_desc_result->second);
             StartRenderPass(fb_create_result.value(), rp_desc_result->second);
         } else {
@@ -443,10 +443,10 @@ result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
 
         if (i < render_pass_fns.size()) {
             render_pass_fns[i](rp_desc_result->second, fb_desc_result->second,
-                               image_id);
+                               frame_id);
         } else if (render_pass_fns.size() == 1) {
             render_pass_fns[0](rp_desc_result->second, fb_desc_result->second,
-                               image_id);
+                               frame_id);
         } else {
             spdlog::error("Skipping render pass \"{}\", no function provided.",
                           rp_desc_result->first);

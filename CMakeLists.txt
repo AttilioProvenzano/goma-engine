@@ -40,6 +40,9 @@ set(PUBLIC_HEADERS
 	include/scene/gen_index.hpp
 	include/scene/scene_loader.hpp
 	include/scene/loaders/assimp_loader.hpp
+	include/scripting/scripting_system.hpp
+	include/scripting/script.hpp
+	include/scripting/scripts/fly_camera.hpp
 	include/platform/platform.hpp
 	include/platform/win32_platform.hpp
 )

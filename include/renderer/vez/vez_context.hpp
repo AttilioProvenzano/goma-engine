@@ -63,7 +63,9 @@ struct VezContext {
         bool setup_command_buffer_active = false;
 
         VkSemaphore submission_semaphore = VK_NULL_HANDLE;
-        VkFence presentation_fence = VK_NULL_HANDLE;
+        VkSemaphore setup_semaphore = VK_NULL_HANDLE;
+        VkSemaphore presentation_semaphore = VK_NULL_HANDLE;
+        VkFence submission_fence = VK_NULL_HANDLE;
         VkFence setup_fence = VK_NULL_HANDLE;
     };
     std::vector<PerFrame> per_frame;

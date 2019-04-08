@@ -267,7 +267,6 @@ result<void> Renderer::Render() {
                     if (!texture->image || !texture->image->valid) {
                         // TODO compressed textures
                         if (!texture->compressed) {
-                            // TODO mipmaps (also samplers)
                             TextureDesc tex_desc{texture->width,
                                                  texture->height};
                             auto image_res = backend_->CreateTexture(
@@ -567,6 +566,7 @@ const char* Renderer::GetVertexShaderPreamble(
     if (result != vs_preamble_map_.end()) {
         return result->second.c_str();
     } else {
+        // TODO stringstream
         std::string preamble;
 
         if (desc.has_positions) {

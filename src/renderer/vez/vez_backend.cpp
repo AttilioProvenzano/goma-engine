@@ -755,17 +755,18 @@ result<size_t> VezBackend::StartFrame(uint32_t threads) {
 
     auto& per_frame = context_.per_frame[context_.current_frame];
     if (per_frame.setup_fence != VK_NULL_HANDLE) {
-        vezWaitForFences(context_.device, 1, &per_frame.setup_fence, VK_TRUE,
-                         UINT64_MAX);
+        VK_CHECK(vezWaitForFences(context_.device, 1, &per_frame.setup_fence,
+                                  VK_TRUE, ~0ULL));
         vezDestroyFence(context_.device, per_frame.setup_fence);
         per_frame.setup_fence = VK_NULL_HANDLE;
     }
+    per_frame.setup_semaphore = VK_NULL_HANDLE;
 
-    if (per_frame.presentation_fence != VK_NULL_HANDLE) {
-        vezWaitForFences(context_.device, 1, &per_frame.presentation_fence,
-                         VK_TRUE, UINT64_MAX);
-        vezDestroyFence(context_.device, per_frame.presentation_fence);
-        per_frame.presentation_fence = VK_NULL_HANDLE;
+    if (per_frame.submission_fence != VK_NULL_HANDLE) {
+        VK_CHECK(vezWaitForFences(context_.device, 1,
+                                  &per_frame.submission_fence, VK_TRUE, ~0ULL));
+        vezDestroyFence(context_.device, per_frame.submission_fence);
+        per_frame.submission_fence = VK_NULL_HANDLE;
     }
 
     auto command_buffer_count = per_frame.command_buffers.size();
@@ -867,8 +868,26 @@ result<void> VezBackend::FinishFrame() {
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = &per_frame.submission_semaphore;
 
+    std::vector<VkSemaphore> wait_semaphores;
+    std::vector<VkPipelineStageFlags> wait_dst;
+
+    if (per_frame.setup_semaphore != VK_NULL_HANDLE) {
+        wait_semaphores.push_back(per_frame.setup_semaphore);
+        wait_dst.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+    }
+
+    if (per_frame.presentation_semaphore != VK_NULL_HANDLE) {
+        wait_semaphores.push_back(per_frame.presentation_semaphore);
+        wait_dst.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+    }
+
+    submit_info.waitSemaphoreCount =
+        static_cast<uint32_t>(wait_semaphores.size());
+    submit_info.pWaitSemaphores = wait_semaphores.data();
+    submit_info.pWaitDstStageMask = wait_dst.data();
+
     VK_CHECK(vezQueueSubmit(graphics_queue, 1, &submit_info,
-                            &per_frame.presentation_fence));
+                            &per_frame.submission_fence));
     return outcome::success();
 }
 
@@ -886,11 +905,14 @@ result<void> VezBackend::PresentImage(const char* present_image_name) {
     vezGetDeviceGraphicsQueue(device, 0, &graphics_queue);
 
     auto& per_frame = context_.per_frame[context_.current_frame];
+    per_frame.presentation_semaphore = VK_NULL_HANDLE;
 
     VezPresentInfo present_info = {};
     present_info.waitSemaphoreCount = 1;
     present_info.pWaitSemaphores = &per_frame.submission_semaphore;
     present_info.pWaitDstStageMask = &wait_dst;
+    present_info.signalSemaphoreCount = 1;
+    present_info.pSignalSemaphores = &per_frame.presentation_semaphore;
     present_info.swapchainCount = 1;
     present_info.pSwapchains = &context_.swapchain;
     present_info.pImages = &present_image;
@@ -993,6 +1015,7 @@ result<VkInstance> VezBackend::CreateInstance() {
     appInfo.pEngineName = "Goma Engine";
     appInfo.engineVersion = VK_MAKE_VERSION(0, 0, 1);
 
+    // TODO layer names based on macros for names
     std::vector<const char*> enabled_layers = {
         "VK_LAYER_LUNARG_standard_validation", "VK_LAYER_LUNARG_monitor"};
 
@@ -1061,6 +1084,7 @@ result<VkDebugReportCallbackEXT> VezBackend::CreateDebugCallback(
     debug_callback_info.sType =
         VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
     debug_callback_info.flags =
+        // TODO configurable
         // VK_DEBUG_REPORT_DEBUG_BIT_EXT |
         // VK_DEBUG_REPORT_INFORMATION_BIT_EXT |
         VK_DEBUG_REPORT_WARNING_BIT_EXT |
@@ -1559,6 +1583,8 @@ result<void> VezBackend::GetActiveCommandBuffer(uint32_t thread) {
         VezSubmitInfo submit_info = {};
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &per_frame.setup_command_buffer;
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = &per_frame.setup_semaphore;
 
         VkQueue graphics_queue = VK_NULL_HANDLE;
         vezGetDeviceGraphicsQueue(context_.device, 0, &graphics_queue);

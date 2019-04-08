@@ -284,31 +284,7 @@ result<void> Renderer::Render() {
     });
 
     // Get the VP matrix
-    auto camera_res = scene->GetAttachment<Camera>({0});  // TODO main camera
-    if (!camera_res) {
-        // TODO potentially remove the camera aspect ratio
-        Camera camera = {};
-        camera.aspect_ratio = float(engine_->platform()->GetWidth()) /
-                              engine_->platform()->GetHeight();
-
-        auto new_camera_res =
-            scene->CreateAttachment<Camera>(std::move(camera));
-        if (!new_camera_res) {
-            return Error::NoMainCamera;
-        }
-
-        auto new_camera_id = new_camera_res.value();
-        // Create a node for the new camera
-        auto camera_node = scene->CreateNode(scene->GetRootNode()).value();
-        scene->Attach<Camera>(new_camera_id, camera_node);
-
-        camera_res = scene->GetAttachment<Camera>(new_camera_id);
-        if (!camera_res) {
-            return Error::NoMainCamera;
-        }
-    }
-
-    auto& camera = camera_res.value();
+    OUTCOME_TRY(camera, scene->GetAttachment<Camera>(engine_->main_camera()));
 
     // Get the camera node (TODO main camera index)
     auto camera_nodes = scene->GetAttachedNodes<Camera>({0});
@@ -316,60 +292,6 @@ result<void> Renderer::Render() {
 
     if (camera_nodes && camera_nodes.value()->size() > 0) {
         auto camera_node = *camera_nodes.value()->begin();
-
-        // Update transform based on input
-        auto transform = scene->GetTransform(camera_node).value();
-        auto input_state = engine_->input_system()->GetFrameInput();
-        const auto& keypresses = input_state.keypresses;
-
-        auto has_key = [&keypresses](KeyInput key) {
-            return keypresses.find(key) != keypresses.end();
-        };
-
-        // TODO delta time!
-        float delta_time = 0.16f;
-
-        // https://stackoverflow.com/questions/9857398/quaternion-camera-how-do-i-make-it-rotate-correctly
-        if (has_key(KeyInput::Up)) {
-            transform.rotation =
-                transform.rotation *
-                glm::quat(glm::cross(camera->look_at, camera->up) * delta_time);
-        }
-        if (has_key(KeyInput::Down)) {
-            transform.rotation =
-                transform.rotation *
-                glm::quat(-glm::cross(camera->look_at, camera->up) *
-                          delta_time);
-        }
-        if (has_key(KeyInput::Left)) {
-            transform.rotation =
-                glm::quat(camera->up * delta_time) * transform.rotation;
-        }
-        if (has_key(KeyInput::Right)) {
-            transform.rotation =
-                glm::quat(-camera->up * delta_time) * transform.rotation;
-        }
-
-        if (has_key(KeyInput::W)) {
-            transform.position +=
-                transform.rotation * camera->look_at * delta_time;
-        }
-        if (has_key(KeyInput::S)) {
-            transform.position +=
-                transform.rotation * -camera->look_at * delta_time;
-        }
-        if (has_key(KeyInput::A)) {
-            transform.position += transform.rotation *
-                                  -glm::cross(camera->look_at, camera->up) *
-                                  delta_time;
-        }
-        if (has_key(KeyInput::D)) {
-            transform.position += transform.rotation *
-                                  glm::cross(camera->look_at, camera->up) *
-                                  delta_time;
-        }
-        scene->SetTransform(camera_node, transform);
-
         // TODO compute cached model returns the model
         scene->ComputeCachedModel(camera_node);
         camera_transform = scene->GetCachedModel(camera_node).value();

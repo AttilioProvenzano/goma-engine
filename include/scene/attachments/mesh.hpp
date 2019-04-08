@@ -9,11 +9,6 @@ namespace goma {
 
 struct Material;
 
-struct Box {
-    glm::vec3 min = glm::vec3(0.0f);
-    glm::vec3 max = glm::vec3(0.0f);
-};
-
 struct MeshBuffers {
     std::shared_ptr<Buffer> vertex;
     std::shared_ptr<Buffer> normal;
@@ -45,7 +40,7 @@ struct Mesh {
     AttachmentIndex<Material> material = {};
 
     std::shared_ptr<VertexInputFormat> vertex_input_format;
-    Box bounding_box = {};
+    std::unique_ptr<Box> bounding_box = {};
     MeshBuffers buffers = {};
 };
 

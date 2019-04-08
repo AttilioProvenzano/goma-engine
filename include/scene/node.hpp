@@ -33,7 +33,7 @@ struct Node {
     Transform transform = Transform();
 
     std::set<NodeIndex> children = {};
-    std::unique_ptr<glm::mat4> cached_model;
+    std::unique_ptr<glm::mat4> cached_model = {};
 
     Node(NodeIndex id_, NodeIndex parent_,
          const Transform& transform_ = Transform())

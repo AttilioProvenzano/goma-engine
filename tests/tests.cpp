@@ -359,7 +359,7 @@ void main() {
     }
 
     // TODO check .end() - 1
-    mesh->bounding_box = {
+    Box bounding_box = {
         {std::min_element(
              mesh->vertices.begin(), mesh->vertices.end(),
              [](const auto& v1, const auto& v2) { return (v1.x < v2.x); })
@@ -372,23 +372,22 @@ void main() {
              mesh->vertices.begin(), mesh->vertices.end(),
              [](const auto& v1, const auto& v2) { return (v1.z < v2.z); })
              ->z},
-        {
-            std::max_element(
-                mesh->vertices.begin(), mesh->vertices.end(),
-                [](const auto& v1, const auto& v2) { return (v1.x < v2.x); })
-                ->x,
-            std::max_element(
-                mesh->vertices.begin(), mesh->vertices.end(),
-                [](const auto& v1, const auto& v2) { return (v1.y < v2.y); })
-                ->y,
-            std::max_element(
-                mesh->vertices.begin(), mesh->vertices.end(),
-                [](const auto& v1, const auto& v2) { return (v1.z < v2.z); })
-                ->z,
-        }};
+        {std::max_element(
+             mesh->vertices.begin(), mesh->vertices.end(),
+             [](const auto& v1, const auto& v2) { return (v1.x < v2.x); })
+             ->x,
+         std::max_element(
+             mesh->vertices.begin(), mesh->vertices.end(),
+             [](const auto& v1, const auto& v2) { return (v1.y < v2.y); })
+             ->y,
+         std::max_element(
+             mesh->vertices.begin(), mesh->vertices.end(),
+             [](const auto& v1, const auto& v2) { return (v1.z < v2.z); })
+             ->z}};
+    mesh->bounding_box = std::make_unique<Box>(std::move(bounding_box));
 
-    Box transformed_bbox = {model * glm::vec4(mesh->bounding_box.min, 1.0f),
-                            model * glm::vec4(mesh->bounding_box.max, 1.0f)};
+    Box transformed_bbox = {model * glm::vec4(mesh->bounding_box->min, 1.0f),
+                            model * glm::vec4(mesh->bounding_box->max, 1.0f)};
 
     auto camera = scene->GetAttachment<Camera>({0}).value();
 

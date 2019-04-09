@@ -33,6 +33,8 @@ class Backend {
         : engine_(engine), config_(config) {}
     virtual ~Backend() = default;
 
+    virtual const RenderPlan& render_plan() { return *render_plan_.get(); }
+
     const Config& config() { return config_; }
     virtual result<void> SetBuffering(Buffering buffering) {
         return Error::ConfigNotSupported;

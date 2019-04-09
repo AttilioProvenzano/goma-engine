@@ -317,6 +317,19 @@ result<void> Renderer::Render() {
 
     RenderPassFn forward_pass = [&](RenderPassDesc rp, FramebufferDesc fb,
                                     FrameIndex frame_id) {
+        // TODO pass color images here
+        uint32_t sample_count = 1;
+        auto image =
+            backend_->render_plan().color_images.find(fb.color_images[0]);
+        if (image != backend_->render_plan().color_images.end()) {
+            sample_count = image->second.samples;
+        }
+
+        backend_->BindDepthStencilState(DepthStencilState{});
+        backend_->BindRasterizationState(RasterizationState{});
+        backend_->BindMultisampleState(
+            MultisampleState{sample_count, sample_count > 1});
+
         // Render meshes
         scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
             auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
@@ -460,9 +473,6 @@ void main() {
                 glm::mat4 mvp = vp * scene->GetCachedModel(mesh_node).value();
                 backend_->BindVertexUniforms({std::move(mvp)});
             }
-
-            backend_->BindDepthStencilState(DepthStencilState{});
-            backend_->BindRasterizationState(RasterizationState{});
 
             if (!mesh.indices.empty()) {
                 backend_->BindIndexBuffer(*mesh.buffers.index);

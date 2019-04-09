@@ -1017,7 +1017,7 @@ result<VkInstance> VezBackend::CreateInstance() {
 
     // TODO layer names based on macros for names
     std::vector<const char*> enabled_layers = {
-        /* "VK_LAYER_LUNARG_standard_validation", */ "VK_LAYER_LUNARG_monitor"};
+        "VK_LAYER_LUNARG_standard_validation", "VK_LAYER_LUNARG_monitor"};
 
     uint32_t instance_layer_count;
     vezEnumerateInstanceLayerProperties(&instance_layer_count, nullptr);
@@ -1110,6 +1110,10 @@ result<VezBackend::PhysicalDevice> VezBackend::CreatePhysicalDevice(
     PhysicalDevice p = {physical_devices[0]};
     vezGetPhysicalDeviceProperties(p.physical_device, &p.properties);
     vezGetPhysicalDeviceFeatures(p.physical_device, &p.features);
+
+    spdlog::info("Physical device: {}, driver version: {}",
+                 p.properties.deviceName, p.properties.driverVersion);
+
     return p;
 }
 

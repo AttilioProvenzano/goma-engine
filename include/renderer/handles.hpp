@@ -106,11 +106,11 @@ struct SamplerDesc {
     FilterType mipmap_mode = FilterType::Linear;
 
     float min_lod = 0.0f;
-    float max_lod = 1.0f;
+    float max_lod = std::numeric_limits<float>::max();
     float lod_bias = 0.0f;
 
     TextureWrappingMode addressing_mode = TextureWrappingMode::Repeat;
-    float anisotropy = 0.0f;
+    float anisotropy = 16.0f;
 };
 
 struct TextureDesc {

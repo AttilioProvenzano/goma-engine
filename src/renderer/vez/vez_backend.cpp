@@ -1393,7 +1393,7 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
     image_info.arrayLayers = 1;
     image_info.mipLevels = 1;
     image_info.format = format;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.samples = static_cast<VkSampleCountFlagBits>(image_desc.samples);
     image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
     image_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
                        VK_IMAGE_USAGE_SAMPLED_BIT;

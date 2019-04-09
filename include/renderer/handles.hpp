@@ -127,8 +127,8 @@ struct TextureDesc {
 
 struct FramebufferColorImageDesc {
     std::string name = "color";
+    uint32_t samples = 4;
     Format format = Format::SwapchainFormat;
-    uint32_t samples = 1;
 
     SamplerDesc sampler = {};
 };
@@ -138,6 +138,7 @@ enum class DepthImageType { Depth, DepthStencil };
 struct FramebufferDepthImageDesc {
     std::string name = "depth";
     DepthImageType depth_type = DepthImageType::DepthStencil;
+    uint32_t samples = 4;
 };
 
 enum class FramebufferSize { Absolute, RelativeToSwapchain };

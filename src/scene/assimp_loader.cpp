@@ -46,11 +46,36 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
             aiMesh *ai_mesh = ai_scene->mMeshes[i];
             Mesh mesh{ai_mesh->mName.C_Str()};
 
+            Box bounding_box;
+            mesh.vertices.reserve(ai_mesh->mNumVertices);
             for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
                 const auto &pos = ai_mesh->mVertices[j];
                 mesh.vertices.push_back({pos.x, pos.y, pos.z});
-            }
 
+                if (pos.x < bounding_box.min.x) {
+                    bounding_box.min.x = pos.x;
+                }
+                if (pos.x > bounding_box.max.x) {
+                    bounding_box.max.x = pos.x;
+                }
+
+                if (pos.y < bounding_box.min.y) {
+                    bounding_box.min.y = pos.y;
+                }
+                if (pos.y > bounding_box.max.y) {
+                    bounding_box.max.y = pos.y;
+                }
+
+                if (pos.z < bounding_box.min.z) {
+                    bounding_box.min.z = pos.z;
+                }
+                if (pos.z > bounding_box.max.z) {
+                    bounding_box.max.z = pos.z;
+                }
+            }
+            mesh.bounding_box = std::make_unique<Box>(std::move(bounding_box));
+
+            mesh.normals.reserve(ai_mesh->mNumVertices);
             if (ai_mesh->HasNormals()) {
                 for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
                     const auto &nor = ai_mesh->mNormals[j];
@@ -58,6 +83,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 }
             }
 
+            mesh.tangents.reserve(ai_mesh->mNumVertices);
+            mesh.bitangents.reserve(ai_mesh->mNumVertices);
             if (ai_mesh->HasTangentsAndBitangents()) {
                 for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
                     const auto &tan = ai_mesh->mTangents[j];
@@ -67,6 +94,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 }
             }
 
+            mesh.indices.reserve(ai_mesh->mNumFaces);
             if (ai_mesh->HasFaces()) {
                 for (size_t j = 0; j < ai_mesh->mNumFaces; j++) {
                     const auto &tri = ai_mesh->mFaces[j];
@@ -76,6 +104,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 }
             }
 
+            mesh.colors.reserve(ai_mesh->mNumFaces);
             if (ai_mesh->HasVertexColors(0)) {
                 auto color_set = ai_mesh->mColors[0];
                 for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
@@ -89,6 +118,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 if (ai_mesh->mNumUVComponents[j] == 2) {
                     auto ai_uv_set = ai_mesh->mTextureCoords[j];
                     std::vector<glm::vec2> uv_set;
+                    uv_set.reserve(ai_mesh->mNumVertices);
 
                     for (size_t k = 0; k < ai_mesh->mNumVertices; k++) {
                         const auto &uv = ai_uv_set[k];
@@ -101,6 +131,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 if (ai_mesh->mNumUVComponents[j] == 3) {
                     auto ai_uvw_set = ai_mesh->mTextureCoords[j];
                     std::vector<glm::vec3> uvw_set;
+                    uvw_set.reserve(ai_mesh->mNumVertices);
 
                     for (size_t k = 0; k < ai_mesh->mNumVertices; k++) {
                         const auto &uvw = ai_uvw_set[k];

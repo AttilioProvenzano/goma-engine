@@ -1319,8 +1319,8 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
 
     uint32_t width, height;
     if (fb_desc.framebuffer_size == FramebufferSize::RelativeToSwapchain) {
-        // TODO Ensure we have the latest surface size (e.g. when recreating the
-        // swapchain)
+        // TODO Ensure we have the latest surface size (e.g. when recreating
+        // the swapchain)
         width = static_cast<uint32_t>(
             round(fb_desc.width * context_.capabilities.currentExtent.width));
         height = static_cast<uint32_t>(
@@ -1375,8 +1375,8 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
 
     uint32_t width, height;
     if (fb_desc.framebuffer_size == FramebufferSize::RelativeToSwapchain) {
-        // TODO Ensure we have the latest surface size (e.g. when recreating the
-        // swapchain)
+        // TODO Ensure we have the latest surface size (e.g. when recreating
+        // the swapchain)
         width = static_cast<uint32_t>(
             round(fb_desc.width * context_.capabilities.currentExtent.width));
         height = static_cast<uint32_t>(

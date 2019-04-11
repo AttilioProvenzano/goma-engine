@@ -29,9 +29,6 @@ result<void> Renderer::Render() {
         return Error::NoSceneLoaded;
     }
 
-    // TODO culling
-    // TODO ordering
-
     // Ensure that all meshes have their own buffers
     scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
         // Create vertex buffer
@@ -314,6 +311,56 @@ result<void> Renderer::Render() {
     proj[1][1] *= -1;  // Vulkan-style projection
 
     glm::mat4 vp = proj * view;
+
+    struct RenderSequenceElement {
+        AttachmentIndex<Mesh> mesh;
+        NodeIndex node;
+        glm::vec3 cs_center;
+    };
+    std::vector<RenderSequenceElement> render_sequence;
+    render_sequence.reserve(scene->GetAttachmentCount<Mesh>());
+
+    // Frustum culling
+    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+        auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
+        if (!nodes_result || !nodes_result.value()) {
+            return;
+        }
+
+        for (auto& mesh_node : *nodes_result.value()) {
+            glm::mat4 mvp = vp * scene->GetCachedModel(mesh_node).value();
+
+            glm::vec3 bbox_center =
+                (mesh.bounding_box->min + mesh.bounding_box->max) * 0.5f;
+            glm::vec4 cs_center = mvp * glm::vec4(bbox_center, 1.0f);
+            cs_center /= cs_center.w;
+
+            glm::vec4 cs_1 = mvp * glm::vec4(mesh.bounding_box->min, 1.0f);
+            cs_1 /= cs_1.w;
+
+            glm::vec4 cs_2 = mvp * glm::vec4(mesh.bounding_box->max, 1.0f);
+            cs_2 /= cs_2.w;
+
+            auto visible = [](glm::vec3 v1, glm::vec3 v2) {
+                // Compress the bounding box to the frustum
+                v1.x = std::max(-1.0f, std::min(v1.x, 1.0f));
+                v1.y = std::max(-1.0f, std::min(v1.y, 1.0f));
+                v1.z = std::max(0.0f, std::min(v1.z, 1.0f));
+                v2.x = std::max(-1.0f, std::min(v2.x, 1.0f));
+                v2.y = std::max(-1.0f, std::min(v2.y, 1.0f));
+                v2.z = std::max(0.0f, std::min(v2.z, 1.0f));
+
+                // Check that none of the dimensions is compressed to zero
+                return v1.x != v2.x && v1.y != v2.y && v1.z != v2.z;
+            };
+
+            if (visible(std::move(cs_1), std::move(cs_2))) {
+                render_sequence.push_back({id, mesh_node, cs_center});
+            }
+        }
+    });
+
+    // TODO ordering
 
     RenderPassFn forward_pass = [&](RenderPassDesc rp, FramebufferDesc fb,
                                     FrameIndex frame_id) {

@@ -499,7 +499,7 @@ TEST(EngineTest, RenderLantern) {
 
     auto res = e.MainLoop([&]() {
         // Stop after 300 frames
-        return e.frame_count() > 300;
+        return e.frame_count() > 1000000;
     });
     ASSERT_TRUE(res) << res.error().message();
 

@@ -378,20 +378,33 @@ result<void> Renderer::Render() {
             MultisampleState{sample_count, sample_count > 1});
 
         // Render meshes
-        scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
-            auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
-            if (!nodes_result || !nodes_result.value()) {
-                return;
-            }
+        AttachmentIndex<Mesh> last_mesh_id{0, 0};
+        Mesh* mesh{nullptr};
+        for (const auto& seq_entry : render_sequence) {
+            auto mesh_id = seq_entry.mesh;
+            auto node_id = seq_entry.node;
 
-            auto material_result =
-                scene->GetAttachment<Material>(mesh.material);
-            if (!material_result) {
-                return;
-            }
-            auto& material = *material_result.value();
+            if (mesh_id != last_mesh_id) {
+                auto mesh_res = scene->GetAttachment<Mesh>(mesh_id);
+                if (!mesh_res) {
+                    spdlog::error("Couldn't find mesh {}.", mesh_id);
+                    continue;
+                }
 
-            static const char* vert = R"(
+                mesh = mesh_res.value();
+                last_mesh_id = mesh_id;
+
+                // Bind the new mesh
+                auto material_result =
+                    scene->GetAttachment<Material>(mesh->material);
+                if (!material_result) {
+                    spdlog::error("Couldn't find material for mesh {}.",
+                                  mesh->name);
+                    continue;
+                }
+                auto& material = *material_result.value();
+
+                static const char* vert = R"(
 #version 450
 
 #ifdef HAS_POSITIONS
@@ -438,7 +451,7 @@ void main() {
 }
 )";
 
-            static const char* frag = R"(
+                static const char* frag = R"(
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
@@ -502,33 +515,39 @@ void main() {
 }
 )";
 
-            auto pipeline_res = backend_->GetGraphicsPipeline(
-                {vert, ShaderSourceType::Source, GetVertexShaderPreamble(mesh)},
-                {frag, ShaderSourceType::Source,
-                 GetFragmentShaderPreamble(material)});
-            if (!pipeline_res) {
-                return;
+                auto pipeline_res = backend_->GetGraphicsPipeline(
+                    {vert, ShaderSourceType::Source,
+                     GetVertexShaderPreamble(*mesh)},
+                    {frag, ShaderSourceType::Source,
+                     GetFragmentShaderPreamble(material)});
+                if (!pipeline_res) {
+                    spdlog::error("Couldn't get pipeline for material {}.",
+                                  material.name);
+                    continue;
+                }
+
+                backend_->BindGraphicsPipeline(*pipeline_res.value());
+
+                backend_->BindVertexInputFormat(*mesh->vertex_input_format);
+                BindMeshBuffers(*mesh);
+                BindMaterialTextures(material);
+
+                if (!mesh->indices.empty()) {
+                    backend_->BindIndexBuffer(*mesh->buffers.index);
+                }
             }
 
-            backend_->BindGraphicsPipeline(*pipeline_res.value());
+            // Draw the mesh node
+            glm::mat4 mvp = vp * scene->GetCachedModel(node_id).value();
+            backend_->BindVertexUniforms({std::move(mvp)});
 
-            backend_->BindVertexInputFormat(*mesh.vertex_input_format);
-            BindMeshBuffers(mesh);
-            BindMaterialTextures(material);
-
-            for (auto& mesh_node : *nodes_result.value()) {
-                glm::mat4 mvp = vp * scene->GetCachedModel(mesh_node).value();
-                backend_->BindVertexUniforms({std::move(mvp)});
-            }
-
-            if (!mesh.indices.empty()) {
-                backend_->BindIndexBuffer(*mesh.buffers.index);
+            if (!mesh->indices.empty()) {
                 backend_->DrawIndexed(
-                    static_cast<uint32_t>(mesh.indices.size()));
+                    static_cast<uint32_t>(mesh->indices.size()));
             } else {
-                backend_->Draw(static_cast<uint32_t>(mesh.vertices.size()));
+                backend_->Draw(static_cast<uint32_t>(mesh->vertices.size()));
             }
-        });
+        }
 
         return outcome::success();
     };

@@ -63,6 +63,8 @@ class Renderer {
 
     result<void> BindMeshBuffers(const Mesh& mesh);
     result<void> BindMaterialTextures(const Material& material);
+
+    std::unique_ptr<glm::mat4> vp_hold;
 };
 
 }  // namespace goma

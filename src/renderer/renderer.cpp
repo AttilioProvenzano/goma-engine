@@ -312,6 +312,13 @@ result<void> Renderer::Render() {
 
     glm::mat4 vp = proj * view;
 
+    const auto keypresses = engine_->input_system()->GetFrameInput().keypresses;
+    if (keypresses.find(KeyInput::H) != keypresses.end()) {
+        vp_hold = std::make_unique<glm::mat4>(vp);
+    } else if (keypresses.find(KeyInput::R) != keypresses.end()) {
+        vp_hold = {};
+    }
+
     struct RenderSequenceElement {
         AttachmentIndex<Mesh> mesh;
         NodeIndex node;
@@ -322,39 +329,59 @@ result<void> Renderer::Render() {
 
     // Frustum culling
     scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+        auto& culling_vp = vp_hold ? *vp_hold : vp;
+
         auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
         if (!nodes_result || !nodes_result.value()) {
             return;
         }
 
+        std::vector<glm::vec4> cs_vertices(8);
         for (auto& mesh_node : *nodes_result.value()) {
-            glm::mat4 mvp = vp * scene->GetCachedModel(mesh_node).value();
+            glm::mat4 mvp =
+                culling_vp * scene->GetCachedModel(mesh_node).value();
 
-            glm::vec3 bbox_center =
-                (mesh.bounding_box->min + mesh.bounding_box->max) * 0.5f;
-            glm::vec4 cs_center = mvp * glm::vec4(bbox_center, 1.0f);
-            cs_center /= cs_center.w;
+            cs_vertices[0] = mvp * glm::vec4(mesh.bounding_box->min, 1.0f);
+            cs_vertices[1] = mvp * glm::vec4(mesh.bounding_box->max, 1.0f);
+            cs_vertices[2] = mvp * glm::vec4(mesh.bounding_box->min.x,
+                                             mesh.bounding_box->min.y,
+                                             mesh.bounding_box->max.z, 1.0f);
+            cs_vertices[3] = mvp * glm::vec4(mesh.bounding_box->min.x,
+                                             mesh.bounding_box->max.y,
+                                             mesh.bounding_box->max.z, 1.0f);
+            cs_vertices[4] = mvp * glm::vec4(mesh.bounding_box->min.x,
+                                             mesh.bounding_box->max.y,
+                                             mesh.bounding_box->min.z, 1.0f);
+            cs_vertices[5] = mvp * glm::vec4(mesh.bounding_box->max.x,
+                                             mesh.bounding_box->max.y,
+                                             mesh.bounding_box->min.z, 1.0f);
+            cs_vertices[6] = mvp * glm::vec4(mesh.bounding_box->max.x,
+                                             mesh.bounding_box->min.y,
+                                             mesh.bounding_box->min.z, 1.0f);
+            cs_vertices[7] = mvp * glm::vec4(mesh.bounding_box->max.x,
+                                             mesh.bounding_box->min.y,
+                                             mesh.bounding_box->max.z, 1.0f);
 
-            glm::vec4 cs_1 = mvp * glm::vec4(mesh.bounding_box->min, 1.0f);
-            cs_1 /= cs_1.w;
+            bool culled =
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.x <= -v.w; }) ||
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.x >= v.w; }) ||
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.y <= -v.w; }) ||
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.y >= v.w; }) ||
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.z <= 0; }) ||
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.z >= v.w; });
 
-            glm::vec4 cs_2 = mvp * glm::vec4(mesh.bounding_box->max, 1.0f);
-            cs_2 /= cs_2.w;
+            if (!culled) {
+                glm::vec3 bbox_center =
+                    (mesh.bounding_box->min + mesh.bounding_box->max) * 0.5f;
+                glm::vec4 cs_center = mvp * glm::vec4(bbox_center, 1.0f);
+                cs_center /= cs_center.w;
 
-            auto visible = [](glm::vec3 v1, glm::vec3 v2) {
-                // Compress the bounding box to the frustum
-                v1.x = std::max(-1.0f, std::min(v1.x, 1.0f));
-                v1.y = std::max(-1.0f, std::min(v1.y, 1.0f));
-                v1.z = std::max(0.0f, std::min(v1.z, 1.0f));
-                v2.x = std::max(-1.0f, std::min(v2.x, 1.0f));
-                v2.y = std::max(-1.0f, std::min(v2.y, 1.0f));
-                v2.z = std::max(0.0f, std::min(v2.z, 1.0f));
-
-                // Check that none of the dimensions is compressed to zero
-                return v1.x != v2.x && v1.y != v2.y && v1.z != v2.z;
-            };
-
-            if (visible(std::move(cs_1), std::move(cs_2))) {
                 render_sequence.push_back({id, mesh_node, cs_center});
             }
         }

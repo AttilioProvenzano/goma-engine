@@ -16,6 +16,7 @@
 namespace outcome = OUTCOME_V2_NAMESPACE;
 using outcome::result;
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <limits>

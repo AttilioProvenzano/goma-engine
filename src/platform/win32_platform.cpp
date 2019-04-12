@@ -85,6 +85,7 @@ InputState Win32Platform::GetInputState() const {
         {GLFW_KEY_LEFT, KeyInput::Left}, {GLFW_KEY_RIGHT, KeyInput::Right},
         {GLFW_KEY_W, KeyInput::W},       {GLFW_KEY_A, KeyInput::A},
         {GLFW_KEY_S, KeyInput::S},       {GLFW_KEY_D, KeyInput::D},
+        {GLFW_KEY_H, KeyInput::H},       {GLFW_KEY_R, KeyInput::R},
     };
 
     for (const auto& entry : glfw_to_key) {

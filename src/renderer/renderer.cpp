@@ -580,6 +580,54 @@ void main() {
             }
         }
 
+        // Draw skybox
+
+        static const char* skybox_vert = R"(
+#version 450
+
+layout(push_constant) uniform PC {
+	mat4 mvp;
+} pc;
+
+vec2 triangle_positions[3] = vec2[](
+    vec2(-1.0, -1.0),
+    vec2(-1.0,  3.0),
+    vec2( 3.0, -1.0)
+);
+
+void main() {
+    gl_Position = vec4(triangle_positions[gl_VertexIndex], 1.0, 1.0);
+}
+)";
+
+        static const char* skybox_frag = R"(
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = vec4(0.1, 0.1, 0.4, 1.0);
+}
+)";
+
+        auto pipeline_res = backend_->GetGraphicsPipeline(
+            {skybox_vert, ShaderSourceType::Source},
+            {skybox_frag, ShaderSourceType::Source});
+        if (!pipeline_res) {
+            spdlog::error("Couldn't get pipeline for skybox.");
+        }
+
+        auto skybox_vtx_res = backend_->GetVertexInputFormat({});
+        if (!skybox_vtx_res) {
+            spdlog::error("Couldn't get vertex input format for skybox.");
+        }
+
+        backend_->BindGraphicsPipeline(*pipeline_res.value());
+        backend_->BindVertexInputFormat(*skybox_vtx_res.value());
+        backend_->BindDepthStencilState({true, false, CompareOp::Equal});
+        backend_->Draw(3);
+
         return outcome::success();
     };
 

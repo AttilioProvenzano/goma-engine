@@ -387,7 +387,11 @@ result<void> Renderer::Render() {
         }
     });
 
-    // TODO ordering
+    // Sorting
+    std::sort(render_sequence.begin(), render_sequence.end(),
+              [](const auto& a, const auto& b) {
+                  return a.cs_center.z < b.cs_center.z;
+              });
 
     RenderPassFn forward_pass = [&](RenderPassDesc rp, FramebufferDesc fb,
                                     FrameIndex frame_id) {

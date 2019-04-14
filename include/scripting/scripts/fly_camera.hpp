@@ -38,16 +38,28 @@ class FlyCamera : public Script {
 
             // https://stackoverflow.com/questions/9857398/quaternion-camera-how-do-i-make-it-rotate-correctly
             if (has_key(KeyInput::Up)) {
-                transform.rotation =
-                    transform.rotation *
-                    glm::quat(glm::cross(camera->look_at, camera->up) *
-                              delta_time);
+                auto right = glm::cross(camera->look_at, camera->up);
+                auto new_rotation =
+                    transform.rotation * glm::quat(right * delta_time);
+
+                // Limit camera pitch to +-85 degrees
+                auto look_at = new_rotation * camera->look_at;
+                if (glm::dot(look_at, camera->up) <
+                    glm::sin(glm::radians(85.0f))) {
+                    transform.rotation = new_rotation;
+                }
             }
             if (has_key(KeyInput::Down)) {
-                transform.rotation =
-                    transform.rotation *
-                    glm::quat(-glm::cross(camera->look_at, camera->up) *
-                              delta_time);
+                auto right = glm::cross(camera->look_at, camera->up);
+                auto new_rotation =
+                    transform.rotation * glm::quat(-right * delta_time);
+
+                // Limit camera pitch to +-85 degrees
+                auto look_at = new_rotation * camera->look_at;
+                if (glm::dot(look_at, camera->up) >
+                    glm::sin(glm::radians(-85.0f))) {
+                    transform.rotation = new_rotation;
+                }
             }
             if (has_key(KeyInput::Left)) {
                 transform.rotation =

@@ -18,6 +18,7 @@ using outcome::result;
 
 #include <algorithm>
 #include <array>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <map>

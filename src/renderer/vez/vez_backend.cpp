@@ -1209,8 +1209,6 @@ result<VkShaderModule> VezBackend::GetVertexShaderModule(
            "Context must be initialized before creating a shader");
     VkDevice device = context_.device;
 
-    // TODO is_filename (read the shader from file)
-
     auto hash = GetShaderHash(vert.source.c_str(), vert.preamble.c_str(),
                               vert.entry_point.c_str());
     auto result = context_.vertex_shader_cache.find(hash);
@@ -1218,10 +1216,27 @@ result<VkShaderModule> VezBackend::GetVertexShaderModule(
     if (result != context_.vertex_shader_cache.end()) {
         return result->second;
     } else {
+        std::vector<char> source;
+        if (vert.source_type == ShaderSourceType::Filename) {
+            std::ifstream f;
+
+            f.open(vert.source);
+            f.seekg(0, std::ios::end);
+            source.resize(f.tellg(), 0);
+            f.seekg(0, std::ios::beg);
+
+            f.read(source.data(), source.size());
+            source.push_back(0);  // null-terminated string
+        }
+
         VezShaderModuleCreateInfo shader_info = {};
         shader_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
-        shader_info.codeSize = vert.source.length();
-        shader_info.pGLSLSource = vert.source.c_str();
+
+        if (vert.source_type == ShaderSourceType::Filename) {
+            shader_info.pGLSLSource = source.data();
+        } else {
+            shader_info.pGLSLSource = vert.source.c_str();
+        }
         shader_info.pPreamble = vert.preamble.c_str();
         shader_info.pEntryPoint = vert.entry_point.c_str();
 
@@ -1255,10 +1270,27 @@ result<VkShaderModule> VezBackend::GetFragmentShaderModule(
     if (result != context_.fragment_shader_cache.end()) {
         return result->second;
     } else {
+        std::vector<char> source;
+        if (frag.source_type == ShaderSourceType::Filename) {
+            std::ifstream f;
+
+            f.open(frag.source);
+            f.seekg(0, std::ios::end);
+            source.resize(f.tellg(), 0);
+            f.seekg(0, std::ios::beg);
+
+            f.read(source.data(), source.size());
+            source.push_back(0);  // null-terminated string
+        }
+
         VezShaderModuleCreateInfo shader_info = {};
         shader_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        shader_info.codeSize = frag.source.length();
-        shader_info.pGLSLSource = frag.source.c_str();
+
+        if (frag.source_type == ShaderSourceType::Filename) {
+            shader_info.pGLSLSource = source.data();
+        } else {
+            shader_info.pGLSLSource = frag.source.c_str();
+        }
         shader_info.pPreamble = frag.preamble.c_str();
         shader_info.pEntryPoint = frag.entry_point.c_str();
 

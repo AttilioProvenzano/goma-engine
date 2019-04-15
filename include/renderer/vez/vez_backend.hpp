@@ -25,6 +25,9 @@ class VezBackend : public Backend {
     virtual result<std::shared_ptr<Image>> CreateTexture(
         const char* name, const TextureDesc& texture_desc,
         void* initial_contents = nullptr) override;
+    virtual result<std::shared_ptr<Image>> CreateTexture(
+        const char* name, const TextureDesc& texture_desc,
+        const std::vector<void*>& initial_contents) override;
     virtual result<std::shared_ptr<Image>> GetTexture(
         const char* name) override;
     virtual result<std::shared_ptr<Buffer>> CreateVertexBuffer(

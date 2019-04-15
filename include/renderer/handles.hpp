@@ -119,6 +119,7 @@ struct TextureDesc {
     Format format = Format::UNormRGBA8;
 
     bool mipmapping = true;
+    bool cubemap = false;
     uint32_t array_layers = 1;
     uint32_t samples = 1;
 

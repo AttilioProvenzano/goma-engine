@@ -50,6 +50,9 @@ class Backend {
     virtual result<std::shared_ptr<Image>> CreateTexture(
         const char* name, const TextureDesc& texture_desc,
         void* initial_contents = nullptr) = 0;
+    virtual result<std::shared_ptr<Image>> CreateTexture(
+        const char* name, const TextureDesc& texture_desc,
+        const std::vector<void*>& initial_contents) = 0;
     virtual result<std::shared_ptr<Image>> GetTexture(const char* name) = 0;
     virtual result<std::shared_ptr<Buffer>> CreateVertexBuffer(
         const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,

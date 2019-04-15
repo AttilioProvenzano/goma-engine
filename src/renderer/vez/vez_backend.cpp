@@ -206,7 +206,9 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
     VezImageCreateInfo image_info = {};
     image_info.extent = {texture_desc.width, texture_desc.height, 1};
     image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.arrayLayers = texture_desc.array_layers;
+    image_info.arrayLayers = texture_desc.cubemap
+                                 ? texture_desc.array_layers * 6
+                                 : texture_desc.array_layers;
     image_info.mipLevels = mip_levels;
     image_info.format = format;
     image_info.samples =
@@ -227,6 +229,34 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
     auto ret = std::make_shared<Image>(vulkan_image);
     context_.texture_cache[hash] = ret;
     return ret;
+}
+
+result<std::shared_ptr<Image>> VezBackend::CreateTexture(
+    const char* name, const TextureDesc& texture_desc,
+    const std::vector<void*>& initial_contents) {
+    OUTCOME_TRY(image, CreateTexture(name, texture_desc));
+
+    // TODO refactor into a single block (with the other CreateTexture)
+    uint32_t layer = 0;
+    for (auto& layer_contents : initial_contents) {
+        VezImageSubresourceLayers layers = {};
+        layers.baseArrayLayer = layer++;
+        layers.layerCount = 1;
+        layers.mipLevel = 0;
+
+        VezImageSubDataInfo sub_data_info = {};
+        sub_data_info.imageExtent = {texture_desc.width, texture_desc.height,
+                                     1};
+        sub_data_info.imageOffset = {0, 0, 0};
+        sub_data_info.imageSubresource = layers;
+
+        // TODO layered + mipmapped is currently not supported,
+        // this functionality should be unified in CreateImage
+        vezImageSubData(context_.device, image->vez.image, &sub_data_info,
+                        layer_contents);
+    }
+
+    return image;
 }
 
 result<std::shared_ptr<Image>> VezBackend::GetTexture(const char* name) {
@@ -1505,7 +1535,10 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
     image_view_info.format = image_info.format;
     image_view_info.image = image;
     image_view_info.subresourceRange = range;
-    image_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    // TODO pass cubemap setting
+    image_view_info.viewType = image_info.arrayLayers == 6
+                                   ? VK_IMAGE_VIEW_TYPE_CUBE
+                                   : VK_IMAGE_VIEW_TYPE_2D;
 
     VkImageView image_view;
     VK_CHECK(vezCreateImageView(device, &image_view_info, &image_view));

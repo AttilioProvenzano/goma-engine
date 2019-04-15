@@ -14,6 +14,9 @@ class Renderer {
 
     result<void> Render();
 
+    result<void> CreateSkybox();
+    result<void> CreateSphere();
+
   private:
     Engine* engine_ = nullptr;
     std::unique_ptr<Backend> backend_;

@@ -46,6 +46,8 @@ result<void> Engine::LoadScene(const char* file_path) {
     FlyCamera fly_camera(main_camera_, 100.0f);
     scripting_system_->RegisterScript(std::move(fly_camera));
 
+    OUTCOME_TRY(renderer_->CreateSkybox());
+
     return outcome::success();
 }
 

@@ -6,6 +6,8 @@
 #include "scene/attachments/material.hpp"
 #include "scene/attachments/mesh.hpp"
 
+#include <stb_image.h>
+
 namespace goma {
 
 Renderer::Renderer(Engine* engine)
@@ -581,7 +583,6 @@ void main() {
         }
 
         // Draw skybox
-
         static const char* skybox_vert = R"(
 #version 450
 
@@ -589,14 +590,12 @@ layout(push_constant) uniform PC {
 	mat4 mvp;
 } pc;
 
-vec2 triangle_positions[3] = vec2[](
-    vec2(-1.0, -1.0),
-    vec2(-1.0,  3.0),
-    vec2( 3.0, -1.0)
-);
+layout(location = 0) in vec3 inPosition;
+layout(location = 0) out vec3 outUVW;
 
 void main() {
-    gl_Position = vec4(triangle_positions[gl_VertexIndex], 1.0, 1.0);
+    gl_Position = pc.mvp * vec4(inPosition, 0.0);
+	outUVW = inPosition;
 }
 )";
 
@@ -604,10 +603,13 @@ void main() {
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+layout(set = 0, binding = 0) uniform samplerCube diffuseTex;
+
+layout(location = 0) in vec3 inUVW;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    outColor = vec4(0.1, 0.1, 0.4, 1.0);
+    outColor = texture(diffuseTex, inUVW);
 }
 )";
 
@@ -616,22 +618,135 @@ void main() {
             {skybox_frag, ShaderSourceType::Source});
         if (!pipeline_res) {
             spdlog::error("Couldn't get pipeline for skybox.");
+            // TODO return
         }
 
-        auto skybox_vtx_res = backend_->GetVertexInputFormat({});
-        if (!skybox_vtx_res) {
-            spdlog::error("Couldn't get vertex input format for skybox.");
+        auto sphere_res = scene->FindAttachment<Mesh>("goma_sphere");
+        if (!sphere_res) {
+            spdlog::error("Couldn't find the sphere mesh for skybox.");
+            // TODO return
         }
+        auto sphere = sphere_res.value().second;
 
         backend_->BindGraphicsPipeline(*pipeline_res.value());
-        backend_->BindVertexInputFormat(*skybox_vtx_res.value());
+        backend_->BindVertexInputFormat(*sphere->vertex_input_format);
+        BindMeshBuffers(*sphere);
+
+        // TODO also bind index buffer in BindMeshBuffers
+        if (!sphere->indices.empty()) {
+            backend_->BindIndexBuffer(*sphere->buffers.index);
+        }
+
+        // Set depth clamp to 1.0f and depth test to Equal
         backend_->BindDepthStencilState({true, false, CompareOp::Equal});
-        backend_->Draw(3);
+        backend_->BindRasterizationState(
+            RasterizationState{true, false, PolygonMode::Fill, CullMode::None});
+        backend_->SetViewport({{float(engine_->platform()->GetWidth()),
+                                float(engine_->platform()->GetHeight()), 0.0f,
+                                0.0f, 1.0f, 1.0f}});
+
+        auto skybox_tex_res = backend_->GetTexture("goma_skybox");
+        if (!skybox_tex_res) {
+            spdlog::error("Couldn't get skybox texture.");
+            // TODO return
+        }
+
+        backend_->BindTexture(skybox_tex_res.value()->vez, 0);
+        backend_->BindVertexUniforms({vp});
+        backend_->DrawIndexed(static_cast<uint32_t>(sphere->indices.size()));
 
         return outcome::success();
     };
 
     backend_->RenderFrame({std::move(forward_pass)}, "color");
+
+    return outcome::success();
+}
+
+result<void> Renderer::CreateSkybox() {
+    CreateSphere();
+
+    const std::vector<char*> filenames{"bluecloud_ft.jpg", "bluecloud_bk.jpg",
+                                       "bluecloud_up.jpg", "bluecloud_dn.jpg",
+                                       "bluecloud_rt.jpg", "bluecloud_lf.jpg"};
+    std::string base_path{"../../../assets/textures/skybox/cloudy/"};
+
+    std::vector<void*> stbi_images;
+
+    int width, height;
+    for (auto& filename : filenames) {
+        // Load skybox using stb_image
+        int n;
+        auto full_path = base_path + filename;
+        auto image_data = stbi_load(full_path.c_str(), &width, &height, &n, 4);
+
+        if (!image_data) {
+            spdlog::warn("Decompressing \"{}\" failed with error: {}",
+                         full_path, stbi_failure_reason());
+            for (auto& stbi_image : stbi_images) {
+                stbi_image_free(stbi_image);
+            }
+            return Error::DecompressionFailed;
+        }
+
+        stbi_images.push_back(image_data);
+    }
+
+    TextureDesc tex_desc{static_cast<uint32_t>(width),
+                         static_cast<uint32_t>(height)};
+    tex_desc.mipmapping = false;
+    tex_desc.cubemap = true;
+
+    backend_->CreateTexture("goma_skybox", tex_desc, stbi_images);
+
+    for (auto& stbi_image : stbi_images) {
+        stbi_image_free(stbi_image);
+    }
+
+    return outcome::success();
+}
+
+// From https://github.com/Erkaman/cute-deferred-shading
+result<void> Renderer::CreateSphere() {
+    int stacks = 20;
+    int slices = 20;
+    const float PI = glm::pi<float>();
+
+    Mesh mesh{"goma_sphere"};
+
+    // loop through stacks.
+    for (int i = 0; i <= stacks; ++i) {
+        float V = (float)i / (float)stacks;
+        float phi = V * PI;
+
+        // loop through the slices.
+        for (int j = 0; j <= slices; ++j) {
+            float U = (float)j / (float)slices;
+            float theta = U * (PI * 2);
+
+            // use spherical coordinates to calculate the positions.
+            float x = cos(theta) * sin(phi);
+            float y = cos(phi);
+            float z = sin(theta) * sin(phi);
+
+            mesh.vertices.push_back({x, y, z});
+        }
+    }
+
+    // Calc The Index Positions
+    for (int i = 0; i < slices * stacks + slices; ++i) {
+        mesh.indices.push_back(static_cast<uint32_t>(i));
+        mesh.indices.push_back(static_cast<uint32_t>(i + slices + 1));
+        mesh.indices.push_back(static_cast<uint32_t>(i + slices));
+
+        mesh.indices.push_back(static_cast<uint32_t>(i + slices + 1));
+        mesh.indices.push_back(static_cast<uint32_t>(i));
+        mesh.indices.push_back(static_cast<uint32_t>(i + 1));
+    }
+
+    OUTCOME_TRY(attachment,
+                engine_->scene()->CreateAttachment<Mesh>(std::move(mesh)));
+    engine_->scene()->RegisterAttachment<Mesh>(attachment, "goma_sphere");
 
     return outcome::success();
 }
@@ -752,6 +867,7 @@ const char* Renderer::GetFragmentShaderPreamble(const Material& material) {
 }
 
 result<void> Renderer::BindMeshBuffers(const Mesh& mesh) {
+    // TODO this copies shared pointers
     uint32_t binding = 0;
     auto bind = [&](std::shared_ptr<Buffer> buf) {
         if (buf && buf->valid) {

@@ -666,10 +666,16 @@ void main() {
 result<void> Renderer::CreateSkybox() {
     CreateSphere();
 
+    /*
     const std::vector<char*> filenames{"bluecloud_ft.jpg", "bluecloud_bk.jpg",
                                        "bluecloud_up.jpg", "bluecloud_dn.jpg",
                                        "bluecloud_rt.jpg", "bluecloud_lf.jpg"};
-    std::string base_path{"../../../assets/textures/skybox/cloudy/"};
+    */
+
+    const std::vector<char*> filenames{"posx.jpg", "negx.jpg", "posy.jpg",
+                                       "negy.jpg", "posz.jpg", "negz.jpg"};
+
+    std::string base_path{"../../../assets/textures/skybox/yokohama/"};
 
     std::vector<void*> stbi_images;
 

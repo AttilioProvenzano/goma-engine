@@ -17,8 +17,25 @@ Engine::Engine()
 result<void> Engine::MainLoop(MainLoopFn inner_loop) {
     if (platform_) {
         platform_->MainLoop([&]() {
+            if (fps_cap > 0) {
+                // Limit FPS
+                std::chrono::duration<float> elapsed =
+                    std::chrono::high_resolution_clock::now() -
+                    frame_timestamp_;
+
+                auto min_frame_time = 1.0f / fps_cap;
+                if (elapsed.count() < min_frame_time) {
+                    auto wait_us = 1e6 * (min_frame_time - elapsed.count());
+                    platform_->Sleep(static_cast<uint32_t>(wait_us));
+                }
+            }
+
+            auto now = std::chrono::high_resolution_clock::now();
+            delta_time_ = now - frame_timestamp_;
+            frame_timestamp_ = now;
+
             input_system_->AcquireFrameInput();
-            scripting_system_->Update(0.016f);  // TODO delta_time
+            scripting_system_->Update(delta_time_.count());
             renderer_->Render();
 
             bool res = false;

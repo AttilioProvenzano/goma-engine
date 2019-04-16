@@ -26,7 +26,12 @@ class Engine {
     uint32_t frame_count() { return frame_count_; }
 
   private:
-    uint32_t frame_count_ = 0;
+    uint32_t frame_count_{0};
+
+    uint32_t fps_cap{60};
+    std::chrono::duration<float> delta_time_{0.0f};
+    std::chrono::time_point<std::chrono::high_resolution_clock>
+        frame_timestamp_{std::chrono::high_resolution_clock::now()};
 
     std::unique_ptr<Platform> platform_;
 

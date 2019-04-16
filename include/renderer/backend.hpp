@@ -11,6 +11,9 @@ namespace goma {
 
 class Engine;
 
+// TODO rework binding push constants
+// (potentially just a memory range,
+// but does it work in OpenGL?)
 struct VertexUniforms {
     glm::mat4 mvp;
 };
@@ -54,6 +57,18 @@ class Backend {
         const char* name, const TextureDesc& texture_desc,
         const std::vector<void*>& initial_contents) = 0;
     virtual result<std::shared_ptr<Image>> GetTexture(const char* name) = 0;
+
+    virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
+        const NodeIndex& node, const char* name, uint64_t size,
+        bool gpu_stored = true, void* initial_contents = nullptr) = 0;
+    virtual result<std::shared_ptr<Buffer>> GetUniformBuffer(
+        const NodeIndex& node, const char* name) = 0;
+    virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
+        const char* name, uint64_t size, bool gpu_stored = true,
+        void* initial_contents = nullptr) = 0;
+    virtual result<std::shared_ptr<Buffer>> GetUniformBuffer(
+        const char* name) = 0;
+
     virtual result<std::shared_ptr<Buffer>> CreateVertexBuffer(
         const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
         bool gpu_stored = true, void* initial_contents = nullptr) = 0;

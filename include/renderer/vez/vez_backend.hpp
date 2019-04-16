@@ -30,6 +30,18 @@ class VezBackend : public Backend {
         const std::vector<void*>& initial_contents) override;
     virtual result<std::shared_ptr<Image>> GetTexture(
         const char* name) override;
+
+    virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
+        const NodeIndex& node, const char* name, uint64_t size,
+        bool gpu_stored = true, void* initial_contents = nullptr) override;
+    virtual result<std::shared_ptr<Buffer>> GetUniformBuffer(
+        const NodeIndex& node, const char* name) override;
+    virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
+        const char* name, uint64_t size, bool gpu_stored = true,
+        void* initial_contents = nullptr) override;
+    virtual result<std::shared_ptr<Buffer>> GetUniformBuffer(
+        const char* name) override;
+
     virtual result<std::shared_ptr<Buffer>> CreateVertexBuffer(
         const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
         bool gpu_stored = true, void* initial_contents = nullptr) override;
@@ -162,6 +174,8 @@ class VezBackend : public Backend {
 
     VezContext::BufferHash GetBufferHash(const char* name);
     VezContext::BufferHash GetMeshBufferHash(const AttachmentIndex<Mesh>& mesh,
+                                             const char* name);
+    VezContext::BufferHash GetNodeBufferHash(const NodeIndex& node,
                                              const char* name);
     VezContext::ShaderHash GetShaderHash(const char* source,
                                          const char* preamble,

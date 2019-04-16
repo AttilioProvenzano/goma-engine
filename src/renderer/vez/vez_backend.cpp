@@ -352,6 +352,52 @@ result<Framebuffer> VezBackend::GetFramebuffer(FrameIndex frame_id,
     return Error::NotFound;
 }
 
+result<std::shared_ptr<Buffer>> VezBackend::CreateUniformBuffer(
+    const NodeIndex& node, const char* name, uint64_t size, bool gpu_stored,
+    void* initial_contents) {
+    auto hash = GetNodeBufferHash(node, name);
+    OUTCOME_TRY(buffer, CreateBuffer(hash, static_cast<VkDeviceSize>(size),
+                                     gpu_stored ? VEZ_MEMORY_GPU_ONLY
+                                                : VEZ_MEMORY_CPU_TO_GPU,
+                                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
+                                         VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                     initial_contents));
+    return buffer;
+}
+
+result<std::shared_ptr<Buffer>> VezBackend::GetUniformBuffer(
+    const NodeIndex& node, const char* name) {
+    auto hash = GetNodeBufferHash(node, name);
+    auto result = context_.buffer_cache.find(hash);
+    if (result != context_.buffer_cache.end()) {
+        return result->second;
+    }
+
+    return Error::NotFound;
+}
+
+result<std::shared_ptr<Buffer>> VezBackend::CreateUniformBuffer(
+    const char* name, uint64_t size, bool gpu_stored, void* initial_contents) {
+    auto hash = GetBufferHash(name);
+    OUTCOME_TRY(buffer, CreateBuffer(hash, static_cast<VkDeviceSize>(size),
+                                     gpu_stored ? VEZ_MEMORY_GPU_ONLY
+                                                : VEZ_MEMORY_CPU_TO_GPU,
+                                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
+                                         VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                     initial_contents));
+    return buffer;
+}
+
+result<std::shared_ptr<Buffer>> VezBackend::GetUniformBuffer(const char* name) {
+    auto hash = GetBufferHash(name);
+    auto result = context_.buffer_cache.find(hash);
+    if (result != context_.buffer_cache.end()) {
+        return result->second;
+    }
+
+    return Error::NotFound;
+}
+
 result<std::shared_ptr<Buffer>> VezBackend::CreateVertexBuffer(
     const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
     bool gpu_stored, void* initial_contents) {
@@ -1714,6 +1760,11 @@ VezContext::BufferHash VezBackend::GetBufferHash(const char* name) {
 VezContext::BufferHash VezBackend::GetMeshBufferHash(
     const AttachmentIndex<Mesh>& mesh, const char* name) {
     return {mesh.id, mesh.gen, sdbm_hash(name)};
+}
+
+VezContext::BufferHash VezBackend::GetNodeBufferHash(const NodeIndex& node,
+                                                     const char* name) {
+    return {0, node.id, node.gen, sdbm_hash(name)};
 }
 
 VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,

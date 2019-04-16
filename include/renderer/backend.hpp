@@ -59,10 +59,10 @@ class Backend {
     virtual result<std::shared_ptr<Image>> GetTexture(const char* name) = 0;
 
     virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
-        const NodeIndex& node, const char* name, uint64_t size,
+        BufferType type, const GenIndex& index, const char* name, uint64_t size,
         bool gpu_stored = true, void* initial_contents = nullptr) = 0;
     virtual result<std::shared_ptr<Buffer>> GetUniformBuffer(
-        const NodeIndex& node, const char* name) = 0;
+        BufferType type, const GenIndex& index, const char* name) = 0;
     virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
         const char* name, uint64_t size, bool gpu_stored = true,
         void* initial_contents = nullptr) = 0;

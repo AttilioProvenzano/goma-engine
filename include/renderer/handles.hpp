@@ -366,6 +366,8 @@ struct ShaderDesc {
     std::string entry_point = "main";
 };
 
+enum class BufferType { General, PerNode, PerMesh, PerMaterial };
+
 struct Box {
     glm::vec3 min = glm::vec3(std::numeric_limits<float>::max());
     glm::vec3 max = glm::vec3(std::numeric_limits<float>::min());

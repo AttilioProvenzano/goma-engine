@@ -32,10 +32,10 @@ class VezBackend : public Backend {
         const char* name) override;
 
     virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
-        const NodeIndex& node, const char* name, uint64_t size,
+        BufferType type, const GenIndex& index, const char* name, uint64_t size,
         bool gpu_stored = true, void* initial_contents = nullptr) override;
     virtual result<std::shared_ptr<Buffer>> GetUniformBuffer(
-        const NodeIndex& node, const char* name) override;
+        BufferType type, const GenIndex& index, const char* name) override;
     virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
         const char* name, uint64_t size, bool gpu_stored = true,
         void* initial_contents = nullptr) override;
@@ -173,10 +173,8 @@ class VezBackend : public Backend {
     result<void> PresentImage(const char* present_image_name);
 
     VezContext::BufferHash GetBufferHash(const char* name);
-    VezContext::BufferHash GetMeshBufferHash(const AttachmentIndex<Mesh>& mesh,
-                                             const char* name);
-    VezContext::BufferHash GetNodeBufferHash(const NodeIndex& node,
-                                             const char* name);
+    VezContext::BufferHash GetBufferHash(BufferType type, const GenIndex& index,
+                                         const char* name);
     VezContext::ShaderHash GetShaderHash(const char* source,
                                          const char* preamble,
                                          const char* entry_point);

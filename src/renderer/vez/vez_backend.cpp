@@ -353,9 +353,9 @@ result<Framebuffer> VezBackend::GetFramebuffer(FrameIndex frame_id,
 }
 
 result<std::shared_ptr<Buffer>> VezBackend::CreateUniformBuffer(
-    const NodeIndex& node, const char* name, uint64_t size, bool gpu_stored,
-    void* initial_contents) {
-    auto hash = GetNodeBufferHash(node, name);
+    BufferType type, const GenIndex& index, const char* name, uint64_t size,
+    bool gpu_stored, void* initial_contents) {
+    auto hash = GetBufferHash(type, index, name);
     OUTCOME_TRY(buffer, CreateBuffer(hash, static_cast<VkDeviceSize>(size),
                                      gpu_stored ? VEZ_MEMORY_GPU_ONLY
                                                 : VEZ_MEMORY_CPU_TO_GPU,
@@ -366,8 +366,8 @@ result<std::shared_ptr<Buffer>> VezBackend::CreateUniformBuffer(
 }
 
 result<std::shared_ptr<Buffer>> VezBackend::GetUniformBuffer(
-    const NodeIndex& node, const char* name) {
-    auto hash = GetNodeBufferHash(node, name);
+    BufferType type, const GenIndex& index, const char* name) {
+    auto hash = GetBufferHash(type, index, name);
     auto result = context_.buffer_cache.find(hash);
     if (result != context_.buffer_cache.end()) {
         return result->second;
@@ -401,7 +401,7 @@ result<std::shared_ptr<Buffer>> VezBackend::GetUniformBuffer(const char* name) {
 result<std::shared_ptr<Buffer>> VezBackend::CreateVertexBuffer(
     const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
     bool gpu_stored, void* initial_contents) {
-    auto hash = GetMeshBufferHash(mesh, name);
+    auto hash = GetBufferHash(BufferType::PerMesh, mesh, name);
     OUTCOME_TRY(buffer, CreateBuffer(hash, static_cast<VkDeviceSize>(size),
                                      gpu_stored ? VEZ_MEMORY_GPU_ONLY
                                                 : VEZ_MEMORY_CPU_TO_GPU,
@@ -413,7 +413,7 @@ result<std::shared_ptr<Buffer>> VezBackend::CreateVertexBuffer(
 
 result<std::shared_ptr<Buffer>> VezBackend::GetVertexBuffer(
     const AttachmentIndex<Mesh>& mesh, const char* name) {
-    auto hash = GetMeshBufferHash(mesh, name);
+    auto hash = GetBufferHash(BufferType::PerMesh, mesh, name);
     auto result = context_.buffer_cache.find(hash);
     if (result != context_.buffer_cache.end()) {
         return result->second;
@@ -425,7 +425,7 @@ result<std::shared_ptr<Buffer>> VezBackend::GetVertexBuffer(
 result<std::shared_ptr<Buffer>> VezBackend::CreateIndexBuffer(
     const AttachmentIndex<Mesh>& mesh, const char* name, uint64_t size,
     bool gpu_stored, void* initial_contents) {
-    auto hash = GetMeshBufferHash(mesh, name);
+    auto hash = GetBufferHash(BufferType::PerMesh, mesh, name);
     OUTCOME_TRY(buffer, CreateBuffer(hash, static_cast<VkDeviceSize>(size),
                                      gpu_stored ? VEZ_MEMORY_GPU_ONLY
                                                 : VEZ_MEMORY_CPU_TO_GPU,
@@ -437,7 +437,7 @@ result<std::shared_ptr<Buffer>> VezBackend::CreateIndexBuffer(
 
 result<std::shared_ptr<Buffer>> VezBackend::GetIndexBuffer(
     const AttachmentIndex<Mesh>& mesh, const char* name) {
-    auto hash = GetMeshBufferHash(mesh, name);
+    auto hash = GetBufferHash(BufferType::PerMesh, mesh, name);
     auto result = context_.buffer_cache.find(hash);
     if (result != context_.buffer_cache.end()) {
         return result->second;
@@ -1757,14 +1757,10 @@ VezContext::BufferHash VezBackend::GetBufferHash(const char* name) {
     return {sdbm_hash(name)};
 }
 
-VezContext::BufferHash VezBackend::GetMeshBufferHash(
-    const AttachmentIndex<Mesh>& mesh, const char* name) {
-    return {mesh.id, mesh.gen, sdbm_hash(name)};
-}
-
-VezContext::BufferHash VezBackend::GetNodeBufferHash(const NodeIndex& node,
-                                                     const char* name) {
-    return {0, node.id, node.gen, sdbm_hash(name)};
+VezContext::BufferHash VezBackend::GetBufferHash(BufferType type,
+                                                 const GenIndex& index,
+                                                 const char* name) {
+    return {static_cast<uint64_t>(type), index.id, index.gen, sdbm_hash(name)};
 }
 
 VezContext::ShaderHash VezBackend::GetShaderHash(const char* source,

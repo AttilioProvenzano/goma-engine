@@ -34,11 +34,13 @@ layout(location = 7) in vec2 inUVW;
 
 layout(location = 0) out vec2 outUV0;
 
-layout(push_constant) uniform PC {
+layout(set = 0, binding = 12, std140) uniform UBO {
 	mat4 mvp;
-} pc;
+	mat4 model;
+	mat4 normal;
+} ubo;
 
 void main() {
-    gl_Position = pc.mvp * vec4(inPosition, 1.0);
+    gl_Position = ubo.mvp * vec4(inPosition, 1.0);
     outUV0 = inUV0;
 }

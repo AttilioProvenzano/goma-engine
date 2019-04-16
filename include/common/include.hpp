@@ -8,6 +8,7 @@
 #define GLM_FORCE_XYZW_ONLY
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/transform.hpp>

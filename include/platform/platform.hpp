@@ -23,6 +23,8 @@ class Platform {
     virtual result<void> InitWindow() = 0;
     virtual result<VkSurfaceKHR> CreateVulkanSurface(
         VkInstance instance) const = 0;
+
+    virtual void Sleep(uint32_t microseconds) = 0;
 };
 
 }  // namespace goma

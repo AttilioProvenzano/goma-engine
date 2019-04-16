@@ -6,6 +6,8 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
+#include <windows.h>
+
 namespace goma {
 
 Win32Platform::~Win32Platform() {
@@ -94,6 +96,10 @@ InputState Win32Platform::GetInputState() const {
     }
 
     return state;
+}
+
+void Win32Platform::Sleep(uint32_t microseconds) {
+    ::Sleep(microseconds / 1000);
 }
 
 }  // namespace goma

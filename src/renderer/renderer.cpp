@@ -465,11 +465,11 @@ result<void> Renderer::Render() {
             auto& model = scene->GetCachedModel(node_id).value();
             glm::mat4 mvp = vp * model;
 
-            auto uniform_buf_res =
-                backend_->GetUniformBuffer(node_id, "vtx_ubo");
+            auto uniform_buf_res = backend_->GetUniformBuffer(
+                BufferType::PerNode, node_id, "vtx_ubo");
             if (!uniform_buf_res) {
                 uniform_buf_res = backend_->CreateUniformBuffer(
-                    node_id, "vtx_ubo", 3 * 256, false);
+                    BufferType::PerNode, node_id, "vtx_ubo", 3 * 256, false);
             }
 
             auto uniform_buf = uniform_buf_res.value();

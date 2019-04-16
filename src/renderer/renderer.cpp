@@ -228,7 +228,7 @@ result<void> Renderer::Render() {
         }
     });
 
-    // Ensure that all meshes have world-space model matrices
+    // Ensure that all mesh nodes have world-space model matrices
     scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
         auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
         if (!nodes_result || !nodes_result.value()) {
@@ -462,8 +462,29 @@ result<void> Renderer::Render() {
             }
 
             // Draw the mesh node
-            glm::mat4 mvp = vp * scene->GetCachedModel(node_id).value();
-            backend_->BindVertexUniforms({std::move(mvp)});
+            auto& model = scene->GetCachedModel(node_id).value();
+            glm::mat4 mvp = vp * model;
+
+            auto uniform_buf_res =
+                backend_->GetUniformBuffer(node_id, "vtx_ubo");
+            if (!uniform_buf_res) {
+                uniform_buf_res = backend_->CreateUniformBuffer(
+                    node_id, "vtx_ubo", 3 * 256, false);
+            }
+
+            auto uniform_buf = uniform_buf_res.value();
+
+            struct UBO {
+                glm::mat4 mvp;
+                glm::mat4 model;
+                glm::mat4 normals;
+            };
+            UBO ubo{std::move(mvp), model, glm::inverseTranspose(model)};
+
+            backend_->UpdateBuffer(*uniform_buf, frame_id * 256, sizeof(ubo),
+                                   &ubo);
+            backend_->BindUniformBuffer(*uniform_buf, frame_id * 256,
+                                        sizeof(ubo), 12);
 
             if (!mesh->indices.empty()) {
                 backend_->DrawIndexed(

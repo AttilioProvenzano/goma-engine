@@ -438,12 +438,12 @@ result<void> Renderer::Render() {
                 auto& material = *material_result.value();
 
                 auto pipeline_res = backend_->GetGraphicsPipeline(
-                    {"../../../assets/shaders/base.vert",
+                    {"../../../assets/shaders/pbr.vert",
                      ShaderSourceType::Filename,
                      GetVertexShaderPreamble(*mesh)},
-                    {"../../../assets/shaders/base.frag",
+                    {"../../../assets/shaders/pbr.frag",
                      ShaderSourceType::Filename,
-                     GetFragmentShaderPreamble(material)});
+                     GetFragmentShaderPreamble(*mesh, material)});
                 if (!pipeline_res) {
                     spdlog::error("Couldn't get pipeline for material {}.",
                                   material.name);
@@ -456,35 +456,64 @@ result<void> Renderer::Render() {
                 BindMeshBuffers(*mesh);
                 BindMaterialTextures(material);
 
+                auto frag_ubo_res = backend_->GetUniformBuffer(
+                    BufferType::PerNode, node_id, "frag_ubo");
+                if (!frag_ubo_res) {
+                    frag_ubo_res = backend_->CreateUniformBuffer(
+                        BufferType::PerNode, node_id, "frag_ubo", 3 * 256,
+                        false);
+                }
+
                 if (!mesh->indices.empty()) {
                     backend_->BindIndexBuffer(*mesh->buffers.index);
                 }
+
+                auto frag_ubo = frag_ubo_res.value();
+
+                struct FragUBO {
+                    float exposure;
+                    float gamma;
+                    float metallic;
+                    float roughness;
+                    glm::vec4 base_color;
+                    glm::vec3 camera;
+                    float alpha_cutoff;
+                };
+                FragUBO frag_ubo_data{
+                    4.5f,   2.2f, 0.2f, 0.5f, {material.diffuse_color, 1.0f},
+                    ws_pos, 0.0f};
+
+                backend_->UpdateBuffer(*frag_ubo, frame_id * 256,
+                                       sizeof(frag_ubo_data), &frag_ubo_data);
+                backend_->BindUniformBuffer(*frag_ubo, frame_id * 256,
+                                            sizeof(frag_ubo_data), 13);
             }
 
             // Draw the mesh node
             auto& model = scene->GetCachedModel(node_id).value();
             glm::mat4 mvp = vp * model;
 
-            auto uniform_buf_res = backend_->GetUniformBuffer(
-                BufferType::PerNode, node_id, "vtx_ubo");
-            if (!uniform_buf_res) {
-                uniform_buf_res = backend_->CreateUniformBuffer(
+            auto vtx_ubo_res = backend_->GetUniformBuffer(BufferType::PerNode,
+                                                          node_id, "vtx_ubo");
+            if (!vtx_ubo_res) {
+                vtx_ubo_res = backend_->CreateUniformBuffer(
                     BufferType::PerNode, node_id, "vtx_ubo", 3 * 256, false);
             }
 
-            auto uniform_buf = uniform_buf_res.value();
+            auto vtx_ubo = vtx_ubo_res.value();
 
-            struct UBO {
+            struct VtxUBO {
                 glm::mat4 mvp;
                 glm::mat4 model;
                 glm::mat4 normals;
             };
-            UBO ubo{std::move(mvp), model, glm::inverseTranspose(model)};
+            VtxUBO vtx_ubo_data{std::move(mvp), model,
+                                glm::inverseTranspose(model)};
 
-            backend_->UpdateBuffer(*uniform_buf, frame_id * 256, sizeof(ubo),
-                                   &ubo);
-            backend_->BindUniformBuffer(*uniform_buf, frame_id * 256,
-                                        sizeof(ubo), 12);
+            backend_->UpdateBuffer(*vtx_ubo, frame_id * 256,
+                                   sizeof(vtx_ubo_data), &vtx_ubo_data);
+            backend_->BindUniformBuffer(*vtx_ubo, frame_id * 256,
+                                        sizeof(vtx_ubo_data), 12);
 
             if (!mesh->indices.empty()) {
                 backend_->DrawIndexed(

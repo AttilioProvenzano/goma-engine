@@ -506,6 +506,19 @@ TEST(EngineTest, RenderLantern) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
+TEST(EngineTest, RenderHelmet) {
+    Engine e;
+    e.LoadScene("../../../assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf");
+
+    auto res = e.MainLoop([&]() {
+        // Stop after 1000000 frames
+        return e.frame_count() > 1000000;
+    });
+    ASSERT_TRUE(res) << res.error().message();
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
 TEST(EngineTest, RenderSponza) {
     Engine e;
     e.LoadScene("../../../assets/models/Sponza/glTF/Sponza.gltf");

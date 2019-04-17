@@ -204,6 +204,8 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
     }
 
     VezImageCreateInfo image_info = {};
+    image_info.flags =
+        texture_desc.cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     image_info.extent = {texture_desc.width, texture_desc.height, 1};
     image_info.imageType = VK_IMAGE_TYPE_2D;
     image_info.arrayLayers = texture_desc.cubemap

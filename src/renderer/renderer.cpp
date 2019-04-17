@@ -696,6 +696,33 @@ const char* Renderer::GetFragmentShaderPreamble(
     } else {
         std::string preamble;
 
+        // Mesh
+        if (desc.has_positions) {
+            preamble += "#define HAS_POSITIONS\n";
+        }
+        if (desc.has_normals) {
+            preamble += "#define HAS_NORMALS\n";
+        }
+        if (desc.has_tangents) {
+            preamble += "#define HAS_TANGENTS\n";
+        }
+        if (desc.has_bitangents) {
+            preamble += "#define HAS_BITANGENTS\n";
+        }
+        if (desc.has_colors) {
+            preamble += "#define HAS_COLORS\n";
+        }
+        if (desc.has_uv0) {
+            preamble += "#define HAS_UV0\n";
+        }
+        if (desc.has_uv1) {
+            preamble += "#define HAS_UV1\n";
+        }
+        if (desc.has_uvw) {
+            preamble += "#define HAS_UVW\n";
+        }
+
+        // Material
         if (desc.has_diffuse_map) {
             preamble += "#define HAS_DIFFUSE_MAP\n";
         }
@@ -733,26 +760,42 @@ const char* Renderer::GetFragmentShaderPreamble(
             preamble += "#define HAS_REFLECTION_MAP\n";
         }
 
+        // preamble += "#define DEBUG_OUTPUT\n";
+        preamble += "#define DEBUG_NORMAL\n";
+
         fs_preamble_map_[desc.int_repr] = std::move(preamble);
         return fs_preamble_map_[desc.int_repr].c_str();
     }
 }
 
-const char* Renderer::GetFragmentShaderPreamble(const Material& material) {
+const char* Renderer::GetFragmentShaderPreamble(const Mesh& mesh,
+                                                const Material& material) {
     auto check_type = [&](TextureType type) {
         return material.texture_bindings.find(type) !=
                material.texture_bindings.end();
     };
 
-    return GetFragmentShaderPreamble(FragmentShaderPreambleDesc{
-        check_type(TextureType::Diffuse), check_type(TextureType::Specular),
-        check_type(TextureType::Ambient), check_type(TextureType::Emissive),
-        check_type(TextureType::MetallicRoughness),
-        check_type(TextureType::HeightMap), check_type(TextureType::NormalMap),
-        check_type(TextureType::Shininess), check_type(TextureType::Opacity),
-        check_type(TextureType::Displacement),
-        check_type(TextureType::LightMap),
-        check_type(TextureType::Reflection)});
+    return GetFragmentShaderPreamble(
+        FragmentShaderPreambleDesc{!mesh.vertices.empty(),
+                                   !mesh.normals.empty(),
+                                   !mesh.tangents.empty(),
+                                   !mesh.bitangents.empty(),
+                                   !mesh.colors.empty(),
+                                   mesh.uv_sets.size() > 0,
+                                   mesh.uv_sets.size() > 1,
+                                   mesh.uvw_sets.size() > 0,
+                                   check_type(TextureType::Diffuse),
+                                   check_type(TextureType::Specular),
+                                   check_type(TextureType::Ambient),
+                                   check_type(TextureType::Emissive),
+                                   check_type(TextureType::MetallicRoughness),
+                                   check_type(TextureType::HeightMap),
+                                   check_type(TextureType::NormalMap),
+                                   check_type(TextureType::Shininess),
+                                   check_type(TextureType::Opacity),
+                                   check_type(TextureType::Displacement),
+                                   check_type(TextureType::LightMap),
+                                   check_type(TextureType::Reflection)});
 }
 
 result<void> Renderer::BindMeshBuffers(const Mesh& mesh) {

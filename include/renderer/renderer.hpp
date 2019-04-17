@@ -42,6 +42,17 @@ class Renderer {
 
     union FragmentShaderPreambleDesc {
         struct {
+            // Mesh
+            bool has_positions : 1;
+            bool has_normals : 1;
+            bool has_tangents : 1;
+            bool has_bitangents : 1;
+            bool has_colors : 1;
+            bool has_uv0 : 1;
+            bool has_uv1 : 1;
+            bool has_uvw : 1;
+
+            // Material
             bool has_diffuse_map : 1;
             bool has_specular_map : 1;
             bool has_ambient_map : 1;
@@ -62,7 +73,8 @@ class Renderer {
     std::map<uint32_t, std::string> fs_preamble_map_;
     const char* GetFragmentShaderPreamble(
         const FragmentShaderPreambleDesc& desc);
-    const char* GetFragmentShaderPreamble(const Material& material);
+    const char* GetFragmentShaderPreamble(const Mesh& mesh,
+                                          const Material& material);
 
     result<void> BindMeshBuffers(const Mesh& mesh);
     result<void> BindMaterialTextures(const Material& material);

@@ -416,7 +416,7 @@ result<void> Renderer::Render() {
         glm::lookAt(glm::vec3{0.0f, 0.0f, 0.0f}, glm::vec3{0.0f, -1.0f, 0.0f},
                     glm::vec3{0.0f, 0.0f, 1.0f});
     // TODO proper values for left, right, top, bottom
-    const float size = 100.0f;
+    const float size = 20.0f;
     auto shadow_proj = glm::ortho(-size, size, -size, size, -size, size);
     auto shadow_vp = shadow_proj * shadow_view;
 

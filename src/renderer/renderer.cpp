@@ -342,6 +342,9 @@ result<void> Renderer::Render() {
     std::vector<RenderSequenceElement> render_sequence;
     render_sequence.reserve(scene->GetAttachmentCount<Mesh>());
 
+    std::vector<RenderSequenceElement> visible_sequence;
+    visible_sequence.reserve(scene->GetAttachmentCount<Mesh>());
+
     // Frustum culling
     scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
         auto& culling_vp = vp_hold ? *vp_hold : vp;
@@ -391,19 +394,20 @@ result<void> Renderer::Render() {
                 std::all_of(cs_vertices.begin(), cs_vertices.end(),
                             [](const auto& v) { return v.z >= v.w; });
 
-            if (!culled) {
-                glm::vec3 bbox_center =
-                    (mesh.bounding_box->min + mesh.bounding_box->max) * 0.5f;
-                glm::vec4 cs_center = mvp * glm::vec4(bbox_center, 1.0f);
-                cs_center /= cs_center.w;
+            glm::vec3 bbox_center =
+                (mesh.bounding_box->min + mesh.bounding_box->max) * 0.5f;
+            glm::vec4 cs_center = mvp * glm::vec4(bbox_center, 1.0f);
+            cs_center /= cs_center.w;
+            render_sequence.push_back({id, mesh_node, cs_center});
 
-                render_sequence.push_back({id, mesh_node, cs_center});
+            if (!culled) {
+                visible_sequence.push_back({id, mesh_node, cs_center});
             }
         }
     });
 
     // Sorting
-    std::sort(render_sequence.begin(), render_sequence.end(),
+    std::sort(visible_sequence.begin(), visible_sequence.end(),
               [](const auto& a, const auto& b) {
                   return a.cs_center.z < b.cs_center.z;
               });
@@ -533,7 +537,7 @@ result<void> Renderer::Render() {
         // Render meshes
         AttachmentIndex<Mesh> last_mesh_id{0, 0};
         Mesh* mesh{nullptr};
-        for (const auto& seq_entry : render_sequence) {
+        for (const auto& seq_entry : visible_sequence) {
             auto mesh_id = seq_entry.mesh;
             auto node_id = seq_entry.node;
 

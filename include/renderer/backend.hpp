@@ -46,7 +46,7 @@ class Backend {
     virtual result<void> InitContext() = 0;
     virtual result<void> InitSurface(Platform* platform) = 0;
     virtual result<std::shared_ptr<Pipeline>> GetGraphicsPipeline(
-        const ShaderDesc& vert, const ShaderDesc& frag) = 0;
+        const ShaderDesc& vert, const ShaderDesc& frag = {}) = 0;
     virtual result<std::shared_ptr<VertexInputFormat>> GetVertexInputFormat(
         const VertexInputFormatDesc& desc) = 0;
 

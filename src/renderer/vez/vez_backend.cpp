@@ -118,7 +118,12 @@ result<std::shared_ptr<Pipeline>> VezBackend::GetGraphicsPipeline(
     VkDevice device = context_.device;
 
     OUTCOME_TRY(vertex_shader, GetVertexShaderModule(vert));
-    OUTCOME_TRY(fragment_shader, GetFragmentShaderModule(frag));
+
+    VkShaderModule fragment_shader{VK_NULL_HANDLE};
+    if (!frag.source.empty()) {
+        OUTCOME_TRY(fs, GetFragmentShaderModule(frag));
+        fragment_shader = fs;
+    }
 
     auto hash = GetGraphicsPipelineHash(vertex_shader, fragment_shader);
     auto result = context_.pipeline_cache.find(hash);
@@ -126,10 +131,11 @@ result<std::shared_ptr<Pipeline>> VezBackend::GetGraphicsPipeline(
     if (result != context_.pipeline_cache.end()) {
         return result->second;
     } else {
-        std::array<VezPipelineShaderStageCreateInfo, 2> shader_stages = {
-            {{}, {}}};
-        shader_stages[0].module = vertex_shader;
-        shader_stages[1].module = fragment_shader;
+        std::vector<VezPipelineShaderStageCreateInfo> shader_stages;
+        shader_stages.push_back({nullptr, vertex_shader});
+        if (fragment_shader != VK_NULL_HANDLE) {
+            shader_stages.push_back({nullptr, fragment_shader});
+        }
 
         VezGraphicsPipelineCreateInfo pipeline_info = {};
         pipeline_info.stageCount = static_cast<uint32_t>(shader_stages.size());

@@ -18,7 +18,7 @@ class VezBackend : public Backend {
     virtual result<void> InitContext() override;
     virtual result<void> InitSurface(Platform* platform) override;
     virtual result<std::shared_ptr<Pipeline>> GetGraphicsPipeline(
-        const ShaderDesc& vert, const ShaderDesc& frag) override;
+        const ShaderDesc& vert, const ShaderDesc& frag = {}) override;
     virtual result<std::shared_ptr<VertexInputFormat>> GetVertexInputFormat(
         const VertexInputFormatDesc& desc) override;
 

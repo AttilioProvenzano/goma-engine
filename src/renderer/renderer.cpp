@@ -529,6 +529,11 @@ result<void> Renderer::Render() {
             sample_count = image->second.samples;
         }
 
+        auto w = engine_->platform()->GetWidth();
+        auto h = engine_->platform()->GetHeight();
+        backend_->SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+        backend_->SetScissor({{w, h}});
+
         backend_->BindDepthStencilState(DepthStencilState{});
         backend_->BindRasterizationState(RasterizationState{});
         backend_->BindMultisampleState(

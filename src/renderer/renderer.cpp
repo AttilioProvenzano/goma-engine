@@ -23,6 +23,19 @@ Renderer::Renderer(Engine* engine)
     } else {
         spdlog::error(result.error().message());
     }
+
+    // TODO review multisampling for shadow mapping, remove default render plan
+    RenderPlan render_plan{};
+    render_plan.render_passes["shadow_pass"] = {
+        "shadow_pass", {}, {true, true, true}};
+    render_plan.depth_images["shadow_depth"] = {"shadow_depth",
+                                                DepthImageType::Depth, 1};
+    render_plan.framebuffers["shadow_fb"] = {
+        "shadow_fb", 1024.0f,       1024.0f, FramebufferSize::Absolute,
+        {},          "shadow_depth"};
+    render_plan.render_sequence.push_back(render_plan.render_sequence[0]);
+    render_plan.render_sequence[0] = {"shadow_pass", "shadow_fb"};
+    backend_->SetRenderPlan(std::move(render_plan));
 }
 
 result<void> Renderer::Render() {

@@ -49,10 +49,13 @@ layout(location = 8) out vec3 outNormal;
 #endif
 #endif
 
+layout(location = 11) out vec3 outShadowPos;
+
 layout(set = 0, binding = 12, std140) uniform VertUBO {
 	mat4 mvp;
 	mat4 model;
 	mat4 normal;
+	mat4 shadowMvp;
 } ubo;
 
 void main()
@@ -85,6 +88,9 @@ void main()
 #ifdef HAS_COLORS
     outColor = inColor;
 #endif
+
+    vec4 shadowPos = ubo.shadowMvp * vec4(inPosition, 1.0);
+    outShadowPos = shadowPos.xyz / shadowPos.w;
 
     gl_Position = ubo.mvp * vec4(inPosition, 1.0);
 }

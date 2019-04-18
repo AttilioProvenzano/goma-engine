@@ -61,6 +61,8 @@ layout(set = 0, binding = 10) uniform sampler2D lightTex;
 layout(set = 0, binding = 11) uniform sampler2D reflectionTex;
 #endif
 
+layout(set = 0, binding = 14) uniform sampler2D shadowMap;
+
 const float M_PI = 3.141592653589793;
 const float c_MinReflectance = 0.04;
 
@@ -80,6 +82,8 @@ layout(location = 8) in mat3 inTBN;
 layout(location = 8) in vec3 inNormal;
 #endif
 #endif
+
+layout(location = 11) in vec3 inShadowPos;
 
 layout(location = 0) out vec4 outColor;
 
@@ -111,11 +115,11 @@ const int LightType_Point = 1;
 const int LightType_Spot = 2;
 
 // uniform Light u_Lights[LIGHT_COUNT];
-const int LIGHT_COUNT = 3;
+const int LIGHT_COUNT = 1;
 const Light u_Lights[] = {
-	{{-1, 0, 0}, 100, {1, 1, 1}, 0.7, {0, 0, 0}, 0, 0, LightType_Directional, {0, 0}},
+	// {{-1, 0, 0}, 100, {1, 1, 1}, 0.7, {0, 0, 0}, 0, 0, LightType_Directional, {0, 0}},
 	{{0, -1, 0}, 100, {1, 1, 1}, 0.7, {0, 0, 0}, 0, 0, LightType_Directional, {0, 0}},
-	{{0, 0, -1}, 100, {1, 1, 1}, 0.7, {0, 0, 0}, 0, 0, LightType_Directional, {0, 0}},
+	// {{0, 0, -1}, 100, {1, 1, 1}, 0.7, {0, 0, 0}, 0, 0, LightType_Directional, {0, 0}},
 	// {{1, 0, 0}, 100, {1, 1, 1}, 10, {0, 0, 0}, 0, 0, LightType_Point, {0, 0}}
 };
 
@@ -499,7 +503,10 @@ void main()
         Light light = u_Lights[i];
         if (light.type == LightType_Directional)
         {
-            color += applyDirectionalLight(light, materialInfo, normal, view);
+            if (inShadowPos.z <= texture(shadowMap, inShadowPos.xy).x)
+            {
+                color += applyDirectionalLight(light, materialInfo, normal, view);
+            }
         }
         else if (light.type == LightType_Point)
         {

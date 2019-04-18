@@ -494,7 +494,8 @@ void main()
 
     // LIGHTING
 
-    vec3 color = vec3(0.0, 0.0, 0.0);
+    const vec3 ambientColor = vec3(0.1, 0.1, 0.1);
+    vec3 color = ambientColor * diffuseColor;
     vec3 normal = getNormal();
     vec3 view = normalize(ubo.cameraAndCutoff.xyz - inPosition);
 

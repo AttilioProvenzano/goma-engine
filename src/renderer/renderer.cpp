@@ -31,7 +31,7 @@ Renderer::Renderer(Engine* engine)
     render_plan.depth_images["shadow_depth"] = {"shadow_depth",
                                                 DepthImageType::Depth, 1};
     render_plan.framebuffers["shadow_fb"] = {
-        "shadow_fb", 1024.0f,       1024.0f, FramebufferSize::Absolute,
+        "shadow_fb", 2048.0f,       2048.0f, FramebufferSize::Absolute,
         {},          "shadow_depth"};
     render_plan.render_sequence.push_back(render_plan.render_sequence[0]);
     render_plan.render_sequence[0] = {"shadow_pass", "shadow_fb"};
@@ -424,8 +424,8 @@ result<void> Renderer::Render() {
         backend_->BindMultisampleState(MultisampleState{});
 
         // TODO better way to set viewport and scissor automatically
-        backend_->SetViewport({{1024.0f, 1024.0f}});
-        backend_->SetScissor({{1024, 1024}});
+        backend_->SetViewport({{2048.0f, 2048.0f}});
+        backend_->SetScissor({{2048, 2048}});
 
         // Render meshes
         AttachmentIndex<Mesh> last_mesh_id{0, 0};

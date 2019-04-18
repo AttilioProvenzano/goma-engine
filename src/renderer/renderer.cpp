@@ -408,9 +408,116 @@ result<void> Renderer::Render() {
                   return a.cs_center.z < b.cs_center.z;
               });
 
+    auto shadow_view =
+        glm::lookAt(glm::vec3{0.0f, 0.0f, 0.0f}, glm::vec3{0.0f, -1.0f, 0.0f},
+                    glm::vec3{0.0f, 0.0f, 1.0f});
+    // TODO proper values for left, right, top, bottom
+    const float size = 100.0f;
+    auto shadow_proj = glm::ortho(-size, size, -size, size, -size, size);
+    auto shadow_vp = shadow_proj * shadow_view;
+
+    RenderPassFn shadow_pass = [&](RenderPassDesc rp, FramebufferDesc fb,
+                                   FrameIndex frame_id) {
+        // TODO shadow pass should ignore culling
+        backend_->BindDepthStencilState(DepthStencilState{});
+        backend_->BindRasterizationState(RasterizationState{});
+        backend_->BindMultisampleState(MultisampleState{});
+
+        // TODO better way to set viewport and scissor automatically
+        backend_->SetViewport({{1024.0f, 1024.0f}});
+        backend_->SetScissor({{1024, 1024}});
+
+        // Render meshes
+        AttachmentIndex<Mesh> last_mesh_id{0, 0};
+        Mesh* mesh{nullptr};
+        for (const auto& seq_entry : render_sequence) {
+            auto mesh_id = seq_entry.mesh;
+            auto node_id = seq_entry.node;
+
+            if (mesh_id != last_mesh_id) {
+                auto mesh_res = scene->GetAttachment<Mesh>(mesh_id);
+                if (!mesh_res) {
+                    spdlog::error("Couldn't find mesh {}.", mesh_id);
+                    continue;
+                }
+
+                mesh = mesh_res.value();
+                last_mesh_id = mesh_id;
+
+                // Bind the new mesh
+                auto material_result =
+                    scene->GetAttachment<Material>(mesh->material);
+                if (!material_result) {
+                    spdlog::error("Couldn't find material for mesh {}.",
+                                  mesh->name);
+                    continue;
+                }
+                auto& material = *material_result.value();
+
+                // TODO cleanup of error messages, just one pipeline (not per
+                // material)
+                auto pipeline_res = backend_->GetGraphicsPipeline(
+                    {"../../../assets/shaders/shadow.vert",
+                     ShaderSourceType::Filename,
+                     GetVertexShaderPreamble(*mesh)});
+                if (!pipeline_res) {
+                    spdlog::error("Couldn't get pipeline for material {}.",
+                                  material.name);
+                    continue;
+                }
+
+                backend_->BindGraphicsPipeline(*pipeline_res.value());
+
+                backend_->BindVertexInputFormat(*mesh->vertex_input_format);
+                BindMeshBuffers(*mesh);
+                BindMaterialTextures(material);
+
+                if (!mesh->indices.empty()) {
+                    backend_->BindIndexBuffer(*mesh->buffers.index);
+                }
+            }
+
+            // Draw the mesh node
+            auto& model = scene->GetCachedModel(node_id).value();
+            glm::mat4 mvp = shadow_vp * model;
+
+            auto vtx_ubo_res = backend_->GetUniformBuffer(
+                BufferType::PerNode, node_id, "shadow_vtx_ubo");
+            if (!vtx_ubo_res) {
+                vtx_ubo_res = backend_->CreateUniformBuffer(
+                    BufferType::PerNode, node_id, "shadow_vtx_ubo", 3 * 256,
+                    false);
+            }
+
+            auto vtx_ubo = vtx_ubo_res.value();
+
+            struct VtxUBO {
+                glm::mat4 mvp;
+                glm::mat4 model;
+                glm::mat4 normals;
+            };
+            VtxUBO vtx_ubo_data{std::move(mvp), model,
+                                glm::inverseTranspose(model)};
+
+            backend_->UpdateBuffer(*vtx_ubo, frame_id * 256,
+                                   sizeof(vtx_ubo_data), &vtx_ubo_data);
+            backend_->BindUniformBuffer(*vtx_ubo, frame_id * 256,
+                                        sizeof(vtx_ubo_data), 12);
+
+            if (!mesh->indices.empty()) {
+                backend_->DrawIndexed(
+                    static_cast<uint32_t>(mesh->indices.size()));
+            } else {
+                backend_->Draw(static_cast<uint32_t>(mesh->vertices.size()));
+            }
+        }
+
+        return outcome::success();
+    };
+
     RenderPassFn forward_pass = [&](RenderPassDesc rp, FramebufferDesc fb,
                                     FrameIndex frame_id) {
-        // TODO pass color images here
+        // TODO pass color/depth images here
         uint32_t sample_count = 1;
         auto image =
             backend_->render_plan().color_images.find(fb.color_images[0]);
@@ -469,6 +576,16 @@ result<void> Renderer::Render() {
                 BindMeshBuffers(*mesh);
                 BindMaterialTextures(material);
 
+                // TODO outcome_try with better error message?
+                auto shadow_depth_res =
+                    backend_->GetFramebufferImage(frame_id, "shadow_depth");
+                if (!shadow_depth_res) {
+                    spdlog::error("Couldn't get the shadow map image.");
+                    continue;
+                }
+
+                backend_->BindTexture(*shadow_depth_res.value(), 14);
+
                 auto frag_ubo_res = backend_->GetUniformBuffer(
                     BufferType::PerNode, node_id, "frag_ubo");
                 if (!frag_ubo_res) {
@@ -506,6 +623,14 @@ result<void> Renderer::Render() {
             auto& model = scene->GetCachedModel(node_id).value();
             glm::mat4 mvp = vp * model;
 
+            // Shadow correction maps X and Y for the shadow MVP
+            // to the range [0, 1], useful to sample from the shadow map
+            const glm::mat4 shadow_correction = {{0.5f, 0.0f, 0.0f, 0.0f},
+                                                 {0.0f, 0.5f, 0.0f, 0.0f},
+                                                 {0.0f, 0.0f, 1.0f, 0.0f},
+                                                 {0.5f, 0.5f, 0.0f, 1.0f}};
+            glm::mat4 shadow_mvp = shadow_correction * shadow_vp * model;
+
             auto vtx_ubo_res = backend_->GetUniformBuffer(BufferType::PerNode,
                                                           node_id, "vtx_ubo");
             if (!vtx_ubo_res) {
@@ -519,9 +644,11 @@ result<void> Renderer::Render() {
                 glm::mat4 mvp;
                 glm::mat4 model;
                 glm::mat4 normals;
+                glm::mat4 shadow_mvp;
             };
             VtxUBO vtx_ubo_data{std::move(mvp), model,
-                                glm::inverseTranspose(model)};
+                                glm::inverseTranspose(model),
+                                std::move(shadow_mvp)};
 
             backend_->UpdateBuffer(*vtx_ubo, frame_id * 256,
                                    sizeof(vtx_ubo_data), &vtx_ubo_data);
@@ -583,7 +710,8 @@ result<void> Renderer::Render() {
         return outcome::success();
     };
 
-    backend_->RenderFrame({std::move(forward_pass)}, "color");
+    backend_->RenderFrame({std::move(shadow_pass), std::move(forward_pass)},
+                          "color");
 
     return outcome::success();
 }

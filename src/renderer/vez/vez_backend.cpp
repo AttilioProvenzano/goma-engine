@@ -1460,6 +1460,8 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
+    OUTCOME_TRY(sampler, GetSampler({}));
+    vulkan_image.sampler = sampler;
 
     auto ret = std::make_shared<Image>(vulkan_image);
     context_.fb_image_cache[hash] = ret;
@@ -1515,6 +1517,8 @@ result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
                        VK_IMAGE_USAGE_SAMPLED_BIT;
 
     OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
+    OUTCOME_TRY(sampler, GetSampler({}));
+    vulkan_image.sampler = sampler;
 
     auto ret = std::make_shared<Image>(vulkan_image);
     context_.fb_image_cache[hash] = ret;

@@ -30,6 +30,8 @@ class VezBackend : public Backend {
         const std::vector<void*>& initial_contents) override;
     virtual result<std::shared_ptr<Image>> GetTexture(
         const char* name) override;
+    virtual result<std::shared_ptr<Image>> GetFramebufferImage(
+        FrameIndex frame_id, const char* name) override;
 
     virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
         BufferType type, const GenIndex& index, const char* name, uint64_t size,
@@ -164,8 +166,6 @@ class VezBackend : public Backend {
     result<std::shared_ptr<Image>> CreateFramebufferImage(
         FrameIndex frame_id, const FramebufferDepthImageDesc& desc,
         const FramebufferDesc& fb_desc);
-    result<std::shared_ptr<Image>> GetFramebufferImage(FrameIndex frame_id,
-                                                       const char* name);
 
     result<size_t> StartFrame(uint32_t threads = 1);
     result<void> StartRenderPass(Framebuffer fb, RenderPassDesc rp_desc);

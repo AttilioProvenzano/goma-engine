@@ -57,6 +57,8 @@ class Backend {
         const char* name, const TextureDesc& texture_desc,
         const std::vector<void*>& initial_contents) = 0;
     virtual result<std::shared_ptr<Image>> GetTexture(const char* name) = 0;
+    virtual result<std::shared_ptr<Image>> GetFramebufferImage(
+        FrameIndex frame_id, const char* name) = 0;
 
     virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
         BufferType type, const GenIndex& index, const char* name, uint64_t size,

@@ -23,8 +23,7 @@ struct FragmentUniforms {};
 enum class Buffering { Double, Triple };
 
 typedef size_t FrameIndex;
-typedef std::function<result<void>(RenderPassDesc, FramebufferDesc, FrameIndex)>
-    RenderPassFn;
+typedef std::function<result<void>(RenderPassDesc, FrameIndex)> RenderPassFn;
 
 class Backend {
   public:

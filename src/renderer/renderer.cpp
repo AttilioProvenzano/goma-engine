@@ -420,8 +420,7 @@ result<void> Renderer::Render() {
     auto shadow_proj = glm::ortho(-size, size, -size, size, -size, size);
     auto shadow_vp = shadow_proj * shadow_view;
 
-    RenderPassFn shadow_pass = [&](RenderPassDesc rp, FramebufferDesc fb,
-                                   FrameIndex frame_id) {
+    RenderPassFn shadow_pass = [&](RenderPassDesc rp, FrameIndex frame_id) {
         // TODO shadow pass should ignore culling
         backend_->BindDepthStencilState(DepthStencilState{});
         backend_->BindRasterizationState(RasterizationState{});
@@ -519,12 +518,10 @@ result<void> Renderer::Render() {
         return outcome::success();
     };
 
-    RenderPassFn forward_pass = [&](RenderPassDesc rp, FramebufferDesc fb,
-                                    FrameIndex frame_id) {
+    RenderPassFn forward_pass = [&](RenderPassDesc rp, FrameIndex frame_id) {
         // TODO pass color/depth images here
         uint32_t sample_count = 1;
-        auto image =
-            backend_->render_plan().color_images.find(fb.color_images[0]);
+        auto image = backend_->render_plan().color_images.find("color");
         if (image != backend_->render_plan().color_images.end()) {
             sample_count = image->second.samples;
         }
@@ -719,8 +716,151 @@ result<void> Renderer::Render() {
         return outcome::success();
     };
 
-    backend_->RenderFrame({std::move(shadow_pass), std::move(forward_pass)},
-                          "color");
+    RenderPassFn blit_pass = [&](RenderPassDesc rp, FrameIndex frame_id) {
+        auto color_image_res = backend_->GetRenderTarget(frame_id, "color");
+        if (!color_image_res) {
+            spdlog::error("Couldn't get the color image.");
+        }
+
+        auto resolved_image_res =
+            backend_->GetRenderTarget(frame_id, "resolved_image");
+        if (!resolved_image_res) {
+            spdlog::error("Couldn't get the resolved image.");
+        }
+
+        auto depth_image_res = backend_->GetRenderTarget(frame_id, "depth");
+        if (!depth_image_res) {
+            spdlog::error("Couldn't get the depth image.");
+        }
+
+        auto resolved_depth_res =
+            backend_->GetRenderTarget(frame_id, "resolved_depth");
+        if (!resolved_depth_res) {
+            spdlog::error("Couldn't get the resolved depth image.");
+        }
+
+        auto blur_full_res = backend_->GetRenderTarget(frame_id, "blur_full");
+        if (!blur_full_res) {
+            spdlog::error("Couldn't get the blur full image.");
+        }
+
+        auto blur_half_res = backend_->GetRenderTarget(frame_id, "blur_half");
+        if (!blur_half_res) {
+            spdlog::error("Couldn't get the blur half image.");
+        }
+
+        auto blur_quarter_res =
+            backend_->GetRenderTarget(frame_id, "blur_quarter");
+        if (!blur_quarter_res) {
+            spdlog::error("Couldn't get the blur quarter image.");
+        }
+
+        auto color_image = color_image_res.value();
+        auto resolved_image = resolved_image_res.value();
+        auto depth_image = depth_image_res.value();
+        auto resolved_depth = resolved_depth_res.value();
+
+        auto w = engine_->platform()->GetWidth();
+        auto h = engine_->platform()->GetHeight();
+
+        VezImageResolve resolve{};
+        resolve.srcSubresource = {0, 0, 1};
+        resolve.dstSubresource = {0, 0, 1};
+        resolve.extent = {w, h, 1};
+        vezCmdResolveImage(color_image->vez.image, resolved_image->vez.image, 1,
+                           &resolve);
+        vezCmdResolveImage(depth_image->vez.image, resolved_depth->vez.image, 1,
+                           &resolve);
+
+        VezImageBlit blit{};
+        blit.srcSubresource = {0, 0, 1};
+        blit.dstSubresource = {0, 0, 1};
+        blit.srcOffsets[1] = {static_cast<int32_t>(w), static_cast<int32_t>(h),
+                              1};
+        blit.dstOffsets[1] = {static_cast<int32_t>(w / 2),
+                              static_cast<int32_t>(h / 2), 1};
+        vezCmdBlitImage(resolved_image->vez.image,
+                        blur_half_res.value()->vez.image, 1, &blit,
+                        VK_FILTER_LINEAR);
+
+        blit.srcOffsets[1] = {static_cast<int32_t>(w / 2),
+                              static_cast<int32_t>(h / 2), 1};
+        blit.dstOffsets[1] = {static_cast<int32_t>(w / 4),
+                              static_cast<int32_t>(h / 4), 1};
+        vezCmdBlitImage(blur_half_res.value()->vez.image,
+                        blur_quarter_res.value()->vez.image, 1, &blit,
+                        VK_FILTER_LINEAR);
+
+        blit.srcOffsets[1] = {static_cast<int32_t>(w / 4),
+                              static_cast<int32_t>(h / 4), 1};
+        blit.dstOffsets[1] = {static_cast<int32_t>(w), static_cast<int32_t>(h),
+                              1};
+        vezCmdBlitImage(blur_quarter_res.value()->vez.image,
+                        blur_full_res.value()->vez.image, 1, &blit,
+                        VK_FILTER_LINEAR);
+
+        return outcome::success();
+    };
+
+    RenderPassFn postprocessing_pass = [&](RenderPassDesc rp,
+                                           FrameIndex frame_id) {
+        auto resolved_image_res =
+            backend_->GetRenderTarget(frame_id, "resolved_image");
+        if (!resolved_image_res) {
+            spdlog::error("Couldn't get the resolved image.");
+        }
+
+        auto blur_full_res = backend_->GetRenderTarget(frame_id, "blur_full");
+        if (!blur_full_res) {
+            spdlog::error("Couldn't get the blur image.");
+        }
+
+        // TODO won't resolve depth, remove before
+        auto depth_res = backend_->GetRenderTarget(frame_id, "depth");
+        if (!depth_res) {
+            spdlog::error("Couldn't get the resolved depth image.");
+        }
+
+        auto blur_full = blur_full_res.value();
+        auto resolved_image = resolved_image_res.value();
+        auto depth = depth_res.value();
+
+        auto w = engine_->platform()->GetWidth();
+        auto h = engine_->platform()->GetHeight();
+        backend_->SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+        backend_->SetScissor({{w, h}});
+
+        backend_->BindDepthStencilState(DepthStencilState{});
+        backend_->BindRasterizationState(RasterizationState{});
+        backend_->BindMultisampleState(MultisampleState{});
+
+        auto no_input = backend_->GetVertexInputFormat({});
+        backend_->BindVertexInputFormat(*no_input.value());
+
+        auto pipeline_res = backend_->GetGraphicsPipeline(
+            {"../../../assets/shaders/fullscreen.vert",
+             ShaderSourceType::Filename},
+            {"../../../assets/shaders/postprocessing.frag",
+             ShaderSourceType::Filename});
+        if (!pipeline_res) {
+            spdlog::error(
+                "Couldn't get pipeline for "
+                "postprocessing");
+        }
+
+        backend_->BindGraphicsPipeline(*pipeline_res.value());
+        backend_->BindTexture(resolved_image->vez, 0);
+        backend_->BindTexture(blur_full->vez, 1);
+        backend_->BindTexture(depth->vez, 2);
+        backend_->Draw(3);
+
+        return outcome::success();
+    };
+
+    backend_->RenderFrame(
+        {std::move(shadow_pass), std::move(forward_pass), std::move(blit_pass),
+         std::move(postprocessing_pass)},
+        "postprocessing");
 
     return outcome::success();
 }

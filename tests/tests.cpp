@@ -221,7 +221,7 @@ void main() {
         << create_pipeline_result.error().message();
 
     vez.RenderFrame(
-        {[&](RenderPassDesc rp, FramebufferDesc fb, FrameIndex frame_id) {
+        {[&](RenderPassDesc rp, FrameIndex frame_id) {
             vez.BindGraphicsPipeline(*create_pipeline_result.value());
             vez.BindVertexInputFormat(*vertex_input_format_result.value());
             vez.BindVertexBuffers({*create_pos_buffer_result.value(),
@@ -424,7 +424,7 @@ void main() {
 
     for (size_t i = 0; i < 100; i++) {
         vez.RenderFrame(
-            {[&](RenderPassDesc rp, FramebufferDesc fb, FrameIndex frame_id) {
+            {[&](RenderPassDesc rp, FrameIndex frame_id) {
                 vez.BindGraphicsPipeline(*create_pipeline_result.value());
 
                 model = glm::rotate(model, glm::radians(2.0f), camera->up);

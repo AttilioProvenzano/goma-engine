@@ -558,7 +558,7 @@ result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
     }
 
     FinishFrame();
-    PresentImage("color");
+    PresentImage(present_image);
 
     uint32_t buf_size = config_.buffering == Buffering::Triple ? 3 : 2;
     context_.current_frame = (context_.current_frame + 1) % buf_size;

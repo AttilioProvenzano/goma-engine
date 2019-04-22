@@ -638,7 +638,7 @@ result<void> Renderer::Render() {
                 };
                 FragUBO frag_ubo_data{
                     4.5f,   2.2f, 0.2f, 0.5f, {material.diffuse_color, 1.0f},
-                    ws_pos, 0.0f};
+                    ws_pos, 0.5f};
 
                 backend_->UpdateBuffer(*frag_ubo, frame_id * 256,
                                        sizeof(frag_ubo_data), &frag_ubo_data);
@@ -1085,8 +1085,10 @@ const char* Renderer::GetFragmentShaderPreamble(
             preamble += "#define HAS_REFLECTION_MAP\n";
         }
 
-        // preamble += "#define DEBUG_OUTPUT\n";
-        preamble += "#define DEBUG_NORMAL\n";
+        // TODO Assimp doesn't seem to mark materials where alpha discard should
+        // be enabled, it would be better to avoid calls to discard when
+        // unneeded
+        preamble += "#define ALPHAMODE_MASK\n";
 
         fs_preamble_map_[desc.int_repr] = std::move(preamble);
         return fs_preamble_map_[desc.int_repr].c_str();

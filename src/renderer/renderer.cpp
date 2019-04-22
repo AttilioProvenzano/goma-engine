@@ -38,7 +38,6 @@ Renderer::Renderer(Engine* engine)
 
     render_plan.depth_images = {
         {"depth", {{}, 4, Format::DepthOnly}},
-        {"resolved_depth", {{}, 1, Format::DepthOnly}},
         {
             "shadow_depth",
             {{2048.0f, 2048.0f, ExtentType::Absolute}, 1, Format::DepthOnly},
@@ -755,12 +754,6 @@ result<void> Renderer::Render() {
             spdlog::error("Couldn't get the depth image.");
         }
 
-        auto resolved_depth_res =
-            backend_->GetRenderTarget(frame_id, "resolved_depth");
-        if (!resolved_depth_res) {
-            spdlog::error("Couldn't get the resolved depth image.");
-        }
-
         auto blur_full_res = backend_->GetRenderTarget(frame_id, "blur_full");
         if (!blur_full_res) {
             spdlog::error("Couldn't get the blur full image.");
@@ -780,7 +773,6 @@ result<void> Renderer::Render() {
         auto color_image = color_image_res.value();
         auto resolved_image = resolved_image_res.value();
         auto depth_image = depth_image_res.value();
-        auto resolved_depth = resolved_depth_res.value();
 
         auto w = engine_->platform()->GetWidth();
         auto h = engine_->platform()->GetHeight();
@@ -790,8 +782,6 @@ result<void> Renderer::Render() {
         resolve.dstSubresource = {0, 0, 1};
         resolve.extent = {w, h, 1};
         vezCmdResolveImage(color_image->vez.image, resolved_image->vez.image, 1,
-                           &resolve);
-        vezCmdResolveImage(depth_image->vez.image, resolved_depth->vez.image, 1,
                            &resolve);
 
         VezImageBlit blit{};

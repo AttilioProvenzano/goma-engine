@@ -24,6 +24,18 @@ namespace {
 TEST(SceneTest, CanCreateScene) {
     Scene s;
     ASSERT_EQ(s.GetRootNode(), NodeIndex(0, 1));
+
+    int a = 3;
+    result<std::reference_wrapper<int>> res(std::ref(a));
+    ASSERT_EQ(res.value(), 3);
+
+    int& b = res.value();
+    b = 4;
+    ASSERT_EQ(res.value(), 4);
+
+    auto& c = res.value();
+    c.get() = 5;
+    ASSERT_EQ(res.value(), 5);
 }
 
 TEST(SceneTest, CanCreateNodes) {
@@ -115,11 +127,16 @@ TEST(AssimpLoaderTest, CanLoadAModel) {
     EXPECT_EQ(scene->GetAttachmentCount<Mesh>(), 1);
 
     auto attached_nodes = scene->GetAttachedNodes<Mesh>({0}).value();
-    EXPECT_EQ(*attached_nodes, std::set<NodeIndex>({1}));
+    EXPECT_EQ(*attached_nodes, std::set<NodeIndex>({2}));
 
     auto children = scene->GetChildren(scene->GetRootNode());
     ASSERT_TRUE(children);
-    ASSERT_EQ(children.value().size(), 2);
+    ASSERT_EQ(children.value().size(), 1);
+
+    auto assimp_root_node = children.value().begin();
+    auto assimp_children = scene->GetChildren(*assimp_root_node);
+    ASSERT_TRUE(assimp_children);
+    ASSERT_EQ(assimp_children.value().size(), 2);
 }
 
 class VezBackendTest : public ::testing::Test {
@@ -137,7 +154,7 @@ TEST_F(VezBackendTest, RenderQuad) {
     Win32Platform platform;
     platform.InitWindow();
 
-    auto init_surface_result = vez.InitSurface(&platform);
+    auto init_surface_result = vez.InitSurface(platform);
     ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
 
     std::vector<glm::vec3> positions = {{-0.5f, -0.5f, 0.0f},
@@ -249,7 +266,7 @@ TEST_F(VezBackendTest, RenderModel) {
     Win32Platform platform;
     platform.InitWindow();
 
-    auto init_surface_result = vez.InitSurface(&platform);
+    auto init_surface_result = vez.InitSurface(platform);
     ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
 
     AssimpLoader loader;
@@ -479,7 +496,7 @@ void main() {
 TEST(RendererTest, RenderDuck) {
     Engine e;
     e.LoadScene("../../../assets/models/Duck/glTF/Duck.gltf");
-    auto res = e.renderer()->Render();
+    auto res = e.renderer().Render();
 
     ASSERT_TRUE(res) << res.error().message();
 
@@ -491,7 +508,7 @@ TEST(RendererTest, RenderLantern) {
     e.LoadScene("../../../assets/models/Lantern/glTF/Lantern.gltf");
 
     for (size_t i = 0; i < 300; i++) {
-        auto res = e.renderer()->Render();
+        auto res = e.renderer().Render();
         ASSERT_TRUE(res) << res.error().message();
         std::this_thread::sleep_for(std::chrono::milliseconds(8));
     }
@@ -504,7 +521,7 @@ TEST(RendererTest, RenderSponza) {
     e.LoadScene("../../../assets/models/Sponza/glTF/Sponza.gltf");
 
     for (size_t i = 0; i < 300; i++) {
-        auto res = e.renderer()->Render();
+        auto res = e.renderer().Render();
         ASSERT_TRUE(res) << res.error().message();
     }
 

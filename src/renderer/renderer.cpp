@@ -26,15 +26,37 @@ Renderer::Renderer(Engine* engine)
 
     // TODO review multisampling for shadow mapping, remove default render plan
     RenderPlan render_plan{};
-    render_plan.render_passes["shadow_pass"] = {
-        "shadow_pass", {}, {true, true, true}};
-    render_plan.depth_images["shadow_depth"] = {"shadow_depth",
-                                                DepthImageType::Depth, 1};
-    render_plan.framebuffers["shadow_fb"] = {
-        "shadow_fb", 2048.0f,       2048.0f, FramebufferSize::Absolute,
-        {},          "shadow_depth"};
-    render_plan.render_sequence.push_back(render_plan.render_sequence[0]);
-    render_plan.render_sequence[0] = {"shadow_pass", "shadow_fb"};
+
+    render_plan.color_images = {
+        {"color", {{}, 4}},
+        {"blur_full", {}},
+        {"blur_half", {{0.5f, 0.5f}}},
+        {"blur_quarter", {{0.25f, 0.25f}}},
+        {"resolved_image", {}},
+        {"postprocessing", {}},
+    };
+
+    render_plan.depth_images = {
+        {"depth", {{}, 4, Format::DepthOnly}},
+        {"resolved_depth", {{}, 1, Format::DepthOnly}},
+        {
+            "shadow_depth",
+            {{2048.0f, 2048.0f, ExtentType::Absolute}, 1, Format::DepthOnly},
+        },
+    };
+
+    render_plan.render_passes = {
+        std::make_pair("shadow",
+                       RenderPassDesc{{}, DepthAttachmentDesc{"shadow_depth"}}),
+        std::make_pair("forward", RenderPassDesc{{ColorAttachmentDesc{"color"}},
+                                                 DepthAttachmentDesc{"depth"}}),
+        std::make_pair("", RenderPassDesc{}),
+        std::make_pair("postprocessing",
+                       RenderPassDesc{{ColorAttachmentDesc{"postprocessing"}}}),
+    };
+
+    // TODO Add blits to the plan (or outside render pass)
+    // TODO remove default render plan
     backend_->SetRenderPlan(std::move(render_plan));
 }
 

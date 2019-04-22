@@ -30,7 +30,7 @@ class VezBackend : public Backend {
         const std::vector<void*>& initial_contents) override;
     virtual result<std::shared_ptr<Image>> GetTexture(
         const char* name) override;
-    virtual result<std::shared_ptr<Image>> GetFramebufferImage(
+    virtual result<std::shared_ptr<Image>> GetRenderTarget(
         FrameIndex frame_id, const char* name) override;
 
     virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
@@ -158,14 +158,14 @@ class VezBackend : public Backend {
     VkFormat GetVkFormat(Format format);
 
     result<Framebuffer> CreateFramebuffer(FrameIndex frame_id, const char* name,
-                                          FramebufferDesc fb_desc);
+                                          RenderPassDesc fb_desc);
     result<Framebuffer> GetFramebuffer(FrameIndex frame_id, const char* name);
-    result<std::shared_ptr<Image>> CreateFramebufferImage(
-        FrameIndex frame_id, const FramebufferColorImageDesc& desc,
-        const FramebufferDesc& fb_desc);
-    result<std::shared_ptr<Image>> CreateFramebufferImage(
-        FrameIndex frame_id, const FramebufferDepthImageDesc& desc,
-        const FramebufferDesc& fb_desc);
+    result<std::shared_ptr<Image>> CreateRenderTarget(
+        FrameIndex frame_id, const char* name,
+        const ColorRenderTargetDesc& desc);
+    result<std::shared_ptr<Image>> CreateRenderTarget(
+        FrameIndex frame_id, const char* name,
+        const DepthRenderTargetDesc& desc);
 
     result<size_t> StartFrame(uint32_t threads = 1);
     result<void> StartRenderPass(Framebuffer fb, RenderPassDesc rp_desc);
@@ -182,8 +182,8 @@ class VezBackend : public Backend {
                                                      VkShaderModule fs);
     VezContext::VertexInputFormatHash GetVertexInputFormatHash(
         const VertexInputFormatDesc& desc);
-    VezContext::ImageHash GetFramebufferImageHash(FrameIndex frame_id,
-                                                  const char* name);
+    VezContext::ImageHash GetRenderTargetHash(FrameIndex frame_id,
+                                              const char* name);
     VezContext::ImageHash GetTextureHash(const char* name);
     VezContext::FramebufferHash GetFramebufferHash(FrameIndex frame_id,
                                                    const char* name);

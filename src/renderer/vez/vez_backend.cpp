@@ -978,8 +978,8 @@ result<void> VezBackend::FinishFrame() {
 result<void> VezBackend::PresentImage(const char* present_image_name) {
     VkDevice device = context_.device;
 
-    OUTCOME_TRY(fb_image, GetFramebufferImage(context_.current_frame,
-                                              present_image_name));
+    OUTCOME_TRY(fb_image,
+                GetRenderTarget(context_.current_frame, present_image_name));
     VkImage present_image = fb_image->vez.image;
 
     VkPipelineStageFlags wait_dst =
@@ -1421,10 +1421,10 @@ result<std::shared_ptr<Buffer>> VezBackend::GetBuffer(
     return Error::NotFound;
 }
 
-result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
-    FrameIndex frame_id, const FramebufferColorImageDesc& image_desc,
-    const FramebufferDesc& fb_desc) {
-    auto hash = GetFramebufferImageHash(frame_id, image_desc.name.c_str());
+result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
+    FrameIndex frame_id, const char* name,
+    const ColorRenderTargetDesc& image_desc) {
+    auto hash = GetRenderTargetHash(frame_id, name);
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         vezDestroyImageView(context_.device, result->second->vez.image_view);
@@ -1832,8 +1832,8 @@ VezContext::ImageHash VezBackend::GetTextureHash(const char* name) {
     return {sdbm_hash(name)};
 }
 
-VezContext::ImageHash VezBackend::GetFramebufferImageHash(FrameIndex frame_id,
-                                                          const char* name) {
+VezContext::ImageHash VezBackend::GetRenderTargetHash(FrameIndex frame_id,
+                                                      const char* name) {
     return {frame_id, sdbm_hash(name)};
 }
 

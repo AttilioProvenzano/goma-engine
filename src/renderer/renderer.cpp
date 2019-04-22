@@ -587,7 +587,7 @@ result<void> Renderer::Render() {
 
                 // TODO outcome_try with better error message?
                 auto shadow_depth_res =
-                    backend_->GetFramebufferImage(frame_id, "shadow_depth");
+                    backend_->GetRenderTarget(frame_id, "shadow_depth");
                 if (!shadow_depth_res) {
                     spdlog::error("Couldn't get the shadow map image.");
                     continue;

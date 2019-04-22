@@ -33,9 +33,9 @@ layout(location = 7) in vec2 inUVW;
 #endif
 
 layout(set = 0, binding = 12, std140) uniform UBO {
-	mat4 mvp;
-	mat4 model;
-	mat4 normal;
+    mat4 mvp;
+    mat4 model;
+    mat4 normal;
 } ubo;
 
 void main() {

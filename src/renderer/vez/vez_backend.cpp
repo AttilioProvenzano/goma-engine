@@ -279,7 +279,7 @@ result<std::shared_ptr<Image>> VezBackend::GetTexture(const char* name) {
 
 result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
                                                   const char* name,
-                                                  FramebufferDesc fb_desc) {
+                                                  RenderPassDesc rp_desc) {
     assert(context_.device &&
            "Context must be initialized before creating a framebuffer");
     VkDevice device = context_.device;
@@ -290,46 +290,70 @@ result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
         vezDestroyFramebuffer(context_.device, result->second);
     }
 
+    uint32_t width = 0;
+    uint32_t height = 0;
+
     std::vector<VkImageView> attachments;
-    for (auto& image_name : fb_desc.color_images) {
-        auto image_desc_res = render_plan_->color_images.find(image_name);
+    for (auto& attachment : rp_desc.color_attachments) {
+        auto image_desc_res =
+            render_plan_->color_images.find(attachment.rt_name);
         if (image_desc_res != render_plan_->color_images.end()) {
-            OUTCOME_TRY(image, CreateFramebufferImage(
-                                   frame_id, image_desc_res->second, fb_desc));
+            // TODO better logging for "not found"
+            OUTCOME_TRY(image,
+                        GetRenderTarget(frame_id, attachment.rt_name.c_str()));
             attachments.push_back(image->vez.image_view);
+
+            const auto& extent = image_desc_res->second.extent;
+            auto w = static_cast<uint32_t>(round(
+                extent.width * context_.capabilities.currentExtent.width));
+            auto h = static_cast<uint32_t>(round(
+                extent.height * context_.capabilities.currentExtent.height));
+
+            if ((width && width != w) || (height && height != h)) {
+                spdlog::error(
+                    "Dimensions for color image \"{}\" not matching dimensions "
+                    "of other images when creating framebuffer \"{}\".",
+                    attachment.rt_name, name);
+                return Error::DimensionsNotMatching;
+            }
+            width = w;
+            height = h;
         } else {
             spdlog::error(
                 "Color image \"{}\" not found when creating framebuffer "
                 "\"{}\".",
-                image_name, fb_desc.name);
+                attachment.rt_name, name);
             return Error::NotFound;
         }
     }
 
-    if (fb_desc.depth_image != "") {
+    if (rp_desc.depth_attachment.rt_name != "") {
         auto depth_image_desc_res =
-            render_plan_->depth_images.find(fb_desc.depth_image);
+            render_plan_->depth_images.find(rp_desc.depth_attachment.rt_name);
         if (depth_image_desc_res != render_plan_->depth_images.end()) {
             OUTCOME_TRY(image,
-                        CreateFramebufferImage(
-                            frame_id, depth_image_desc_res->second, fb_desc));
+                        CreateRenderTarget(
+                            frame_id, rp_desc.depth_attachment.rt_name.c_str(),
+                            depth_image_desc_res->second));
             attachments.push_back(image->vez.image_view);
-        }
-    }
 
-    // TODO abstract into a helper function
-    uint32_t width, height;
-    if (fb_desc.framebuffer_size == FramebufferSize::RelativeToSwapchain) {
-        // TODO Ensure we have the latest surface size (e.g. when recreating the
-        // swapchain)
-        width = static_cast<uint32_t>(
-            round(fb_desc.width * context_.capabilities.currentExtent.width));
-        height = static_cast<uint32_t>(
-            round(fb_desc.height * context_.capabilities.currentExtent.height));
-    } else {
-        // FramebufferSize::Absolute
-        width = static_cast<uint32_t>(round(fb_desc.width));
-        height = static_cast<uint32_t>(round(fb_desc.height));
+            // TODO we can actually compare extents directly
+            const auto& extent = depth_image_desc_res->second.extent;
+            auto w = static_cast<uint32_t>(round(
+                extent.width * context_.capabilities.currentExtent.width));
+            auto h = static_cast<uint32_t>(round(
+                extent.height * context_.capabilities.currentExtent.height));
+
+            if ((width && width != w) || (height && height != h)) {
+                spdlog::error(
+                    "Dimensions for color image \"{}\" not matching dimensions "
+                    "of other images when creating framebuffer \"{}\".",
+                    rp_desc.depth_attachment.rt_name, name);
+                return Error::DimensionsNotMatching;
+            }
+            width = w;
+            height = h;
+        }
     }
 
     VezFramebufferCreateInfo fb_info = {};
@@ -488,54 +512,49 @@ result<void> VezBackend::SetRenderPlan(const RenderPlan& render_plan) {
 result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
                                      const char* present_image) {
     if (!render_plan_) {
-        // Set a default render plan
-        SetRenderPlan({});
+        spdlog::error("A valid render plan must be set before rendering.");
+        return Error::NoRenderPlan;
     }
 
     auto frame_id = StartFrame().value();
 
-    for (size_t i = 0; i < render_plan_->render_sequence.size(); i++) {
-        auto& render_seq_entry = render_plan_->render_sequence[i];
+    for (size_t i = 0; i < render_plan_->render_passes.size(); i++) {
+        auto& rp_entry = render_plan_->render_passes[i];
 
-        auto& rp_desc_result =
-            render_plan_->render_passes.find(render_seq_entry.rp_name);
-        if (rp_desc_result == render_plan_->render_passes.end()) {
-            spdlog::error("Invalid render pass \"{}\"!",
-                          render_seq_entry.rp_name);
-            return Error::NotFound;
-        }
-
-        auto& fb_desc_result =
-            render_plan_->framebuffers.find(render_seq_entry.fb_name);
-        if (fb_desc_result == render_plan_->framebuffers.end()) {
-            spdlog::error("Invalid framebuffer \"{}\"!",
-                          render_seq_entry.fb_name);
-            return Error::NotFound;
-        }
-
-        auto fb_result =
-            GetFramebuffer(frame_id, fb_desc_result->first.c_str());
+        // TODO clean up empty render pass name for commands outside rp
+        auto fb_result = GetFramebuffer(frame_id, rp_entry.first.c_str());
 
         if (!fb_result) {
-            auto fb_create_result =
-                CreateFramebuffer(frame_id, fb_desc_result->first.c_str(),
-                                  fb_desc_result->second);
-            StartRenderPass(fb_create_result.value(), rp_desc_result->second);
+            auto fb_create_result = CreateFramebuffer(
+                frame_id, rp_entry.first.c_str(), rp_entry.second);
+            if (!rp_entry.first.empty()) {
+                StartRenderPass(fb_create_result.value(), rp_entry.second);
+            }
         } else {
-            StartRenderPass(fb_result.value(), rp_desc_result->second);
+            if (!rp_entry.first.empty()) {
+                StartRenderPass(fb_result.value(), rp_entry.second);
+            }
         }
 
         if (i < render_pass_fns.size()) {
-            render_pass_fns[i](rp_desc_result->second, fb_desc_result->second,
-                               frame_id);
+            render_pass_fns[i](
+                rp_entry.first.empty() ? RenderPassDesc{} : rp_entry.second,
+                frame_id);
         } else if (render_pass_fns.size() == 1) {
-            render_pass_fns[0](rp_desc_result->second, fb_desc_result->second,
-                               frame_id);
+            render_pass_fns[0](
+                rp_entry.first.empty() ? RenderPassDesc{} : rp_entry.second,
+                frame_id);
         } else {
             spdlog::error("Skipping render pass \"{}\", no function provided.",
-                          rp_desc_result->first);
+                          rp_entry.first);
             continue;
         }
+
+        // TODO duplicate in begin render pass (remove)
+        if (rp_in_progress_) {
+            vezCmdEndRenderPass();
+        };
+        rp_in_progress_ = false;
     }
 
     FinishFrame();
@@ -891,12 +910,7 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
     };
     rp_in_progress_ = false;
 
-    size_t total_attachments = rp_desc.depth_attachment.active
-                                   ? rp_desc.color_attachments.size() + 1
-                                   : rp_desc.color_attachments.size();
-
     std::vector<VezAttachmentInfo> attach_infos;
-    attach_infos.reserve(total_attachments);
 
     for (auto attachment : rp_desc.color_attachments) {
         attach_infos.push_back(
@@ -908,7 +922,7 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
               attachment.clear_color[2], attachment.clear_color[3]}});
     }
 
-    if (rp_desc.depth_attachment.active) {
+    if (!rp_desc.depth_attachment.rt_name.empty()) {
         VezAttachmentInfo depth_info = {
             rp_desc.depth_attachment.clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
                                            : VK_ATTACHMENT_LOAD_OP_LOAD,
@@ -1434,24 +1448,26 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
     VkFormat format = GetVkFormat(image_desc.format);
 
     uint32_t width, height;
-    if (fb_desc.framebuffer_size == FramebufferSize::RelativeToSwapchain) {
+    if (image_desc.extent.type == ExtentType::RelativeToSwapchain) {
         // TODO Ensure we have the latest surface size (e.g. when recreating
         // the swapchain)
         width = static_cast<uint32_t>(
-            round(fb_desc.width * context_.capabilities.currentExtent.width));
+            round(image_desc.extent.width *
+                  context_.capabilities.currentExtent.width));
         height = static_cast<uint32_t>(
-            round(fb_desc.height * context_.capabilities.currentExtent.height));
+            round(image_desc.extent.height *
+                  context_.capabilities.currentExtent.height));
     } else {
-        // FramebufferSize::Absolute
-        width = static_cast<uint32_t>(round(fb_desc.width));
-        height = static_cast<uint32_t>(round(fb_desc.height));
+        // ExtentType::Absolute
+        width = static_cast<uint32_t>(round(image_desc.extent.width));
+        height = static_cast<uint32_t>(round(image_desc.extent.height));
     }
 
     VezImageCreateInfo image_info = {};
     image_info.extent = {width, height, 1};
     image_info.imageType = VK_IMAGE_TYPE_2D;
     image_info.arrayLayers = 1;
-    image_info.mipLevels = 1;
+    image_info.mipLevels = image_desc.mip_levels;
     image_info.format = format;
     image_info.samples = static_cast<VkSampleCountFlagBits>(image_desc.samples);
     image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -1468,41 +1484,32 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
     return ret;
 }
 
-result<std::shared_ptr<Image>> VezBackend::CreateFramebufferImage(
-    FrameIndex frame_id, const FramebufferDepthImageDesc& image_desc,
-    const FramebufferDesc& fb_desc) {
-    auto hash = GetFramebufferImageHash(frame_id, image_desc.name.c_str());
+result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
+    FrameIndex frame_id, const char* name,
+    const DepthRenderTargetDesc& image_desc) {
+    auto hash = GetRenderTargetHash(frame_id, name);
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         vezDestroyImageView(context_.device, result->second->vez.image_view);
         vezDestroyImage(context_.device, result->second->vez.image);
     }
 
-    VkFormat format;
-    switch (image_desc.depth_type) {
-        case DepthImageType::Depth:
-            format = VK_FORMAT_D32_SFLOAT;
-            break;
-        case DepthImageType::DepthStencil:
-            format = VK_FORMAT_D32_SFLOAT_S8_UINT;
-            break;
-        default:
-            format = VK_FORMAT_D32_SFLOAT_S8_UINT;
-            break;
-    }
+    VkFormat format = GetVkFormat(image_desc.format);
 
     uint32_t width, height;
-    if (fb_desc.framebuffer_size == FramebufferSize::RelativeToSwapchain) {
+    if (image_desc.extent.type == ExtentType::RelativeToSwapchain) {
         // TODO Ensure we have the latest surface size (e.g. when recreating
-        // the swapchain)
+        // the swapchain) or switch to platform_
         width = static_cast<uint32_t>(
-            round(fb_desc.width * context_.capabilities.currentExtent.width));
+            round(image_desc.extent.width *
+                  context_.capabilities.currentExtent.width));
         height = static_cast<uint32_t>(
-            round(fb_desc.height * context_.capabilities.currentExtent.height));
+            round(image_desc.extent.height *
+                  context_.capabilities.currentExtent.height));
     } else {
-        // FramebufferSize::Absolute
-        width = static_cast<uint32_t>(round(fb_desc.width));
-        height = static_cast<uint32_t>(round(fb_desc.height));
+        // ExtentType::Absolute
+        width = static_cast<uint32_t>(round(image_desc.extent.width));
+        height = static_cast<uint32_t>(round(image_desc.extent.height));
     }
 
     VezImageCreateInfo image_info = {};

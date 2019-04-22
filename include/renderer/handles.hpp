@@ -128,71 +128,62 @@ struct TextureDesc {
     SamplerDesc sampler = {};
 };
 
-struct FramebufferColorImageDesc {
-    std::string name = "color";
-    uint32_t samples = 4;
-    Format format = Format::SwapchainFormat;
+enum class ExtentType { Absolute, RelativeToSwapchain };
 
+struct Extent {
+    float width = 1.0f;
+    float height = 1.0f;
+    ExtentType type = ExtentType::RelativeToSwapchain;
+};
+
+struct ColorRenderTargetDesc {
+    // TODO initialize all objects with {}
+    Extent extent{};
+    uint32_t samples = 1;
+    uint32_t mip_levels = 1;
+    uint32_t array_layers = 1;
+
+    Format format = Format::SwapchainFormat;
     SamplerDesc sampler = {};
 };
 
-enum class DepthImageType { Depth, DepthStencil };
+struct DepthRenderTargetDesc {
+    Extent extent{};
+    uint32_t samples = 1;
 
-struct FramebufferDepthImageDesc {
-    std::string name = "depth";
-    DepthImageType depth_type = DepthImageType::DepthStencil;
-    uint32_t samples = 4;
-};
-
-enum class FramebufferSize { Absolute, RelativeToSwapchain };
-
-struct FramebufferDesc {
-    std::string name = "frame";
-
-    float width = 1.0f;
-    float height = 1.0f;
-    FramebufferSize framebuffer_size = FramebufferSize::RelativeToSwapchain;
-
-    std::vector<std::string> color_images = {"color"};
-    std::string depth_image = "depth";  // empty string means no depth
+    Format format = Format::DepthStencil;
+    SamplerDesc sampler = {};
 };
 
 struct ColorAttachmentDesc {
+    std::string rt_name;
     bool clear = true;
     bool store = true;
     std::array<float, 4> clear_color = {0.1f, 0.1f, 0.1f, 1.0f};
 };
 
 struct DepthAttachmentDesc {
-    bool active = true;
+    std::string rt_name;
     bool clear = true;
-    bool store = false;
+    bool store = true;
     float clear_depth = 1.0f;
     uint32_t clear_stencil = 0;
 };
 
 struct RenderPassDesc {
-    std::string name = "forward";
-    std::vector<ColorAttachmentDesc> color_attachments = {{}};
-    DepthAttachmentDesc depth_attachment = {};
+    std::vector<ColorAttachmentDesc> color_attachments;
+    DepthAttachmentDesc depth_attachment{""};  // empty	rt_name for no depth
 };
 
+using RenderTargetName = std::string;
+using RenderPassName = std::string;
+using RenderPassEntry = std::pair<RenderPassName, RenderPassDesc>;
+
 struct RenderPlan {
-    std::map<std::string, FramebufferColorImageDesc> color_images = {
-        std::make_pair("color", FramebufferColorImageDesc())};
-    std::map<std::string, FramebufferDepthImageDesc> depth_images = {
-        std::make_pair("depth", FramebufferDepthImageDesc())};
+    std::map<RenderTargetName, ColorRenderTargetDesc> color_images{};
+    std::map<RenderTargetName, DepthRenderTargetDesc> depth_images{};
 
-    std::map<std::string, RenderPassDesc> render_passes = {
-        std::make_pair("forward", RenderPassDesc())};
-    std::map<std::string, FramebufferDesc> framebuffers = {
-        std::make_pair("frame", FramebufferDesc())};
-
-    struct SequenceElement {
-        std::string rp_name;
-        std::string fb_name;
-    };
-    std::vector<SequenceElement> render_sequence = {{"forward", "frame"}};
+    std::vector<RenderPassEntry> render_passes{};
 };
 
 struct VertexInputBindingDesc {

@@ -304,10 +304,16 @@ result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
             attachments.push_back(image->vez.image_view);
 
             const auto& extent = image_desc_res->second.extent;
-            auto w = static_cast<uint32_t>(round(
-                extent.width * context_.capabilities.currentExtent.width));
-            auto h = static_cast<uint32_t>(round(
-                extent.height * context_.capabilities.currentExtent.height));
+            auto w = static_cast<uint32_t>(
+                round(extent.width *
+                      (extent.type == ExtentType::Absolute
+                           ? 1U
+                           : context_.capabilities.currentExtent.width)));
+            auto h = static_cast<uint32_t>(
+                round(extent.height *
+                      (extent.type == ExtentType::Absolute
+                           ? 1U
+                           : context_.capabilities.currentExtent.height)));
 
             if ((width && width != w) || (height && height != h)) {
                 spdlog::error(
@@ -339,10 +345,16 @@ result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
 
             // TODO we can actually compare extents directly
             const auto& extent = depth_image_desc_res->second.extent;
-            auto w = static_cast<uint32_t>(round(
-                extent.width * context_.capabilities.currentExtent.width));
-            auto h = static_cast<uint32_t>(round(
-                extent.height * context_.capabilities.currentExtent.height));
+            auto w = static_cast<uint32_t>(
+                round(extent.width *
+                      (extent.type == ExtentType::Absolute
+                           ? 1U
+                           : context_.capabilities.currentExtent.width)));
+            auto h = static_cast<uint32_t>(
+                round(extent.height *
+                      (extent.type == ExtentType::Absolute
+                           ? 1U
+                           : context_.capabilities.currentExtent.height)));
 
             if ((width && width != w) || (height && height != h)) {
                 spdlog::error(

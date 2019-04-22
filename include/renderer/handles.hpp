@@ -71,6 +71,8 @@ enum class Format {
     SFloatRGB32,
     SFloatRG32,
     SFloatR32,
+    DepthOnly,
+    DepthStencil
 };
 
 enum class FilterType { Nearest, Linear };

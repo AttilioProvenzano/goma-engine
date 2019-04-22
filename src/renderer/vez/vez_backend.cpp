@@ -1756,6 +1756,10 @@ VkFormat VezBackend::GetVkFormat(Format format) {
             return VK_FORMAT_R32G32_SFLOAT;
         case Format::SFloatR32:
             return VK_FORMAT_R32_SFLOAT;
+        case Format::DepthOnly:
+            return VK_FORMAT_D32_SFLOAT;
+        case Format::DepthStencil:
+            return VK_FORMAT_D32_SFLOAT_S8_UINT;
         case Format::SwapchainFormat:
         case Format::Undefined:
         default:

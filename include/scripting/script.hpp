@@ -8,7 +8,7 @@ class Engine;
 
 class Script {
   public:
-    virtual void Update(Engine& engine, float delta_time) {}
+    virtual void Update(Engine& engine, float delta_time) = 0;
 };
 
 }  // namespace goma

@@ -66,7 +66,7 @@ result<void> Renderer::Render() {
     }
 
     // Ensure that all meshes have their own buffers
-    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+    scene->ForEach<Mesh>([&](auto id, auto, Mesh& mesh) {
         // Create vertex buffer
         if (!mesh.vertices.empty() &&
             (!mesh.buffers.vertex || !mesh.buffers.vertex->valid)) {
@@ -188,7 +188,7 @@ result<void> Renderer::Render() {
     });
 
     // Ensure that all meshes have their own vertex input format
-    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+    scene->ForEach<Mesh>([&](auto, auto, Mesh& mesh) {
         VertexInputFormatDesc input_format_desc;
 
         uint32_t binding_id = 0;
@@ -263,7 +263,7 @@ result<void> Renderer::Render() {
     });
 
     // Ensure that all mesh nodes have world-space model matrices
-    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+    scene->ForEach<Mesh>([&](auto id, auto, Mesh&) {
         auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
         if (!nodes_result || !nodes_result.value()) {
             return;
@@ -277,7 +277,7 @@ result<void> Renderer::Render() {
     });
 
     // Upload textures
-    scene->ForEach<Material>([&](auto id, auto _, Material& material) {
+    scene->ForEach<Material>([&](auto, auto, Material& material) {
         const std::vector<TextureType> texture_types = {
             TextureType::Diffuse,           TextureType::Specular,
             TextureType::Ambient,           TextureType::Emissive,
@@ -368,7 +368,7 @@ result<void> Renderer::Render() {
 
     // Frustum culling
     std::vector<glm::vec4> cs_vertices(8);
-    scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
+    scene->ForEach<Mesh>([&](auto id, auto, Mesh& mesh) {
         auto& culling_vp = vp_hold ? *vp_hold : vp;
 
         auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
@@ -502,7 +502,7 @@ result<void> Renderer::Render() {
             }
 
             // Draw the mesh node
-            auto& model = scene->GetCachedModel(node_id).value();
+            auto model = scene->GetCachedModel(node_id).value();
             glm::mat4 mvp = shadow_vp * model;
 
             auto vtx_ubo_res = backend_->GetUniformBuffer(
@@ -647,7 +647,7 @@ result<void> Renderer::Render() {
             }
 
             // Draw the mesh node
-            auto& model = scene->GetCachedModel(node_id).value();
+            auto model = scene->GetCachedModel(node_id).value();
             glm::mat4 mvp = vp * model;
 
             // Shadow correction maps X and Y for the shadow MVP
@@ -887,7 +887,8 @@ result<void> Renderer::CreateSkybox() {
 
     std::vector<void*> stbi_images;
 
-    int width, height;
+    int width = 0;
+    int height = 0;
     for (auto& filename : filenames) {
         // Load skybox using stb_image
         int n;

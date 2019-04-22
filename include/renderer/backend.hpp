@@ -43,7 +43,7 @@ class Backend {
         return outcome::success();
     }
 
-    virtual result<void> SetBuffering(Buffering buffering) {
+    virtual result<void> SetBuffering(Buffering) {
         return Error::ConfigNotSupported;
     }
 

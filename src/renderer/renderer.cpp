@@ -479,8 +479,8 @@ result<void> Renderer::Render() {
                 }
                 auto& material = *material_result.value();
 
-                // TODO cleanup of error messages, just one pipeline (not per
-                // material)
+                // TODO cleanup of error messages, just one pipeline (not
+                // per material)
                 auto pipeline_res = backend_->GetGraphicsPipeline(
                     {"../../../assets/shaders/shadow.vert",
                      ShaderSourceType::Filename,
@@ -889,12 +889,6 @@ result<void> Renderer::Render() {
 
 result<void> Renderer::CreateSkybox() {
     CreateSphere();
-
-    /*
-    const std::vector<char*> filenames{"bluecloud_ft.jpg", "bluecloud_bk.jpg",
-                                       "bluecloud_up.jpg", "bluecloud_dn.jpg",
-                                       "bluecloud_rt.jpg", "bluecloud_lf.jpg"};
-    */
 
     const std::vector<char*> filenames{"posx.jpg", "negx.jpg", "posy.jpg",
                                        "negy.jpg", "posz.jpg", "negz.jpg"};

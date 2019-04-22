@@ -517,7 +517,7 @@ TEST(EngineTest, RenderLantern) {
 
     auto res = e.MainLoop([&]() {
         // Stop after 300 frames
-        return e.frame_count() > 1000000;
+        return e.frame_count() > 300;
     });
     ASSERT_TRUE(res) << res.error().message();
 
@@ -529,8 +529,8 @@ TEST(EngineTest, RenderHelmet) {
     e.LoadScene("../../../assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf");
 
     auto res = e.MainLoop([&]() {
-        // Stop after 1000000 frames
-        return e.frame_count() > 1000000;
+        // Stop after 300 frames
+        return e.frame_count() > 300;
     });
     ASSERT_TRUE(res) << res.error().message();
 
@@ -542,8 +542,8 @@ TEST(EngineTest, RenderSponza) {
     e.LoadScene("../../../assets/models/Sponza/glTF/Sponza.gltf");
 
     auto res = e.MainLoop([&]() {
-        // Stop after 1000 frames
-        return e.frame_count() > 100000;
+        // Stop after 300 frames
+        return e.frame_count() > 300;
     });
     ASSERT_TRUE(res) << res.error().message();
 

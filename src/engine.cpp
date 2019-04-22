@@ -60,7 +60,7 @@ result<void> Engine::LoadScene(const char* file_path) {
     OUTCOME_TRY(main_camera, CreateDefaultCamera());
     main_camera_ = main_camera;
 
-    FlyCamera fly_camera(main_camera_, 100.0f);
+    FlyCamera fly_camera(main_camera_, 10.0f);
     scripting_system_->RegisterScript(std::move(fly_camera));
 
     OUTCOME_TRY(renderer_->CreateSkybox());

@@ -165,21 +165,23 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
         aiNode *ai_root_node = ai_scene->mRootNode;
         aiVector3D pos, rot, scale;
 
+        auto scene_root_node = scene->CreateNode(scene->GetRootNode()).value();
+
         ai_root_node->mTransformation.Decompose(scale, rot, pos);
-        auto root_transform = scene->GetTransform(scene->GetRootNode()).value();
+        auto root_transform = scene->GetTransform(scene_root_node).value();
         root_transform.position = {pos.x, pos.y, pos.z};
         root_transform.rotation = glm::quat(glm::vec3(rot.x, rot.y, rot.z));
         root_transform.scale = {scale.x, scale.y, scale.z};
-        scene->SetTransform(scene->GetRootNode(), root_transform);
+        scene->SetTransform(scene_root_node, root_transform);
 
-        node_map[ai_root_node] = scene->GetRootNode();
-        node_name_map[ai_root_node->mName.C_Str()] = scene->GetRootNode();
+        node_map[ai_root_node] = scene_root_node;
+        node_name_map[ai_root_node->mName.C_Str()] = scene_root_node;
 
         for (unsigned int i = 0; i < ai_root_node->mNumMeshes; i++) {
             // We have a 1:1 correspondence between aiMesh and Mesh objects,
             // so we can use the same index
             uint32_t mesh_index = ai_root_node->mMeshes[i];
-            scene->Attach<Mesh>({mesh_index}, scene->GetRootNode());
+            scene->Attach<Mesh>({mesh_index}, scene_root_node);
         }
 
         // Traverse the node graph
@@ -195,7 +197,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
             open_nodes.pop();
             closed_nodes.insert(ai_node);
 
-            NodeIndex parent = scene->GetRootNode();
+            NodeIndex parent = scene_root_node;
             auto result = node_map.find(ai_node->mParent);
             if (result != node_map.end()) {
                 parent = result->second;

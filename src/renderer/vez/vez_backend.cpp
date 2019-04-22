@@ -1534,12 +1534,32 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
     return ret;
 }
 
-result<std::shared_ptr<Image>> VezBackend::GetFramebufferImage(
-    FrameIndex frame_id, const char* name) {
-    auto hash = GetFramebufferImageHash(frame_id, name);
+result<std::shared_ptr<Image>> VezBackend::GetRenderTarget(FrameIndex frame_id,
+                                                           const char* name) {
+    if (!render_plan_) {
+        spdlog::error(
+            "A valid render plan must be set before getting a render target.");
+        return Error::NoRenderPlan;
+    }
+
+    auto hash = GetRenderTargetHash(frame_id, name);
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         return result->second;
+    } else {
+        auto desc_res = render_plan_->color_images.find(name);
+        if (desc_res != render_plan_->color_images.end()) {
+            OUTCOME_TRY(fb_image,
+                        CreateRenderTarget(frame_id, name, desc_res->second));
+            return fb_image;
+        }
+
+        auto depth_desc_res = render_plan_->depth_images.find(name);
+        if (depth_desc_res != render_plan_->depth_images.end()) {
+            OUTCOME_TRY(fb_image, CreateRenderTarget(frame_id, name,
+                                                     depth_desc_res->second));
+            return fb_image;
+        }
     }
 
     return Error::NotFound;

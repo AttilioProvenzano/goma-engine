@@ -367,6 +367,7 @@ result<void> Renderer::Render() {
     visible_sequence.reserve(scene->GetAttachmentCount<Mesh>());
 
     // Frustum culling
+    std::vector<glm::vec4> cs_vertices(8);
     scene->ForEach<Mesh>([&](auto id, auto _, Mesh& mesh) {
         auto& culling_vp = vp_hold ? *vp_hold : vp;
 
@@ -375,7 +376,6 @@ result<void> Renderer::Render() {
             return;
         }
 
-        std::vector<glm::vec4> cs_vertices(8);
         for (auto& mesh_node : *nodes_result.value()) {
             glm::mat4 mvp =
                 culling_vp * scene->GetCachedModel(mesh_node).value();

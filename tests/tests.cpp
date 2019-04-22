@@ -220,6 +220,15 @@ void main() {
     ASSERT_TRUE(create_pipeline_result)
         << create_pipeline_result.error().message();
 
+    vez.SetRenderPlan(
+        {{{"color", {}}},
+         {{"depth", {}}},
+         {
+             std::make_pair("forward",
+                            RenderPassDesc{{ColorAttachmentDesc{"color"}},
+                                           DepthAttachmentDesc{"depth"}}),
+         }});
+
     vez.RenderFrame(
         {[&](RenderPassDesc rp, FrameIndex frame_id) {
             vez.BindGraphicsPipeline(*create_pipeline_result.value());
@@ -421,6 +430,15 @@ void main() {
         << create_unif_buffer_result.error().message();
 
     auto mvp_buffer = create_unif_buffer_result.value();
+
+    vez.SetRenderPlan(
+        {{{"color", {}}},
+         {{"depth", {}}},
+         {
+             std::make_pair("forward",
+                            RenderPassDesc{{ColorAttachmentDesc{"color"}},
+                                           DepthAttachmentDesc{"depth"}}),
+         }});
 
     for (size_t i = 0; i < 100; i++) {
         vez.RenderFrame(

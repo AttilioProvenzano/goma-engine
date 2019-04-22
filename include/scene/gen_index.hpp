@@ -8,7 +8,8 @@ struct GenIndex {
     size_t id;
     size_t gen;  // 0 reserved for invalid elements
 
-    GenIndex(size_t id_ = 0, size_t gen_ = 1) : id(id_), gen(gen_) {}
+    GenIndex() : id(0), gen(0) {}
+    GenIndex(size_t id_, size_t gen_ = 1) : id(id_), gen(gen_) {}
 
     bool valid() const { return gen > 0; }
 

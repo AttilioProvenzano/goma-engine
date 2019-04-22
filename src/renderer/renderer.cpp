@@ -10,15 +10,15 @@
 
 namespace goma {
 
-Renderer::Renderer(Engine* engine)
-    : engine_(engine), backend_(std::make_unique<VezBackend>(engine)) {
+Renderer::Renderer(Engine& engine)
+    : engine_(engine), backend_(std::make_unique<VezBackend>()) {
     if (auto result = backend_->InitContext()) {
         spdlog::info("Context initialized.");
     } else {
         spdlog::error(result.error().message());
     }
 
-    if (auto result = backend_->InitSurface(engine_->platform())) {
+    if (auto result = backend_->InitSurface(engine_.platform())) {
         spdlog::info("Surface initialized.");
     } else {
         spdlog::error(result.error().message());
@@ -60,7 +60,7 @@ Renderer::Renderer(Engine* engine)
 }
 
 result<void> Renderer::Render() {
-    Scene* scene = engine_->scene();
+    Scene* scene = engine_.scene();
     if (!scene) {
         return Error::NoSceneLoaded;
     }
@@ -317,7 +317,7 @@ result<void> Renderer::Render() {
     });
 
     // Get the VP matrix
-    OUTCOME_TRY(camera, scene->GetAttachment<Camera>(engine_->main_camera()));
+    OUTCOME_TRY(camera, scene->GetAttachment<Camera>(engine_.main_camera()));
 
     // Get the camera node (TODO main camera index)
     auto camera_nodes = scene->GetAttachedNodes<Camera>({0});
@@ -330,8 +330,8 @@ result<void> Renderer::Render() {
         camera_transform = scene->GetCachedModel(camera_node).value();
     }
 
-    float aspect_ratio = float(engine_->platform()->GetWidth()) /
-                         engine_->platform()->GetHeight();
+    float aspect_ratio =
+        float(engine_.platform().GetWidth()) / engine_.platform().GetHeight();
     auto fovy = camera->h_fov / aspect_ratio;
 
     // Compute position, look at and up vector in world space
@@ -348,7 +348,7 @@ result<void> Renderer::Render() {
 
     glm::mat4 vp = proj * view;
 
-    const auto keypresses = engine_->input_system()->GetFrameInput().keypresses;
+    const auto keypresses = engine_.input_system().GetFrameInput().keypresses;
     if (keypresses.find(KeyInput::H) != keypresses.end()) {
         vp_hold = std::make_unique<glm::mat4>(vp);
     } else if (keypresses.find(KeyInput::R) != keypresses.end()) {
@@ -547,8 +547,8 @@ result<void> Renderer::Render() {
             sample_count = image->second.samples;
         }
 
-        auto w = engine_->platform()->GetWidth();
-        auto h = engine_->platform()->GetHeight();
+        auto w = engine_.platform().GetWidth();
+        auto h = engine_.platform().GetHeight();
         backend_->SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
         backend_->SetScissor({{w, h}});
 
@@ -720,9 +720,9 @@ result<void> Renderer::Render() {
         backend_->BindDepthStencilState({true, false, CompareOp::Equal});
         backend_->BindRasterizationState(
             RasterizationState{true, false, PolygonMode::Fill, CullMode::None});
-        backend_->SetViewport({{float(engine_->platform()->GetWidth()),
-                                float(engine_->platform()->GetHeight()), 0.0f,
-                                0.0f, 1.0f, 1.0f}});
+        backend_->SetViewport(
+            {{float(engine_.platform().GetWidth()),
+              float(engine_.platform().GetHeight()), 0.0f, 0.0f, 1.0f, 1.0f}});
 
         auto skybox_tex_res = backend_->GetTexture("goma_skybox");
         if (!skybox_tex_res) {
@@ -774,8 +774,8 @@ result<void> Renderer::Render() {
         auto resolved_image = resolved_image_res.value();
         auto depth_image = depth_image_res.value();
 
-        auto w = engine_->platform()->GetWidth();
-        auto h = engine_->platform()->GetHeight();
+        auto w = engine_.platform().GetWidth();
+        auto h = engine_.platform().GetHeight();
 
         VezImageResolve resolve{};
         resolve.srcSubresource = {0, 0, 1};
@@ -837,8 +837,8 @@ result<void> Renderer::Render() {
         auto resolved_image = resolved_image_res.value();
         auto depth = depth_res.value();
 
-        auto w = engine_->platform()->GetWidth();
-        auto h = engine_->platform()->GetHeight();
+        auto w = engine_.platform().GetWidth();
+        auto h = engine_.platform().GetHeight();
         backend_->SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
         backend_->SetScissor({{w, h}});
 
@@ -959,8 +959,8 @@ result<void> Renderer::CreateSphere() {
     }
 
     OUTCOME_TRY(attachment,
-                engine_->scene()->CreateAttachment<Mesh>(std::move(mesh)));
-    engine_->scene()->RegisterAttachment<Mesh>(attachment, "goma_sphere");
+                engine_.scene()->CreateAttachment<Mesh>(std::move(mesh)));
+    engine_.scene()->RegisterAttachment<Mesh>(attachment, "goma_sphere");
 
     return outcome::success();
 }
@@ -1148,7 +1148,7 @@ result<void> Renderer::BindMeshBuffers(const Mesh& mesh) {
 }
 
 result<void> Renderer::BindMaterialTextures(const Material& material) {
-    Scene* scene = engine_->scene();
+    Scene* scene = engine_.scene();
     if (!scene) {
         return Error::NoSceneLoaded;
     }

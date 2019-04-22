@@ -8,10 +8,10 @@ namespace goma {
 
 Engine::Engine()
     : platform_(std::make_unique<Win32Platform>()),
-      input_system_(std::make_unique<InputSystem>(*platform_.get())) {
+      input_system_(std::make_unique<InputSystem>(*platform_.get())),
+      scripting_system_{std::make_unique<ScriptingSystem>(*this)} {
     platform_->InitWindow();
-    scripting_system_ = std::make_unique<ScriptingSystem>(*this);
-    renderer_ = std::make_unique<Renderer>(this);
+    renderer_ = std::make_unique<Renderer>(*this);
 }
 
 result<void> Engine::MainLoop(MainLoopFn inner_loop) {

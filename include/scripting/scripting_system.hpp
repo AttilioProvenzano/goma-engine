@@ -26,7 +26,7 @@ class ScriptingSystem {
   private:
     Engine& engine_;
 
-    std::vector<std::unique_ptr<Script>> scripts_;
+    std::vector<std::unique_ptr<Script>> scripts_{};
 };
 
 }  // namespace goma

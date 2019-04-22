@@ -28,22 +28,27 @@ typedef std::function<result<void>(RenderPassDesc, FrameIndex)> RenderPassFn;
 class Backend {
   public:
     struct Config {
-        Buffering buffering = Buffering::Triple;
+        Buffering buffering{Buffering::Triple};
     };
 
-    Backend(Engine* engine = nullptr, const Config& config = {})
-        : engine_(engine), config_(config) {}
+    Backend(const Config& config = {}, const RenderPlan& render_plan = {})
+        : config_(config), render_plan_(render_plan) {}
     virtual ~Backend() = default;
 
-    virtual const RenderPlan& render_plan() { return *render_plan_.get(); }
-
+    const RenderPlan& render_plan() { return render_plan_; }
     const Config& config() { return config_; }
+
+    virtual result<void> SetRenderPlan(RenderPlan render_plan) {
+        render_plan_ = std::move(render_plan);
+        return outcome::success();
+    }
+
     virtual result<void> SetBuffering(Buffering buffering) {
         return Error::ConfigNotSupported;
     }
 
     virtual result<void> InitContext() = 0;
-    virtual result<void> InitSurface(Platform* platform) = 0;
+    virtual result<void> InitSurface(Platform& platform) = 0;
     virtual result<std::shared_ptr<Pipeline>> GetGraphicsPipeline(
         const ShaderDesc& vert, const ShaderDesc& frag = {}) = 0;
     virtual result<std::shared_ptr<VertexInputFormat>> GetVertexInputFormat(
@@ -83,7 +88,6 @@ class Backend {
     virtual result<void> UpdateBuffer(const Buffer& buffer, uint64_t offset,
                                       uint64_t size, void* contents) = 0;
 
-    virtual result<void> SetRenderPlan(const RenderPlan& render_plan) = 0;
     virtual result<void> RenderFrame(std::vector<RenderPassFn> render_pass_fns,
                                      const char* present_image) = 0;
 
@@ -151,9 +155,8 @@ class Backend {
     virtual result<void> TeardownContext() = 0;
 
   protected:
-    Engine* engine_ = nullptr;
-    Config config_ = {};
-    std::unique_ptr<RenderPlan> render_plan_;
+    Config config_{};
+    RenderPlan render_plan_{};
 };
 
 }  // namespace goma

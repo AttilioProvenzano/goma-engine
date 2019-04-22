@@ -10,7 +10,7 @@ class Engine;
 
 class Renderer {
   public:
-    Renderer(Engine* engine);
+    Renderer(Engine& engine);
 
     result<void> Render();
 
@@ -18,8 +18,12 @@ class Renderer {
     result<void> CreateSphere();
 
   private:
-    Engine* engine_ = nullptr;
-    std::unique_ptr<Backend> backend_;
+    Engine& engine_;
+    std::unique_ptr<Backend> backend_{};
+
+    std::map<uint32_t, std::string> vs_preamble_map_{};
+    std::map<uint32_t, std::string> fs_preamble_map_{};
+    std::unique_ptr<glm::mat4> vp_hold{};
 
     union VertexShaderPreambleDesc {
         struct {
@@ -35,8 +39,6 @@ class Renderer {
 
         uint32_t int_repr;
     };
-
-    std::map<uint32_t, std::string> vs_preamble_map_;
     const char* GetVertexShaderPreamble(const VertexShaderPreambleDesc& desc);
     const char* GetVertexShaderPreamble(const Mesh& mesh);
 
@@ -69,8 +71,6 @@ class Renderer {
 
         uint32_t int_repr;
     };
-
-    std::map<uint32_t, std::string> fs_preamble_map_;
     const char* GetFragmentShaderPreamble(
         const FragmentShaderPreambleDesc& desc);
     const char* GetFragmentShaderPreamble(const Mesh& mesh,
@@ -78,8 +78,6 @@ class Renderer {
 
     result<void> BindMeshBuffers(const Mesh& mesh);
     result<void> BindMaterialTextures(const Material& material);
-
-    std::unique_ptr<glm::mat4> vp_hold;
 };
 
 }  // namespace goma

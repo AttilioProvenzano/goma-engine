@@ -107,10 +107,10 @@ class Scene {
     typedef TypeMap<std::unique_ptr<AttachmentManagerBase>>
         AttachmentManagerMap;
 
-    std::vector<Node> nodes_;
-    std::queue<size_t> recycled_nodes_;
+    std::vector<Node> nodes_{};
+    std::queue<size_t> recycled_nodes_{};
 
-    AttachmentManagerMap attachment_managers_;
+    AttachmentManagerMap attachment_managers_{};
 
     template <typename T>
     AttachmentManager<T>* GetAttachmentManager() {

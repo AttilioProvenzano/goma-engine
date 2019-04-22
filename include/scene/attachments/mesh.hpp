@@ -37,11 +37,11 @@ struct Mesh {
     std::vector<std::vector<glm::vec2>> uv_sets;
     std::vector<std::vector<glm::vec3>> uvw_sets;
 
-    AttachmentIndex<Material> material = {};
+    AttachmentIndex<Material> material{};
 
     std::shared_ptr<VertexInputFormat> vertex_input_format;
-    std::unique_ptr<Box> bounding_box = {};
-    MeshBuffers buffers = {};
+    std::unique_ptr<Box> bounding_box{};
+    MeshBuffers buffers{};
 };
 
 }  // namespace goma

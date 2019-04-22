@@ -16,31 +16,30 @@ class Engine {
     result<void> MainLoop(MainLoopFn inner_fn);
     result<void> LoadScene(const char* file_path);
 
-    Platform* platform() { return platform_.get(); }
-    InputSystem* input_system() { return input_system_.get(); }
-    ScriptingSystem* scripting_system() { return scripting_system_.get(); }
-    Renderer* renderer() { return renderer_.get(); }
+    Platform& platform() { return *platform_.get(); }
+    InputSystem& input_system() { return *input_system_.get(); }
+    ScriptingSystem& scripting_system() { return *scripting_system_.get(); }
+    Renderer& renderer() { return *renderer_.get(); }
     Scene* scene() { return scene_.get(); }
     AttachmentIndex<Camera> main_camera() { return main_camera_; }
 
     uint32_t frame_count() { return frame_count_; }
 
   private:
+    std::unique_ptr<Platform> platform_{};
+    std::unique_ptr<InputSystem> input_system_{};
+    std::unique_ptr<ScriptingSystem> scripting_system_{};
+    std::unique_ptr<Renderer> renderer_{};
+
+    std::unique_ptr<Scene> scene_{};
+    AttachmentIndex<Camera> main_camera_{};
+
     uint32_t frame_count_{0};
 
     uint32_t fps_cap{60};
     std::chrono::duration<float> delta_time_{0.0f};
     std::chrono::time_point<std::chrono::high_resolution_clock>
         frame_timestamp_{std::chrono::high_resolution_clock::now()};
-
-    std::unique_ptr<Platform> platform_;
-
-    std::unique_ptr<InputSystem> input_system_;
-    std::unique_ptr<ScriptingSystem> scripting_system_;
-    std::unique_ptr<Renderer> renderer_;
-
-    std::unique_ptr<Scene> scene_;
-    AttachmentIndex<Camera> main_camera_;
 
     result<AttachmentIndex<Camera>> CreateDefaultCamera();
 };

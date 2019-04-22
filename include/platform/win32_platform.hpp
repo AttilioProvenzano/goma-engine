@@ -23,10 +23,10 @@ class Win32Platform : public Platform {
     virtual result<VkSurfaceKHR> CreateVulkanSurface(
         VkInstance instance) const override;
 
-	virtual void Sleep(uint32_t microseconds) override;
+    virtual void Sleep(uint32_t microseconds) override;
 
   private:
-    GLFWwindow* window_ = nullptr;
+    GLFWwindow* window_{nullptr};
 };
 
 }  // namespace goma

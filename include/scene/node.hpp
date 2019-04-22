@@ -30,10 +30,10 @@ struct Transform {
 struct Node {
     NodeIndex id;
     NodeIndex parent;  // root node has parent {0, 0}
-    Transform transform = Transform();
+    Transform transform{};
 
-    std::set<NodeIndex> children = {};
-    std::unique_ptr<glm::mat4> cached_model = {};
+    std::set<NodeIndex> children{};
+    std::unique_ptr<glm::mat4> cached_model{};
 
     Node(NodeIndex id_, NodeIndex parent_,
          const Transform& transform_ = Transform())

@@ -29,7 +29,7 @@ class FlyCamera : public Script {
 
             // Update transform based on input
             auto transform = scene->GetTransform(camera_node).value();
-            auto input_state = engine.input_system()->GetFrameInput();
+            auto input_state = engine.input_system().GetFrameInput();
             const auto& keypresses = input_state.keypresses;
 
             auto has_key = [&keypresses](KeyInput key) {
@@ -93,9 +93,8 @@ class FlyCamera : public Script {
     }
 
   private:
-    AttachmentIndex<Camera> camera_id_;
-
-    float speed_;
+    AttachmentIndex<Camera> camera_id_{};
+    float speed_{1.0f};
 };
 
 }  // namespace goma

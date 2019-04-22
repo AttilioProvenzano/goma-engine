@@ -12,10 +12,9 @@ struct Texture {
     uint32_t width;
     uint32_t height;
     std::vector<uint8_t> data;
+    bool compressed{false};
 
-    bool compressed = false;
-
-    std::shared_ptr<Image> image;
+    std::shared_ptr<Image> image{};
 };
 
 }  // namespace goma

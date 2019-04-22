@@ -10,7 +10,7 @@ template <typename T>
 struct Attachment {
     AttachmentIndex<T> id;
     std::set<NodeIndex> nodes;
-    T data = {};
+    T data{};
 
     Attachment(AttachmentIndex<T> id_, const std::set<NodeIndex>& nodes_,
                T&& data_ = T())

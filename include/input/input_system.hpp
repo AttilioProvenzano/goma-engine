@@ -19,8 +19,8 @@ class InputSystem {
   private:
     const Platform& platform_;
 
-    InputState frame_input_ = {};
-    InputState last_frame_input_ = {};
+    InputState frame_input_{};
+    InputState last_frame_input_{};
 };
 
 }  // namespace goma

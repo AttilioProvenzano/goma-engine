@@ -11,12 +11,13 @@ namespace goma {
 
 class VezBackend : public Backend {
   public:
-    VezBackend(Engine* engine = nullptr, const Config& config = {});
+    VezBackend(const Config& config = {}, const RenderPlan& render_plan = {});
     virtual ~VezBackend() override;
-    virtual result<void> SetBuffering(Buffering buffering);
+    virtual result<void> SetRenderPlan(RenderPlan render_plan) override;
+    virtual result<void> SetBuffering(Buffering buffering) override;
 
     virtual result<void> InitContext() override;
-    virtual result<void> InitSurface(Platform* platform) override;
+    virtual result<void> InitSurface(Platform& platform) override;
     virtual result<std::shared_ptr<Pipeline>> GetGraphicsPipeline(
         const ShaderDesc& vert, const ShaderDesc& frag = {}) override;
     virtual result<std::shared_ptr<VertexInputFormat>> GetVertexInputFormat(
@@ -57,7 +58,6 @@ class VezBackend : public Backend {
     virtual result<void> UpdateBuffer(const Buffer& buffer, uint64_t offset,
                                       uint64_t size, void* contents) override;
 
-    virtual result<void> SetRenderPlan(const RenderPlan& render_plan) override;
     virtual result<void> RenderFrame(std::vector<RenderPassFn> render_pass_fns,
                                      const char* present_image) override;
 
@@ -146,9 +146,8 @@ class VezBackend : public Backend {
     result<VkSampler> GetSampler(const SamplerDesc& sampler_desc);
 
   private:
-    VezContext context_;
-    bool rp_in_progress_ = false;
-    uint32_t thread_id_ = 0;
+    VezContext context_{};
+    bool rp_in_progress_{false};
 
     result<VulkanImage> CreateImage(VezContext::ImageHash hash,
                                     VezImageCreateInfo image_info,

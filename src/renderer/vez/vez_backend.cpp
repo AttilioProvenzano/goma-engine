@@ -1,7 +1,5 @@
 #include "renderer/vez/vez_backend.hpp"
 
-#include "engine.hpp"
-
 #include "Core/ShaderModule.h"  // from V-EZ
 
 #define VK_CHECK(fn)                                                         \
@@ -57,8 +55,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(
 
 namespace goma {
 
-VezBackend::VezBackend(Engine* engine, const Config& config)
-    : Backend(engine, config) {
+VezBackend::VezBackend(const Config& config, const RenderPlan& render_plan)
+    : Backend(config, render_plan) {
     SetBuffering(config.buffering);
 }
 
@@ -94,13 +92,12 @@ result<void> VezBackend::InitContext() {
     return outcome::success();
 }
 
-result<void> VezBackend::InitSurface(Platform* platform) {
-    assert(platform && "Platform must not be null");
+result<void> VezBackend::InitSurface(Platform& platform) {
     assert(context_.instance && "Context must be initialized");
     assert(context_.physical_device && "Context must be initialized");
     assert(context_.device && "Context must be initialized");
 
-    OUTCOME_TRY(surface, platform->CreateVulkanSurface(context_.instance));
+    OUTCOME_TRY(surface, platform.CreateVulkanSurface(context_.instance));
     context_.surface = surface;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context_.physical_device, surface,
                                               &context_.capabilities);
@@ -137,7 +134,7 @@ result<std::shared_ptr<Pipeline>> VezBackend::GetGraphicsPipeline(
             shader_stages.push_back({nullptr, fragment_shader});
         }
 
-        VezGraphicsPipelineCreateInfo pipeline_info = {};
+        VezGraphicsPipelineCreateInfo pipeline_info{};
         pipeline_info.stageCount = static_cast<uint32_t>(shader_stages.size());
         pipeline_info.pStages = shader_stages.data();
 
@@ -175,7 +172,7 @@ result<std::shared_ptr<VertexInputFormat>> VezBackend::GetVertexInputFormat(
             {a.location, a.binding, GetVkFormat(a.format), a.offset});
     }
 
-    VezVertexInputFormatCreateInfo input_info = {};
+    VezVertexInputFormatCreateInfo input_info{};
     input_info.vertexBindingDescriptionCount =
         static_cast<uint32_t>(bindings.size());
     input_info.pVertexBindingDescriptions = bindings.data();
@@ -209,7 +206,7 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
         mip_levels = std::max(1U, mip_levels);
     }
 
-    VezImageCreateInfo image_info = {};
+    VezImageCreateInfo image_info{};
     image_info.flags =
         texture_desc.cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     image_info.extent = {texture_desc.width, texture_desc.height, 1};
@@ -247,12 +244,12 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
     // TODO refactor into a single block (with the other CreateTexture)
     uint32_t layer = 0;
     for (auto& layer_contents : initial_contents) {
-        VezImageSubresourceLayers layers = {};
+        VezImageSubresourceLayers layers{};
         layers.baseArrayLayer = layer++;
         layers.layerCount = 1;
         layers.mipLevel = 0;
 
-        VezImageSubDataInfo sub_data_info = {};
+        VezImageSubDataInfo sub_data_info{};
         sub_data_info.imageExtent = {texture_desc.width, texture_desc.height,
                                      1};
         sub_data_info.imageOffset = {0, 0, 0};
@@ -296,8 +293,8 @@ result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
     std::vector<VkImageView> attachments;
     for (auto& attachment : rp_desc.color_attachments) {
         auto image_desc_res =
-            render_plan_->color_images.find(attachment.rt_name);
-        if (image_desc_res != render_plan_->color_images.end()) {
+            render_plan_.color_images.find(attachment.rt_name);
+        if (image_desc_res != render_plan_.color_images.end()) {
             // TODO better logging for "not found"
             OUTCOME_TRY(image,
                         GetRenderTarget(frame_id, attachment.rt_name.c_str()));
@@ -335,8 +332,8 @@ result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
 
     if (rp_desc.depth_attachment.rt_name != "") {
         auto depth_image_desc_res =
-            render_plan_->depth_images.find(rp_desc.depth_attachment.rt_name);
-        if (depth_image_desc_res != render_plan_->depth_images.end()) {
+            render_plan_.depth_images.find(rp_desc.depth_attachment.rt_name);
+        if (depth_image_desc_res != render_plan_.depth_images.end()) {
             OUTCOME_TRY(image,
                         CreateRenderTarget(
                             frame_id, rp_desc.depth_attachment.rt_name.c_str(),
@@ -368,7 +365,7 @@ result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
         }
     }
 
-    VezFramebufferCreateInfo fb_info = {};
+    VezFramebufferCreateInfo fb_info{};
     fb_info.width = width;
     fb_info.height = height;
     fb_info.layers = 1;
@@ -505,7 +502,7 @@ result<void> VezBackend::UpdateBuffer(const Buffer& buffer, uint64_t offset,
     return outcome::success();
 }
 
-result<void> VezBackend::SetRenderPlan(const RenderPlan& render_plan) {
+result<void> VezBackend::SetRenderPlan(RenderPlan render_plan) {
     // Teardown any existing render plan
     for (auto framebuffer : context_.framebuffer_cache) {
         vezDestroyFramebuffer(context_.device, framebuffer.second);
@@ -517,21 +514,16 @@ result<void> VezBackend::SetRenderPlan(const RenderPlan& render_plan) {
     }
 
     // Copy the render plan into render_plan
-    render_plan_ = std::make_unique<RenderPlan>(render_plan);
+    render_plan_ = std::move(render_plan);
     return outcome::success();
 }
 
 result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
                                      const char* present_image) {
-    if (!render_plan_) {
-        spdlog::error("A valid render plan must be set before rendering.");
-        return Error::NoRenderPlan;
-    }
-
     auto frame_id = StartFrame().value();
 
-    for (size_t i = 0; i < render_plan_->render_passes.size(); i++) {
-        auto& rp_entry = render_plan_->render_passes[i];
+    for (size_t i = 0; i < render_plan_.render_passes.size(); i++) {
+        auto& rp_entry = render_plan_.render_passes[i];
 
         // TODO clean up empty render pass name for commands outside rp
         auto fb_result = GetFramebuffer(frame_id, rp_entry.first.c_str());
@@ -684,7 +676,7 @@ result<void> VezBackend::BindVertexInputFormat(
 }
 
 result<void> VezBackend::BindDepthStencilState(const DepthStencilState& state) {
-    VezDepthStencilState vez_state = {};
+    VezDepthStencilState vez_state{};
     vez_state.depthTestEnable = state.depth_test;
     vez_state.depthWriteEnable = state.depth_write;
     vez_state.depthBoundsTestEnable = state.depth_bounds;
@@ -704,7 +696,7 @@ result<void> VezBackend::BindDepthStencilState(const DepthStencilState& state) {
 }
 
 result<void> VezBackend::BindColorBlendState(const ColorBlendState& state) {
-    VezColorBlendState vez_state = {};
+    VezColorBlendState vez_state{};
     vez_state.logicOpEnable = state.color_blend;
     vez_state.logicOp = static_cast<VkLogicOp>(state.logic_op);
 
@@ -736,7 +728,7 @@ result<void> VezBackend::BindColorBlendState(const ColorBlendState& state) {
 }
 
 result<void> VezBackend::BindMultisampleState(const MultisampleState& state) {
-    VezMultisampleState vez_state = {};
+    VezMultisampleState vez_state{};
 
     // Reduce state.samples to a power of 2
     uint32_t samples_po2 = std::min(state.samples, 64U);
@@ -760,7 +752,7 @@ result<void> VezBackend::BindMultisampleState(const MultisampleState& state) {
 
 result<void> VezBackend::BindInputAssemblyState(
     const InputAssemblyState& state) {
-    VezInputAssemblyState vez_state = {};
+    VezInputAssemblyState vez_state{};
     vez_state.topology = static_cast<VkPrimitiveTopology>(state.topology);
     vez_state.primitiveRestartEnable = state.primitive_restart;
 
@@ -770,7 +762,7 @@ result<void> VezBackend::BindInputAssemblyState(
 
 result<void> VezBackend::BindRasterizationState(
     const RasterizationState& state) {
-    VezRasterizationState vez_state = {};
+    VezRasterizationState vez_state{};
     vez_state.depthBiasEnable = state.depth_bias;
     vez_state.depthClampEnable = state.depth_clamp;
     vez_state.cullMode = static_cast<VkCullModeFlags>(state.cull_mode);
@@ -889,7 +881,7 @@ result<size_t> VezBackend::StartFrame(uint32_t threads) {
         VkQueue graphics_queue = VK_NULL_HANDLE;
         vezGetDeviceGraphicsQueue(device, 0, &graphics_queue);
 
-        VezCommandBufferAllocateInfo cmd_info = {};
+        VezCommandBufferAllocateInfo cmd_info{};
         cmd_info.commandBufferCount =
             static_cast<uint32_t>(threads - command_buffer_count);
         cmd_info.queue = graphics_queue;
@@ -935,7 +927,7 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
     }
 
     if (!rp_desc.depth_attachment.rt_name.empty()) {
-        VezAttachmentInfo depth_info = {
+        VezAttachmentInfo depth_info{
             rp_desc.depth_attachment.clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
                                            : VK_ATTACHMENT_LOAD_OP_LOAD,
             rp_desc.depth_attachment.store ? VK_ATTACHMENT_STORE_OP_STORE
@@ -946,7 +938,7 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
         attach_infos.push_back(depth_info);
     }
 
-    VezRenderPassBeginInfo rp_info = {};
+    VezRenderPassBeginInfo rp_info{};
     rp_info.framebuffer = fb.vez;
     rp_info.attachmentCount = static_cast<uint32_t>(attach_infos.size());
     rp_info.pAttachments = attach_infos.data();
@@ -972,9 +964,9 @@ result<void> VezBackend::FinishFrame() {
     auto& per_frame = context_.per_frame[context_.current_frame];
 
     // Submit the command buffer for the current thread
-    VezSubmitInfo submit_info = {};
+    VezSubmitInfo submit_info{};
     submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &per_frame.command_buffers[thread_id_];
+    submit_info.pCommandBuffers = &per_frame.command_buffers[0];
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = &per_frame.submission_semaphore;
 
@@ -1017,7 +1009,7 @@ result<void> VezBackend::PresentImage(const char* present_image_name) {
     auto& per_frame = context_.per_frame[context_.current_frame];
     per_frame.presentation_semaphore = VK_NULL_HANDLE;
 
-    VezPresentInfo present_info = {};
+    VezPresentInfo present_info{};
     present_info.waitSemaphoreCount = 1;
     present_info.pWaitSemaphores = &per_frame.submission_semaphore;
     present_info.pWaitDstStageMask = &wait_dst;
@@ -1119,14 +1111,14 @@ result<void> VezBackend::TeardownContext() {
 
 result<VkInstance> VezBackend::CreateInstance() {
     // TODO application name and version to be filled
-    VezApplicationInfo appInfo = {};
+    VezApplicationInfo appInfo{};
     appInfo.pApplicationName = "Goma App";
     appInfo.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
     appInfo.pEngineName = "Goma Engine";
     appInfo.engineVersion = VK_MAKE_VERSION(0, 0, 1);
 
     // TODO layer names based on macros for names
-    std::vector<const char*> enabled_layers = {
+    std::vector<const char*> enabled_layers{
         // "VK_LAYER_LUNARG_standard_validation",
         "VK_LAYER_LUNARG_monitor",
     };
@@ -1148,7 +1140,7 @@ result<VkInstance> VezBackend::CreateInstance() {
         }
     }
 
-    std::vector<const char*> enabled_extensions = {
+    std::vector<const char*> enabled_extensions{
         "VK_KHR_surface", "VK_KHR_win32_surface", "VK_EXT_debug_report"};
 
 #ifndef BYPASS_EXTENSION_ENUMERATION
@@ -1175,7 +1167,7 @@ result<VkInstance> VezBackend::CreateInstance() {
         std::move(enabled_extensions);
 #endif
 
-    VezInstanceCreateInfo instance_info = {};
+    VezInstanceCreateInfo instance_info{};
     instance_info.pApplicationInfo = &appInfo;
     instance_info.enabledLayerCount =
         static_cast<uint32_t>(instance_layer_names.size());
@@ -1192,7 +1184,7 @@ result<VkInstance> VezBackend::CreateInstance() {
 
 result<VkDebugReportCallbackEXT> VezBackend::CreateDebugCallback(
     VkInstance instance) {
-    VkDebugReportCallbackCreateInfoEXT debug_callback_info = {};
+    VkDebugReportCallbackCreateInfoEXT debug_callback_info{};
     debug_callback_info.sType =
         VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
     debug_callback_info.flags =
@@ -1219,7 +1211,7 @@ result<VezBackend::PhysicalDevice> VezBackend::CreatePhysicalDevice(
     vezEnumeratePhysicalDevices(instance, &physical_device_count,
                                 physical_devices.data());
 
-    PhysicalDevice p = {physical_devices[0]};
+    PhysicalDevice p{physical_devices[0]};
     vezGetPhysicalDeviceProperties(p.physical_device, &p.properties);
     vezGetPhysicalDeviceFeatures(p.physical_device, &p.features);
 
@@ -1230,7 +1222,7 @@ result<VezBackend::PhysicalDevice> VezBackend::CreatePhysicalDevice(
 }
 
 result<VkDevice> VezBackend::CreateDevice(VkPhysicalDevice physical_device) {
-    std::vector<const char*> enabled_extensions = {"VK_KHR_swapchain"};
+    std::vector<const char*> enabled_extensions{"VK_KHR_swapchain"};
 
 #ifndef BYPASS_EXTENSION_ENUMERATION
     uint32_t device_extension_count;
@@ -1257,7 +1249,7 @@ result<VkDevice> VezBackend::CreateDevice(VkPhysicalDevice physical_device) {
         std::move(enabled_extensions);
 #endif
 
-    VezDeviceCreateInfo device_info = {};
+    VezDeviceCreateInfo device_info{};
     device_info.enabledExtensionCount =
         static_cast<uint32_t>(device_extension_names.size());
     device_info.ppEnabledExtensionNames = device_extension_names.data();
@@ -1273,7 +1265,7 @@ result<VezSwapchain> VezBackend::CreateSwapchain(VkSurfaceKHR surface) {
            "Context must be initialized before creating a swapchain");
     VkDevice device = context_.device;
 
-    VezSwapchainCreateInfo swapchain_info = {};
+    VezSwapchainCreateInfo swapchain_info{};
     swapchain_info.surface = surface;
     swapchain_info.tripleBuffer = VK_TRUE;  // TODO configurable
     swapchain_info.format = {VK_FORMAT_R8G8B8A8_UNORM,
@@ -1311,7 +1303,7 @@ result<VkShaderModule> VezBackend::GetVertexShaderModule(
             source.push_back(0);  // null-terminated string
         }
 
-        VezShaderModuleCreateInfo shader_info = {};
+        VezShaderModuleCreateInfo shader_info{};
         shader_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
 
         if (vert.source_type == ShaderSourceType::Filename) {
@@ -1365,7 +1357,7 @@ result<VkShaderModule> VezBackend::GetFragmentShaderModule(
             source.push_back(0);  // null-terminated string
         }
 
-        VezShaderModuleCreateInfo shader_info = {};
+        VezShaderModuleCreateInfo shader_info{};
         shader_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 
         if (frag.source_type == ShaderSourceType::Filename) {
@@ -1406,7 +1398,7 @@ result<std::shared_ptr<Buffer>> VezBackend::CreateBuffer(
         result->second->valid = false;
     }
 
-    VezBufferCreateInfo buffer_info = {};
+    VezBufferCreateInfo buffer_info{};
     buffer_info.size = size;
     buffer_info.usage = usage;
 
@@ -1419,7 +1411,7 @@ result<std::shared_ptr<Buffer>> VezBackend::CreateBuffer(
             VK_CHECK(vezMapBuffer(device, buffer, 0, size, &buffer_memory));
             memcpy(buffer_memory, initial_contents, size);
 
-            VezMappedBufferRange range = {};
+            VezMappedBufferRange range{};
             range.buffer = buffer;
             range.offset = 0;
             range.size = size;
@@ -1477,7 +1469,7 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
         height = static_cast<uint32_t>(round(image_desc.extent.height));
     }
 
-    VezImageCreateInfo image_info = {};
+    VezImageCreateInfo image_info{};
     image_info.extent = {width, height, 1};
     image_info.imageType = VK_IMAGE_TYPE_2D;
     image_info.arrayLayers = 1;
@@ -1526,7 +1518,7 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
         height = static_cast<uint32_t>(round(image_desc.extent.height));
     }
 
-    VezImageCreateInfo image_info = {};
+    VezImageCreateInfo image_info{};
     image_info.extent = {width, height, 1};
     image_info.imageType = VK_IMAGE_TYPE_2D;
     image_info.arrayLayers = 1;
@@ -1548,26 +1540,20 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
 
 result<std::shared_ptr<Image>> VezBackend::GetRenderTarget(FrameIndex frame_id,
                                                            const char* name) {
-    if (!render_plan_) {
-        spdlog::error(
-            "A valid render plan must be set before getting a render target.");
-        return Error::NoRenderPlan;
-    }
-
     auto hash = GetRenderTargetHash(frame_id, name);
     auto result = context_.fb_image_cache.find(hash);
     if (result != context_.fb_image_cache.end()) {
         return result->second;
     } else {
-        auto desc_res = render_plan_->color_images.find(name);
-        if (desc_res != render_plan_->color_images.end()) {
+        auto desc_res = render_plan_.color_images.find(name);
+        if (desc_res != render_plan_.color_images.end()) {
             OUTCOME_TRY(fb_image,
                         CreateRenderTarget(frame_id, name, desc_res->second));
             return fb_image;
         }
 
-        auto depth_desc_res = render_plan_->depth_images.find(name);
-        if (depth_desc_res != render_plan_->depth_images.end()) {
+        auto depth_desc_res = render_plan_.depth_images.find(name);
+        if (depth_desc_res != render_plan_.depth_images.end()) {
             OUTCOME_TRY(fb_image, CreateRenderTarget(frame_id, name,
                                                      depth_desc_res->second));
             return fb_image;
@@ -1584,9 +1570,9 @@ result<VkSampler> VezBackend::GetSampler(const SamplerDesc& sampler_desc) {
     if (result != context_.sampler_cache.end()) {
         return result->second;
     } else {
-        VezSamplerCreateInfo sampler_info = {};
+        VezSamplerCreateInfo sampler_info{};
 
-        VkSamplerAddressMode address_mode = {};
+        VkSamplerAddressMode address_mode{};
         switch (sampler_desc.addressing_mode) {
             case TextureWrappingMode::Repeat:
                 address_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -1602,7 +1588,7 @@ result<VkSampler> VezBackend::GetSampler(const SamplerDesc& sampler_desc) {
                 break;
         }
 
-        VkSamplerMipmapMode mipmap_mode = {};
+        VkSamplerMipmapMode mipmap_mode{};
         switch (sampler_desc.mipmap_mode) {
             case FilterType::Linear:
                 mipmap_mode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
@@ -1613,7 +1599,7 @@ result<VkSampler> VezBackend::GetSampler(const SamplerDesc& sampler_desc) {
                 break;
         }
 
-        VkFilter filter = {};
+        VkFilter filter{};
         switch (sampler_desc.filter_type) {
             case FilterType::Linear:
                 filter = VK_FILTER_LINEAR;
@@ -1655,11 +1641,11 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
     VkImage image = VK_NULL_HANDLE;
     VK_CHECK(vezCreateImage(device, VEZ_MEMORY_GPU_ONLY, &image_info, &image));
 
-    VezImageSubresourceRange range = {};
+    VezImageSubresourceRange range{};
     range.layerCount = image_info.arrayLayers;
     range.levelCount = image_info.mipLevels;
 
-    VezImageViewCreateInfo image_view_info = {};
+    VezImageViewCreateInfo image_view_info{};
     image_view_info.components = {
         VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
         VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
@@ -1675,12 +1661,12 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
     VK_CHECK(vezCreateImageView(device, &image_view_info, &image_view));
 
     if (initial_contents) {
-        VezImageSubresourceLayers layers = {};
+        VezImageSubresourceLayers layers{};
         layers.baseArrayLayer = 0;
         layers.layerCount = image_info.arrayLayers;
         layers.mipLevel = 0;
 
-        VezImageSubDataInfo sub_data_info = {};
+        VezImageSubDataInfo sub_data_info{};
         sub_data_info.imageExtent = image_info.extent;
         sub_data_info.imageOffset = {0, 0, 0};
         sub_data_info.imageSubresource = layers;
@@ -1697,7 +1683,7 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
                 int32_t w = std::max(1, last_w / 2);
                 int32_t h = std::max(1, last_h / 2);
 
-                VezImageBlit blit = {};
+                VezImageBlit blit{};
                 blit.srcSubresource = {i - 1, 0, 1};
                 blit.srcOffsets[1] = {last_w, last_h, 1};
                 blit.dstSubresource = {i, 0, 1};
@@ -1711,7 +1697,7 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
         }
     }
 
-    VulkanImage vulkan_image = {image, image_view};
+    VulkanImage vulkan_image{image, image_view};
     return vulkan_image;
 }
 
@@ -1722,7 +1708,7 @@ result<void> VezBackend::GetSetupCommandBuffer() {
         VkQueue graphics_queue = VK_NULL_HANDLE;
         vezGetDeviceGraphicsQueue(context_.device, 0, &graphics_queue);
 
-        VezCommandBufferAllocateInfo cmd_info = {};
+        VezCommandBufferAllocateInfo cmd_info{};
         cmd_info.commandBufferCount = 1;
         cmd_info.queue = graphics_queue;
 
@@ -1748,7 +1734,7 @@ result<void> VezBackend::GetActiveCommandBuffer(uint32_t thread) {
         vezEndCommandBuffer();
 
         // Submit the setup command buffer
-        VezSubmitInfo submit_info = {};
+        VezSubmitInfo submit_info{};
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &per_frame.setup_command_buffer;
         submit_info.signalSemaphoreCount = 1;
@@ -1769,10 +1755,10 @@ result<void> VezBackend::GetActiveCommandBuffer(uint32_t thread) {
 
         // TODO separate scissor and viewport (also more details)
         // TODO remove from here, they are now separate
-        VkRect2D scissor = {{}, {800, 600}};
+        VkRect2D scissor{{}, {800, 600}};
         vezCmdSetScissor(0, 1, &scissor);
 
-        VkViewport viewport = {};
+        VkViewport viewport{};
         viewport.width = 800;
         viewport.height = 600;
         viewport.minDepth = 0.0f;
@@ -1899,7 +1885,7 @@ VezContext::SamplerHash VezBackend::GetSamplerHash(
         TextureWrappingMode addressing_mode : 4;
     };
 
-    SamplerHashBitField bit_field = {
+    SamplerHashBitField bit_field{
         sampler_desc.min_lod,
         sampler_desc.max_lod,
         sampler_desc.lod_bias,

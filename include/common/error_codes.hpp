@@ -29,6 +29,8 @@ enum class Error {
     NoSceneLoaded = 20,
     NoMainCamera = 21,
     ConfigNotSupported = 22,
+    DimensionsNotMatching = 23,
+    NoRenderPlan = 24,
 };
 
 }
@@ -100,6 +102,10 @@ class GomaError_category : public std::error_category {
                 return "no main camera";
             case goma::Error::ConfigNotSupported:
                 return "configuration item not supported";
+            case goma::Error::DimensionsNotMatching:
+                return "dimensions not matching";
+            case goma::Error::NoRenderPlan:
+                return "no render plan";
             default:
                 return "unknown error";
         }

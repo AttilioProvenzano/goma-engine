@@ -104,8 +104,8 @@ class Scene {
     }
 
   private:
-    typedef TypeMap<std::unique_ptr<AttachmentManagerBase>>
-        AttachmentManagerMap;
+    using AttachmentManagerMap =
+        TypeMap<std::unique_ptr<AttachmentManagerBase>>;
 
     std::vector<Node> nodes_{};
     std::queue<size_t> recycled_nodes_{};

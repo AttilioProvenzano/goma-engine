@@ -14,12 +14,12 @@ struct TextureBinding {
     uint32_t uv_index{0};
     float blend{1.0f};
     std::array<TextureWrappingMode, 3> wrapping{TextureWrappingMode::Repeat,
-        TextureWrappingMode::Repeat,
-        TextureWrappingMode::Repeat};
+                                                TextureWrappingMode::Repeat,
+                                                TextureWrappingMode::Repeat};
 };
 
-typedef std::unordered_map<TextureType, std::vector<TextureBinding>>
-    TextureBindingMap;
+using TextureBindingMap =
+    std::unordered_map<TextureType, std::vector<TextureBinding>>;
 
 struct Material {
     std::string name;

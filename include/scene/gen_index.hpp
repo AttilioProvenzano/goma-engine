@@ -28,7 +28,7 @@ struct GenIndex {
     friend std::ostream& operator<<(std::ostream& o, const goma::GenIndex& id);
 };
 
-typedef GenIndex NodeIndex;
+using NodeIndex = GenIndex;
 
 template <typename T>
 using AttachmentIndex = GenIndex;

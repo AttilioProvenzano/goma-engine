@@ -8,27 +8,27 @@
 namespace goma {
 
 struct VezContext {
-    typedef std::vector<uint64_t> ShaderHash;
-    typedef std::map<ShaderHash, VkShaderModule> ShaderCache;
+    using ShaderHash = std::vector<uint64_t>;
+    using ShaderCache = std::map<ShaderHash, VkShaderModule>;
 
-    typedef std::vector<VkShaderModule> PipelineHash;
-    typedef std::map<PipelineHash, std::shared_ptr<Pipeline>> PipelineCache;
+    using PipelineHash = std::vector<VkShaderModule>;
+    using PipelineCache = std::map<PipelineHash, std::shared_ptr<Pipeline>>;
 
-    typedef std::vector<uint64_t> VertexInputFormatHash;
-    typedef std::map<VertexInputFormatHash, std::shared_ptr<VertexInputFormat>>
-        VertexInputFormatCache;
+    using VertexInputFormatHash = std::vector<uint64_t>;
+    using VertexInputFormatCache =
+        std::map<VertexInputFormatHash, std::shared_ptr<VertexInputFormat>>;
 
-    typedef std::vector<uint64_t> BufferHash;
-    typedef std::map<BufferHash, std::shared_ptr<Buffer>> BufferCache;
+    using BufferHash = std::vector<uint64_t>;
+    using BufferCache = std::map<BufferHash, std::shared_ptr<Buffer>>;
 
-    typedef std::vector<uint64_t> ImageHash;
-    typedef std::map<ImageHash, std::shared_ptr<Image>> ImageCache;
+    using ImageHash = std::vector<uint64_t>;
+    using ImageCache = std::map<ImageHash, std::shared_ptr<Image>>;
 
-    typedef std::vector<uint64_t> SamplerHash;
-    typedef std::map<SamplerHash, VkSampler> SamplerCache;
+    using SamplerHash = std::vector<uint64_t>;
+    using SamplerCache = std::map<SamplerHash, VkSampler>;
 
-    typedef std::vector<uint64_t> FramebufferHash;
-    typedef std::map<FramebufferHash, VezFramebuffer> FramebufferCache;
+    using FramebufferHash = std::vector<uint64_t>;
+    using FramebufferCache = std::map<FramebufferHash, VezFramebuffer>;
 
     VkInstance instance{VK_NULL_HANDLE};
     VkDebugReportCallbackEXT debug_callback{VK_NULL_HANDLE};

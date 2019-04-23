@@ -265,11 +265,11 @@ result<void> Renderer::Render() {
     // Ensure that all mesh nodes have world-space model matrices
     scene->ForEach<Mesh>([&](auto id, auto, Mesh&) {
         auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
-        if (!nodes_result || !nodes_result.value()) {
+        if (!nodes_result) {
             return;
         }
 
-        for (auto& mesh_node : *nodes_result.value()) {
+        for (auto& mesh_node : nodes_result.value().get()) {
             if (!scene->HasCachedModel(mesh_node)) {
                 scene->ComputeCachedModel(mesh_node);
             }
@@ -294,20 +294,19 @@ result<void> Renderer::Render() {
                 auto texture_res =
                     scene->GetAttachment<Texture>(binding->second[0].index);
                 if (texture_res) {
-                    auto& texture = texture_res.value();
+                    auto& texture = texture_res.value().get();
 
                     // Upload texture if necessary
-                    if (!texture->image || !texture->image->valid) {
+                    if (!texture.image || !texture.image->valid) {
                         // TODO compressed textures
-                        if (!texture->compressed) {
-                            TextureDesc tex_desc{texture->width,
-                                                 texture->height};
+                        if (!texture.compressed) {
+                            TextureDesc tex_desc{texture.width, texture.height};
                             auto image_res = backend_->CreateTexture(
-                                texture->path.c_str(), tex_desc,
-                                texture->data.data());
+                                texture.path.c_str(), tex_desc,
+                                texture.data.data());
 
                             if (image_res) {
-                                texture->image = image_res.value();
+                                texture.image = image_res.value();
                             }
                         }
                     }
@@ -317,14 +316,16 @@ result<void> Renderer::Render() {
     });
 
     // Get the VP matrix
-    OUTCOME_TRY(camera, scene->GetAttachment<Camera>(engine_.main_camera()));
+    OUTCOME_TRY(camera_ref,
+                scene->GetAttachment<Camera>(engine_.main_camera()));
+    auto& camera = camera_ref.get();
 
     // Get the camera node (TODO main camera index)
     auto camera_nodes = scene->GetAttachedNodes<Camera>({0});
     glm::mat4 camera_transform = glm::mat4(1.0f);
 
-    if (camera_nodes && camera_nodes.value()->size() > 0) {
-        auto camera_node = *camera_nodes.value()->begin();
+    if (camera_nodes && camera_nodes.value().get().size() > 0) {
+        auto camera_node = *camera_nodes.value().get().begin();
         // TODO compute cached model returns the model
         scene->ComputeCachedModel(camera_node);
         camera_transform = scene->GetCachedModel(camera_node).value();
@@ -332,18 +333,18 @@ result<void> Renderer::Render() {
 
     float aspect_ratio =
         float(engine_.platform().GetWidth()) / engine_.platform().GetHeight();
-    auto fovy = camera->h_fov / aspect_ratio;
+    auto fovy = camera.h_fov / aspect_ratio;
 
     // Compute position, look at and up vector in world space
-    glm::vec3 ws_pos = camera_transform * glm::vec4(camera->position, 1.0f);
+    glm::vec3 ws_pos = camera_transform * glm::vec4(camera.position, 1.0f);
     glm::vec3 ws_look_at =
-        glm::normalize(camera_transform * glm::vec4(camera->look_at, 0.0f));
+        glm::normalize(camera_transform * glm::vec4(camera.look_at, 0.0f));
     glm::vec3 ws_up =
-        glm::normalize(camera_transform * glm::vec4(camera->up, 0.0f));
+        glm::normalize(camera_transform * glm::vec4(camera.up, 0.0f));
     glm::mat4 view = glm::lookAt(ws_pos, ws_pos + ws_look_at, ws_up);
 
     glm::mat4 proj = glm::perspective(glm::radians(fovy), aspect_ratio,
-                                      camera->near_plane, camera->far_plane);
+                                      camera.near_plane, camera.far_plane);
     proj[1][1] *= -1;  // Vulkan-style projection
 
     glm::mat4 vp = proj * view;
@@ -372,11 +373,11 @@ result<void> Renderer::Render() {
         auto& culling_vp = vp_hold ? *vp_hold : vp;
 
         auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
-        if (!nodes_result || !nodes_result.value()) {
+        if (!nodes_result) {
             return;
         }
 
-        for (auto& mesh_node : *nodes_result.value()) {
+        for (auto& mesh_node : nodes_result.value().get()) {
             glm::mat4 mvp =
                 culling_vp * scene->GetCachedModel(mesh_node).value();
 
@@ -465,7 +466,7 @@ result<void> Renderer::Render() {
                     continue;
                 }
 
-                mesh = mesh_res.value();
+                mesh = &mesh_res.value().get();
                 last_mesh_id = mesh_id;
 
                 // Bind the new mesh
@@ -476,7 +477,7 @@ result<void> Renderer::Render() {
                                   mesh->name);
                     continue;
                 }
-                auto& material = *material_result.value();
+                auto& material = material_result.value().get();
 
                 // TODO cleanup of error messages, just one pipeline (not
                 // per material)
@@ -571,7 +572,7 @@ result<void> Renderer::Render() {
                     continue;
                 }
 
-                mesh = mesh_res.value();
+                mesh = &mesh_res.value().get();
                 last_mesh_id = mesh_id;
 
                 // Bind the new mesh
@@ -582,7 +583,7 @@ result<void> Renderer::Render() {
                                   mesh->name);
                     continue;
                 }
-                auto& material = *material_result.value();
+                auto& material = material_result.value().get();
 
                 auto pipeline_res = backend_->GetGraphicsPipeline(
                     {"../../../assets/shaders/pbr.vert",
@@ -705,15 +706,15 @@ result<void> Renderer::Render() {
             spdlog::error("Couldn't find the sphere mesh for skybox.");
             // TODO return
         }
-        auto sphere = sphere_res.value().second;
+        auto& sphere = sphere_res.value().second.get();
 
         backend_->BindGraphicsPipeline(*pipeline_res.value());
-        backend_->BindVertexInputFormat(*sphere->vertex_input_format);
-        BindMeshBuffers(*sphere);
+        backend_->BindVertexInputFormat(*sphere.vertex_input_format);
+        BindMeshBuffers(sphere);
 
         // TODO also bind index buffer in BindMeshBuffers
-        if (!sphere->indices.empty()) {
-            backend_->BindIndexBuffer(*sphere->buffers.index);
+        if (!sphere.indices.empty()) {
+            backend_->BindIndexBuffer(*sphere.buffers.index);
         }
 
         // Set depth clamp to 1.0f and depth test to Equal
@@ -732,7 +733,7 @@ result<void> Renderer::Render() {
 
         backend_->BindTexture(skybox_tex_res.value()->vez, 0);
         backend_->BindVertexUniforms({vp});
-        backend_->DrawIndexed(static_cast<uint32_t>(sphere->indices.size()));
+        backend_->DrawIndexed(static_cast<uint32_t>(sphere.indices.size()));
 
         return outcome::success();
     };
@@ -1172,9 +1173,9 @@ result<void> Renderer::BindMaterialTextures(const Material& material) {
             auto texture_res =
                 scene->GetAttachment<Texture>(binding->second[0].index);
             if (texture_res) {
-                auto& texture = texture_res.value();
-                if (texture->image && texture->image->valid) {
-                    backend_->BindTexture(*texture->image, binding_id);
+                auto& texture = texture_res.value().get();
+                if (texture.image && texture.image->valid) {
+                    backend_->BindTexture(*texture.image, binding_id);
                 }
             }
         }

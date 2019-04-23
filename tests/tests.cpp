@@ -89,20 +89,20 @@ TEST(SceneTest, CanCreateAttachments) {
     ASSERT_TRUE(texture_result);
 
     auto texture = texture_result.value();
-    auto attached_nodes = s.GetAttachedNodes<Texture>(texture).value();
-    ASSERT_EQ(*attached_nodes, std::set<NodeIndex>({node}));
+    auto attached_nodes = s.GetAttachedNodes<Texture>(texture).value().get();
+    ASSERT_EQ(attached_nodes, std::set<NodeIndex>({node}));
 
     s.Attach<Texture>(texture, other_node);
-    ASSERT_EQ(*attached_nodes, std::set<NodeIndex>({node, other_node}));
+    ASSERT_EQ(attached_nodes, std::set<NodeIndex>({node, other_node}));
 
     s.Detach<Texture>(texture, node);
-    ASSERT_EQ(*attached_nodes, std::set<NodeIndex>({other_node}));
+    ASSERT_EQ(attached_nodes, std::set<NodeIndex>({other_node}));
 
     s.Attach<Texture>(texture, node);
-    ASSERT_EQ(*attached_nodes, std::set<NodeIndex>({node, other_node}));
+    ASSERT_EQ(attached_nodes, std::set<NodeIndex>({node, other_node}));
 
     s.DetachAll<Texture>(texture);
-    ASSERT_EQ(*attached_nodes, std::set<NodeIndex>());
+    ASSERT_EQ(attached_nodes, std::set<NodeIndex>());
 }
 
 TEST(SceneTest, CanCreateATexture) {
@@ -126,8 +126,8 @@ TEST(AssimpLoaderTest, CanLoadAModel) {
     EXPECT_EQ(scene->GetAttachmentCount<Light>(), 0);
     EXPECT_EQ(scene->GetAttachmentCount<Mesh>(), 1);
 
-    auto attached_nodes = scene->GetAttachedNodes<Mesh>({0}).value();
-    EXPECT_EQ(*attached_nodes, std::set<NodeIndex>({2}));
+    auto& attached_nodes = scene->GetAttachedNodes<Mesh>({0}).value().get();
+    EXPECT_EQ(attached_nodes, std::set<NodeIndex>({2}));
 
     auto children = scene->GetChildren(scene->GetRootNode());
     ASSERT_TRUE(children);
@@ -194,8 +194,8 @@ TEST_F(VezBackendTest, RenderQuad) {
     std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {0, 0, 0, 255});
     for (uint32_t y = 0; y < 512; y++) {
         for (uint32_t x = 0; x < 512; x++) {
-            pixels[512 * y + x][0] = x / 2;
-            pixels[512 * y + x][1] = y / 2;
+            pixels[512 * y + x][0] = static_cast<uint8_t>(x / 2);
+            pixels[512 * y + x][1] = static_cast<uint8_t>(y / 2);
         }
     }
 
@@ -247,7 +247,7 @@ void main() {
          }});
 
     vez.RenderFrame(
-        {[&](RenderPassDesc rp, FrameIndex frame_id) {
+        {[&](RenderPassDesc rp, FrameIndex) {
             vez.BindGraphicsPipeline(*create_pipeline_result.value());
             vez.BindVertexInputFormat(*vertex_input_format_result.value());
             vez.BindVertexBuffers({*create_pos_buffer_result.value(),
@@ -277,24 +277,23 @@ TEST_F(VezBackendTest, RenderModel) {
     // Extract the unique_ptr from the result wrapper
     auto scene = std::move(result.value());
 
-    auto mesh = scene->GetAttachment<Mesh>({0}).value();
+    auto& mesh = scene->GetAttachment<Mesh>({0}).value().get();
     auto create_pos_buffer_result = vez.CreateVertexBuffer(
-        {0}, "triangle_pos", mesh->vertices.size() * sizeof(mesh->vertices[0]),
-        true, mesh->vertices.data());
+        {0}, "triangle_pos", mesh.vertices.size() * sizeof(mesh.vertices[0]),
+        true, mesh.vertices.data());
     ASSERT_TRUE(create_pos_buffer_result)
         << create_pos_buffer_result.error().message();
 
     auto create_uv_buffer_result = vez.CreateVertexBuffer(
         {0}, "triangle_uvs",
-        mesh->uv_sets[0].size() * sizeof(mesh->uv_sets[0][0]), true,
-        mesh->uv_sets[0].data());
+        mesh.uv_sets[0].size() * sizeof(mesh.uv_sets[0][0]), true,
+        mesh.uv_sets[0].data());
     ASSERT_TRUE(create_uv_buffer_result)
         << create_uv_buffer_result.error().message();
 
-    auto create_index_buffer_result =
-        vez.CreateIndexBuffer({0}, "triangle_indices",
-                              mesh->indices.size() * sizeof(mesh->indices[0]),
-                              true, mesh->indices.data());
+    auto create_index_buffer_result = vez.CreateIndexBuffer(
+        {0}, "triangle_indices", mesh.indices.size() * sizeof(mesh.indices[0]),
+        true, mesh.indices.data());
     ASSERT_TRUE(create_index_buffer_result)
         << create_index_buffer_result.error().message();
 
@@ -315,11 +314,11 @@ for (uint32_t y = 0; y < 512; y++) {
 }
     */
 
-    auto tex = scene->GetAttachment<Texture>({0}).value();
-    TextureDesc texture_desc = {tex->width, tex->height};
+    auto tex = scene->GetAttachment<Texture>({0}).value().get();
+    TextureDesc texture_desc = {tex.width, tex.height};
 
     auto create_texture_result =
-        vez.CreateTexture("texture", texture_desc, tex->data.data());
+        vez.CreateTexture("texture", texture_desc, tex.data.data());
     ASSERT_TRUE(create_texture_result)
         << create_texture_result.error().message();
 
@@ -360,8 +359,8 @@ void main() {
     ASSERT_TRUE(create_pipeline_result)
         << create_pipeline_result.error().message();
 
-    auto nodes = scene->GetAttachedNodes<Mesh>({0}).value();
-    auto node = *nodes->begin();
+    auto nodes = scene->GetAttachedNodes<Mesh>({0}).value().get();
+    auto node = *nodes.begin();
 
     glm::mat4 model = glm::mat4(1.0f);
 
@@ -375,11 +374,11 @@ void main() {
     while (node != scene->GetRootNode()) {
         parent_node = scene->GetParent(node).value();
 
-        auto transform = scene->GetTransform(parent_node).value();
-        model = glm::scale(model, transform.scale);
-        model = glm::mat4_cast(transform.rotation) * model;
-        model = glm::translate(model, transform.position);
-        scene->SetTransform(parent_node, transform);
+        auto parent_transform = scene->GetTransform(parent_node).value();
+        model = glm::scale(model, parent_transform.scale);
+        model = glm::mat4_cast(parent_transform.rotation) * model;
+        model = glm::translate(model, parent_transform.position);
+        scene->SetTransform(parent_node, parent_transform);
 
         node = parent_node;
     }
@@ -387,45 +386,45 @@ void main() {
     // TODO check .end() - 1
     Box bounding_box = {
         {std::min_element(
-             mesh->vertices.begin(), mesh->vertices.end(),
+             mesh.vertices.begin(), mesh.vertices.end(),
              [](const auto& v1, const auto& v2) { return (v1.x < v2.x); })
              ->x,
          std::min_element(
-             mesh->vertices.begin(), mesh->vertices.end(),
+             mesh.vertices.begin(), mesh.vertices.end(),
              [](const auto& v1, const auto& v2) { return (v1.y < v2.y); })
              ->y,
          std::min_element(
-             mesh->vertices.begin(), mesh->vertices.end(),
+             mesh.vertices.begin(), mesh.vertices.end(),
              [](const auto& v1, const auto& v2) { return (v1.z < v2.z); })
              ->z},
         {std::max_element(
-             mesh->vertices.begin(), mesh->vertices.end(),
+             mesh.vertices.begin(), mesh.vertices.end(),
              [](const auto& v1, const auto& v2) { return (v1.x < v2.x); })
              ->x,
          std::max_element(
-             mesh->vertices.begin(), mesh->vertices.end(),
+             mesh.vertices.begin(), mesh.vertices.end(),
              [](const auto& v1, const auto& v2) { return (v1.y < v2.y); })
              ->y,
          std::max_element(
-             mesh->vertices.begin(), mesh->vertices.end(),
+             mesh.vertices.begin(), mesh.vertices.end(),
              [](const auto& v1, const auto& v2) { return (v1.z < v2.z); })
              ->z}};
-    mesh->bounding_box = std::make_unique<Box>(std::move(bounding_box));
+    mesh.bounding_box = std::make_unique<Box>(std::move(bounding_box));
 
-    Box transformed_bbox = {model * glm::vec4(mesh->bounding_box->min, 1.0f),
-                            model * glm::vec4(mesh->bounding_box->max, 1.0f)};
+    Box transformed_bbox = {model * glm::vec4(mesh.bounding_box->min, 1.0f),
+                            model * glm::vec4(mesh.bounding_box->max, 1.0f)};
 
-    auto camera = scene->GetAttachment<Camera>({0}).value();
+    auto camera = scene->GetAttachment<Camera>({0}).value().get();
 
     // Let's draw a cone with the fov angle from the camera to the bounding box
-    auto fovy = camera->h_fov * 600 /
+    auto fovy = camera.h_fov * 600 /
                 800;  // TODO implement the full formula in the renderer
     // TODO add absolute values (transformed might have min/max swapped)
     float dist = (transformed_bbox.max.x - transformed_bbox.min.x) /
-                 (2 * tan(glm::radians(camera->h_fov)));
+                 (2 * tan(glm::radians(camera.h_fov)));
     dist = std::max(dist, (transformed_bbox.max.y - transformed_bbox.min.y) /
                               (2 * tan(glm::radians(fovy))));
-    dist += camera->near_plane;
+    dist += camera.near_plane;
     dist += transformed_bbox.max.z;
     dist *= 3;
 
@@ -434,9 +433,9 @@ void main() {
                         (transformed_bbox.max.z + transformed_bbox.min.z) / 2};
 
     glm::mat4 view =
-        glm::lookAt(center - glm::vec3(0, 0, dist), center, camera->up);
-    glm::mat4 proj = glm::perspective(glm::radians(fovy), camera->aspect_ratio,
-                                      camera->near_plane, camera->far_plane);
+        glm::lookAt(center - glm::vec3(0, 0, dist), center, camera.up);
+    glm::mat4 proj = glm::perspective(glm::radians(fovy), camera.aspect_ratio,
+                                      camera.near_plane, camera.far_plane);
     proj[1][1] *= -1;
 
     uint64_t unif_offset = 256;
@@ -462,7 +461,7 @@ void main() {
             {[&](RenderPassDesc rp, FrameIndex frame_id) {
                 vez.BindGraphicsPipeline(*create_pipeline_result.value());
 
-                model = glm::rotate(model, glm::radians(2.0f), camera->up);
+                model = glm::rotate(model, glm::radians(2.0f), camera.up);
                 glm::mat4 mvp = proj * view * model;
                 vez.UpdateBuffer(*mvp_buffer, frame_id * unif_offset,
                                  sizeof(mvp), &mvp);
@@ -486,7 +485,7 @@ void main() {
                 raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
                 vezCmdSetRasterizationState(&raster_state);
 
-                vez.DrawIndexed(static_cast<uint32_t>(mesh->indices.size()));
+                vez.DrawIndexed(static_cast<uint32_t>(mesh.indices.size()));
                 return outcome::success();
             }},
             "color");

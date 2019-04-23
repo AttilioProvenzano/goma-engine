@@ -103,14 +103,15 @@ class AttachmentManager : public AttachmentManagerBase {
 
     const std::vector<Attachment<T>>& GetAll() { return attachments_; }
 
-    result<T*> Get(AttachmentIndex<T> id) {
+    result<std::reference_wrapper<T>> Get(AttachmentIndex<T> id) {
         if (!Validate(id)) {
             return Error::InvalidAttachment;
         }
-        return &attachments_[id.id].data;
+        return attachments_[id.id].data;
     }
 
-    result<std::pair<AttachmentIndex<T>, T*>> Find(const std::string& name) {
+    result<std::pair<AttachmentIndex<T>, std::reference_wrapper<T>>> Find(
+        const std::string& name) {
         auto result = attachment_map_.find(name);
         if (result == attachment_map_.end()) {
             return Error::NotFound;
@@ -144,11 +145,12 @@ class AttachmentManager : public AttachmentManagerBase {
         return outcome::success();
     }
 
-    result<std::set<NodeIndex>*> GetNodes(AttachmentIndex<T> id) {
+    result<std::reference_wrapper<std::set<NodeIndex>>> GetNodes(
+        AttachmentIndex<T> id) {
         if (!Validate(id)) {
             return Error::InvalidAttachment;
         }
-        return &attachments_[id.id].nodes;
+        return attachments_[id.id].nodes;
     }
 
     size_t count() { return valid_count_; }

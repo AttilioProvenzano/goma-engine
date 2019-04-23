@@ -68,13 +68,13 @@ class Scene {
     }
 
     template <typename T>
-    result<T*> GetAttachment(AttachmentIndex<T> id) {
+    result<std::reference_wrapper<T>> GetAttachment(AttachmentIndex<T> id) {
         return GetAttachmentManager<T>()->Get(id);
     }
 
     template <typename T>
-    result<std::pair<AttachmentIndex<T>, T*>> FindAttachment(
-        const std::string& name) {
+    result<std::pair<AttachmentIndex<T>, std::reference_wrapper<T>>>
+    FindAttachment(const std::string& name) {
         return GetAttachmentManager<T>()->Find(name);
     }
 
@@ -99,7 +99,8 @@ class Scene {
     }
 
     template <typename T>
-    result<std::set<NodeIndex>*> GetAttachedNodes(AttachmentIndex<T> id) {
+    result<std::reference_wrapper<std::set<NodeIndex>>> GetAttachedNodes(
+        AttachmentIndex<T> id) {
         return GetAttachmentManager<T>()->GetNodes(id);
     }
 

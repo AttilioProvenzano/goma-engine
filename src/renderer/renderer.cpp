@@ -3,6 +3,7 @@
 #include "engine.hpp"
 #include "renderer/vez/vez_backend.hpp"
 #include "scene/attachments/camera.hpp"
+#include "scene/attachments/light.hpp"
 #include "scene/attachments/material.hpp"
 #include "scene/attachments/mesh.hpp"
 
@@ -313,6 +314,55 @@ result<void> Renderer::Render() {
                 }
             }
         }
+    });
+
+    // Set up light buffer
+    struct LightData {
+        glm::vec3 direction;
+        uint32_t type;
+
+        glm::vec3 color;
+        float intensity;
+
+        glm::vec3 position;
+        float range;
+
+        float innerConeCos;
+        float outerConeCos;
+
+        glm::vec2 padding;
+    };
+
+    const size_t kMaxLights = 64;
+    struct LightBufferData {
+        glm::vec3 ambient_color{glm::vec3(0.0f)};
+        uint32_t num_lights{0};
+
+        // TODO data on shadow maps
+
+        LightData lights[kMaxLights]{};
+    };
+
+    uint32_t num_lights = static_cast<uint32_t>(
+        std::min(kMaxLights, scene->GetAttachmentCount<Light>()));
+    LightBufferData light_buffer_data{glm::vec3(0.05f), num_lights};
+
+    size_t i = 0;
+    scene->ForEach<Light>([&](auto, auto, Light& light) {
+        if (i >= num_lights) {
+            return;
+        }
+
+        auto& buf_light = light_buffer_data.lights[i];
+        buf_light.direction = light.direction;  // TODO node transform
+        buf_light.type = AAA;                   // light.type;
+        buf_light.color = light.diffuse_color;
+        buf_light.intensity = light.intensity;
+        buf_light.position = light.position;  // TODO node transform
+        buf_light.range = (100 + light.attenuation[0]) /
+                          light.attenuation[1];  // range for 99% reduction
+        buf_light.innerConeCos = std::cos(light.inner_cone_angle);
+        buf_light.outerConeCos = std::cos(light.outer_cone_angle);
     });
 
     // Get the VP matrix

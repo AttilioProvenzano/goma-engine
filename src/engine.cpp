@@ -69,7 +69,7 @@ result<void> Engine::LoadScene(const char* file_path) {
 }
 
 result<AttachmentIndex<Camera>> Engine::CreateDefaultCamera() {
-    Camera camera = {};
+    Camera camera{};
     camera.aspect_ratio = float(platform_->GetWidth()) / platform_->GetHeight();
 
     auto new_camera_res = scene_->CreateAttachment<Camera>(std::move(camera));
@@ -83,6 +83,18 @@ result<AttachmentIndex<Camera>> Engine::CreateDefaultCamera() {
     scene_->Attach<Camera>(new_camera_id, camera_node);
 
     return new_camera_id;
+}
+
+result<AttachmentIndex<Light>> Engine::CreateDefaultLight() {
+    Light light{"default_light"};
+
+    OUTCOME_TRY(light_id, scene_->CreateAttachment<Light>(std::move(light)));
+
+    // Create a node for the new light
+    OUTCOME_TRY(light_node, scene_->CreateNode(scene_->GetRootNode()));
+    scene_->Attach<Light>(light_id, light_node);
+
+    return light_id;
 }
 
 }  // namespace goma

@@ -6,6 +6,7 @@
 #include "platform/platform.hpp"
 #include "scene/scene.hpp"
 #include "scene/attachments/camera.hpp"
+#include "scene/attachments/light.hpp"
 
 namespace goma {
 
@@ -42,6 +43,7 @@ class Engine {
         frame_timestamp_{std::chrono::high_resolution_clock::now()};
 
     result<AttachmentIndex<Camera>> CreateDefaultCamera();
+    result<AttachmentIndex<Light>> CreateDefaultLight();
 };
 
 }  // namespace goma

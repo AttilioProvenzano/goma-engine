@@ -96,16 +96,16 @@ layout(set = 0, binding = 13, std140) uniform FragUBO {
 struct Light
 {
     vec3 direction;
-    float range;
+    int type;
 
     vec3 color;
     float intensity;
 
     vec3 position;
-    float innerConeCos;
+    float range;
 
+    float innerConeCos;
     float outerConeCos;
-    int type;
 
     vec2 padding;
 };

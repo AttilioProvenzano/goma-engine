@@ -1188,8 +1188,8 @@ result<VkDebugReportCallbackEXT> VezBackend::CreateDebugCallback(
         // TODO configurable
         // VK_DEBUG_REPORT_DEBUG_BIT_EXT |
         // VK_DEBUG_REPORT_INFORMATION_BIT_EXT |
-        VK_DEBUG_REPORT_WARNING_BIT_EXT |
-        VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
+        // VK_DEBUG_REPORT_WARNING_BIT_EXT |
+        // VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
         VK_DEBUG_REPORT_ERROR_BIT_EXT;
     debug_callback_info.pfnCallback = &DebugReportCallback;
 

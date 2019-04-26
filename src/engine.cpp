@@ -60,6 +60,10 @@ result<void> Engine::LoadScene(const char* file_path) {
     OUTCOME_TRY(main_camera, CreateDefaultCamera());
     main_camera_ = main_camera;
 
+    if (scene_->GetAttachmentCount<Light>() == 0) {
+        CreateDefaultLight();
+    }
+
     FlyCamera fly_camera(main_camera_, 10.0f);
     scripting_system_->RegisterScript(std::move(fly_camera));
 
@@ -87,11 +91,21 @@ result<AttachmentIndex<Camera>> Engine::CreateDefaultCamera() {
 
 result<AttachmentIndex<Light>> Engine::CreateDefaultLight() {
     Light light{"default_light"};
+    // light.direction = glm::normalize(glm::vec3{-0.25f, -1.0f, -0.25f});
+    // light.up = glm::normalize(glm::vec3{-1.0f, 0.25f, -0.25f});
+
+    // Light facing down
+    light.direction = {0.0f, -1.0f, 0.0f};
+    light.up = {1.0f, 0.0f, 0.0f};
+
+    // Tilt it a bit
+    auto rotation = glm::quat({glm::radians(5.0f), 0.0f, glm::radians(5.0f)});
 
     OUTCOME_TRY(light_id, scene_->CreateAttachment<Light>(std::move(light)));
 
     // Create a node for the new light
-    OUTCOME_TRY(light_node, scene_->CreateNode(scene_->GetRootNode()));
+    OUTCOME_TRY(light_node, scene_->CreateNode(scene_->GetRootNode(),
+                                               {glm::vec3(0.0f), rotation}));
     scene_->Attach<Light>(light_id, light_node);
 
     return light_id;

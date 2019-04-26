@@ -902,7 +902,6 @@ result<void> VezBackend::StartRenderPass(Framebuffer fb,
                                          RenderPassDesc rp_desc) {
     assert(context_.device &&
            "Context must be initialized before starting a render pass");
-    VkDevice device = context_.device;
 
     // Ensure there is a valid command buffer for the current thread
     OUTCOME_TRY(GetActiveCommandBuffer());

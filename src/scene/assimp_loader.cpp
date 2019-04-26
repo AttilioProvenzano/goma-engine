@@ -466,6 +466,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                  {ai_light->mDirection.x, ai_light->mDirection.y,
                   ai_light->mDirection.z},
                  {ai_light->mUp.x, ai_light->mUp.y, ai_light->mUp.z},
+                 1.0f,
                  {ai_light->mColorDiffuse.r, ai_light->mColorDiffuse.g,
                   ai_light->mColorDiffuse.b},
                  {ai_light->mColorSpecular.r, ai_light->mColorSpecular.g,

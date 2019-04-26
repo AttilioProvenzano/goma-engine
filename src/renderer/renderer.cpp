@@ -45,7 +45,10 @@ Renderer::Renderer(Engine& engine)
         },
     };
 
+    // TODO names are quite meaningless now, it's better to have objects instead
+    // of pairs which can account for non-render pass stuff
     render_plan.render_passes = {
+        std::make_pair("", RenderPassDesc{}),
         std::make_pair("shadow",
                        RenderPassDesc{{}, DepthAttachmentDesc{"shadow_depth"}}),
         std::make_pair("forward", RenderPassDesc{{ColorAttachmentDesc{"color"}},
@@ -265,6 +268,7 @@ result<void> Renderer::Render() {
 
     // Ensure that all mesh nodes have world-space model matrices
     scene->ForEach<Mesh>([&](auto id, auto, Mesh&) {
+        // TODO foreach already gives nodes
         auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
         if (!nodes_result) {
             return;
@@ -319,7 +323,7 @@ result<void> Renderer::Render() {
     // Set up light buffer
     struct LightData {
         glm::vec3 direction;
-        uint32_t type;
+        int32_t type;
 
         glm::vec3 color;
         float intensity;
@@ -333,36 +337,71 @@ result<void> Renderer::Render() {
         glm::vec2 padding;
     };
 
-    const size_t kMaxLights = 64;
+    constexpr size_t kMaxLights = 64;
     struct LightBufferData {
         glm::vec3 ambient_color{glm::vec3(0.0f)};
-        uint32_t num_lights{0};
+        int32_t num_lights{0};
+        std::array<int32_t, 4> shadow_ids{-1};
 
-        // TODO data on shadow maps
-
-        LightData lights[kMaxLights]{};
+        std::array<LightData, kMaxLights> lights{};
     };
 
     uint32_t num_lights = static_cast<uint32_t>(
         std::min(kMaxLights, scene->GetAttachmentCount<Light>()));
-    LightBufferData light_buffer_data{glm::vec3(0.05f), num_lights};
+    LightBufferData light_buffer_data{glm::vec3(0.01f),
+                                      static_cast<int32_t>(num_lights)};
 
     size_t i = 0;
-    scene->ForEach<Light>([&](auto, auto, Light& light) {
+    auto shadow_vp = glm::mat4(1.0f);
+    bool shadow_map_found{false};
+    scene->ForEach<Light>([&](auto id, auto, Light& light) {
         if (i >= num_lights) {
             return;
         }
 
-        auto& buf_light = light_buffer_data.lights[i];
-        buf_light.direction = light.direction;  // TODO node transform
-        buf_light.type = AAA;                   // light.type;
-        buf_light.color = light.diffuse_color;
-        buf_light.intensity = light.intensity;
-        buf_light.position = light.position;  // TODO node transform
-        buf_light.range = (100 + light.attenuation[0]) /
-                          light.attenuation[1];  // range for 99% reduction
-        buf_light.innerConeCos = std::cos(light.inner_cone_angle);
-        buf_light.outerConeCos = std::cos(light.outer_cone_angle);
+        // TODO foreach already gives nodes
+        auto light_nodes = scene->GetAttachedNodes<Light>(id).value().get();
+
+        for (const auto& light_node : light_nodes) {
+            if (!scene->HasCachedModel(light_node)) {
+                scene->ComputeCachedModel(light_node);
+            }
+            auto model =
+                scene->GetCachedModel(light_node)
+                    .value();  // TODO maybe just a get model matrix (we have
+                               // setTransform, no internal mutability)
+
+            auto& buf_light = light_buffer_data.lights[i];
+            buf_light.direction = model * glm::vec4(light.direction, 0.0f);
+            buf_light.type = static_cast<int32_t>(light.type);
+            buf_light.color = light.diffuse_color;
+            buf_light.intensity = light.intensity;
+            buf_light.position = model * glm::vec4(light.position, 1.0f);
+            buf_light.range = (100 + light.attenuation[0]) /
+                              light.attenuation[1];  // range for 99% reduction
+            buf_light.innerConeCos = std::cos(light.inner_cone_angle);
+            buf_light.outerConeCos = std::cos(light.outer_cone_angle);
+
+            if (!shadow_map_found && light.type == LightType::Directional) {
+                shadow_map_found = true;
+                light_buffer_data.shadow_ids[0] = i;
+
+                glm::vec3 ws_eye = model * glm::vec4(light.position, 1.0f);
+                glm::vec3 ws_direction =
+                    glm::normalize(model * glm::vec4(light.direction, 0.0f));
+                glm::vec3 ws_up =
+                    glm::normalize(model * glm::vec4(light.up, 0.0f));
+                auto shadow_view =
+                    glm::lookAt(ws_eye, ws_eye + ws_direction, ws_up);
+
+                constexpr float size = 20.0f;
+                auto shadow_proj =
+                    glm::ortho(-size, size, -size, size, -size, size);
+                shadow_vp = shadow_proj * shadow_view;
+            }
+
+            i++;
+        }
     });
 
     // Get the VP matrix
@@ -484,16 +523,26 @@ result<void> Renderer::Render() {
                   return a.cs_center.z < b.cs_center.z;
               });
 
-    auto shadow_view =
-        glm::lookAt(glm::vec3{0.0f, 0.0f, 0.0f}, glm::vec3{0.0f, -1.0f, 0.0f},
-                    glm::vec3{0.0f, 0.0f, 1.0f});
-    // TODO proper values for left, right, top, bottom
-    const float size = 20.0f;
-    auto shadow_proj = glm::ortho(-size, size, -size, size, -size, size);
-    auto shadow_vp = shadow_proj * shadow_view;
+    RenderPassFn update_light_buffer = [&](RenderPassDesc rp,
+                                           FrameIndex frame_id) {
+        constexpr auto padded_light_size =
+            (sizeof(light_buffer_data) / 256 + 1) * 256;
+        auto light_buffer_res = backend_->GetUniformBuffer("lights");
+        if (!light_buffer_res) {
+            light_buffer_res = backend_->CreateUniformBuffer(
+                "lights", 3 * padded_light_size, false);
+        }
+
+        auto light_buffer = light_buffer_res.value();
+
+        backend_->UpdateBuffer(*light_buffer, frame_id * padded_light_size,
+                               sizeof(light_buffer_data), &light_buffer_data);
+
+        // TODO halt rendering on failure of a pass
+        return outcome::success();
+    };
 
     RenderPassFn shadow_pass = [&](RenderPassDesc rp, FrameIndex frame_id) {
-        // TODO shadow pass should ignore culling
         backend_->BindDepthStencilState(DepthStencilState{});
         backend_->BindRasterizationState(RasterizationState{});
         backend_->BindMultisampleState(MultisampleState{});
@@ -607,6 +656,16 @@ result<void> Renderer::Render() {
         backend_->BindRasterizationState(RasterizationState{});
         backend_->BindMultisampleState(
             MultisampleState{sample_count, sample_count > 1});
+
+        // TODO dynamic offset needs to be multiple of 256?
+        constexpr auto padded_light_size =
+            (sizeof(light_buffer_data) / 256 + 1) * 256;
+        auto light_buffer_res = backend_->GetUniformBuffer("lights");
+        if (light_buffer_res) {
+            backend_->BindUniformBuffer(*light_buffer_res.value(),
+                                        frame_id * padded_light_size,
+                                        sizeof(light_buffer_data), 15);
+        }
 
         // Render meshes
         AttachmentIndex<Mesh> last_mesh_id{0, 0};
@@ -921,7 +980,8 @@ result<void> Renderer::Render() {
     };
 
     backend_->RenderFrame(
-        {std::move(shadow_pass), std::move(forward_pass), std::move(blit_pass),
+        {std::move(update_light_buffer), std::move(shadow_pass),
+         std::move(forward_pass), std::move(blit_pass),
          std::move(postprocessing_pass)},
         "postprocessing");
 

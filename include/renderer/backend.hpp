@@ -23,7 +23,11 @@ struct FragmentUniforms {};
 enum class Buffering { Double, Triple };
 
 using FrameIndex = size_t;
-using RenderPassFn = std::function<result<void>(RenderPassDesc, FrameIndex)>;
+using RenderPassFn = std::function<result<void>(
+    RenderPassDesc,
+    FrameIndex)>;  // TODO rename to "rendering commands fn", to account for the
+                   // fact that there may be fns outside of a render pass. Also
+                   // a pointer to render pass desc
 
 class Backend {
   public:

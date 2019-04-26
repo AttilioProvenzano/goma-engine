@@ -95,33 +95,23 @@ layout(set = 0, binding = 13, std140) uniform FragUBO {
 
 struct Light
 {
-    vec3 direction;
-    int type;
-
-    vec3 color;
-    float intensity;
-
-    vec3 position;
-    float range;
-
-    float innerConeCos;
-    float outerConeCos;
-
-    vec2 padding;
+    vec4 directionAndType;
+    vec4 colorAndIntensity;
+    vec4 positionAndRange;
+    vec2 innerAndOuterConeCos;
 };
 
 const int LightType_Directional = 0;
 const int LightType_Point = 1;
 const int LightType_Spot = 2;
 
-// uniform Light u_Lights[LIGHT_COUNT];
-const int LIGHT_COUNT = 1;
-const Light u_Lights[] = {
-	// {{-1, 0, 0}, 100, {1, 1, 1}, 0.7, {0, 0, 0}, 0, 0, LightType_Directional, {0, 0}},
-	{{0, -1, 0}, 100, {1, 1, 1}, 0.7, {0, 0, 0}, 0, 0, LightType_Directional, {0, 0}},
-	// {{0, 0, -1}, 100, {1, 1, 1}, 0.7, {0, 0, 0}, 0, 0, LightType_Directional, {0, 0}},
-	// {{1, 0, 0}, 100, {1, 1, 1}, 10, {0, 0, 0}, 0, 0, LightType_Point, {0, 0}}
-};
+const int MAX_LIGHTS = 64;
+
+layout(set = 0, binding = 15, std140) uniform LightUBO {
+    vec4 ambientAndNumLights;
+    vec4 shadowIds;
+    Light lights[MAX_LIGHTS];
+} lightUbo;
 
 struct AngularInfo
 {
@@ -392,28 +382,30 @@ float getSpotAttenuation(vec3 pointToLight, vec3 spotDirection, float outerConeC
 
 vec3 applyDirectionalLight(Light light, MaterialInfo materialInfo, vec3 normal, vec3 view)
 {
-    vec3 pointToLight = -light.direction;
+    vec3 pointToLight = -light.directionAndType.xyz;
     vec3 shade = getPointShade(pointToLight, materialInfo, normal, view);
-    return light.intensity * light.color * shade;
+    return light.colorAndIntensity.a * light.colorAndIntensity.rgb * shade;
 }
 
 vec3 applyPointLight(Light light, MaterialInfo materialInfo, vec3 normal, vec3 view)
 {
-    vec3 pointToLight = light.position - inPosition;
+    vec3 pointToLight = light.positionAndRange.xyz - inPosition;
     float distance = length(pointToLight);
-    float attenuation = getRangeAttenuation(light.range, distance);
+    float attenuation = getRangeAttenuation(light.positionAndRange.w, distance);
     vec3 shade = getPointShade(pointToLight, materialInfo, normal, view);
-    return attenuation * light.intensity * light.color * shade;
+    return attenuation * light.colorAndIntensity.a * light.colorAndIntensity.rgb * shade;
 }
 
 vec3 applySpotLight(Light light, MaterialInfo materialInfo, vec3 normal, vec3 view)
 {
-    vec3 pointToLight = light.position - inPosition;
+    vec3 pointToLight = light.positionAndRange.xyz - inPosition;
     float distance = length(pointToLight);
-    float rangeAttenuation = getRangeAttenuation(light.range, distance);
-    float spotAttenuation = getSpotAttenuation(pointToLight, light.direction, light.outerConeCos, light.innerConeCos);
+    float rangeAttenuation = getRangeAttenuation(light.positionAndRange.w, distance);
+    float spotAttenuation = getSpotAttenuation(pointToLight, light.directionAndType.xyz,
+        light.innerAndOuterConeCos.y, light.innerAndOuterConeCos.x);
     vec3 shade = getPointShade(pointToLight, materialInfo, normal, view);
-    return rangeAttenuation * spotAttenuation * light.intensity * light.color * shade;
+    return rangeAttenuation * spotAttenuation * light.colorAndIntensity.a
+        * light.colorAndIntensity.rgb * shade;
 }
 
 void main()
@@ -494,26 +486,30 @@ void main()
 
     // LIGHTING
 
-    const vec3 ambientColor = vec3(0.1, 0.1, 0.1);
+    const vec3 ambientColor = lightUbo.ambientAndNumLights.rgb;
     vec3 color = ambientColor * diffuseColor;
     vec3 normal = getNormal();
     vec3 view = normalize(ubo.cameraAndCutoff.xyz - inPosition);
 
-    for (int i = 0; i < LIGHT_COUNT; ++i)
+    int numLights = floatBitsToInt(lightUbo.ambientAndNumLights.w);
+    int shadowId = floatBitsToInt(lightUbo.shadowIds[0]);
+    for (int i = 0; i < numLights; ++i)
     {
-        Light light = u_Lights[i];
-        if (light.type == LightType_Directional)
+        Light light = lightUbo.lights[i];
+
+        int type = floatBitsToInt(light.directionAndType.w);
+        if (type == LightType_Directional)
         {
-            if (inShadowPos.z <= texture(shadowMap, inShadowPos.xy).x)
+            if (i != shadowId || inShadowPos.z <= texture(shadowMap, inShadowPos.xy).x)
             {
                 color += applyDirectionalLight(light, materialInfo, normal, view);
             }
         }
-        else if (light.type == LightType_Point)
+        else if (type == LightType_Point)
         {
             color += applyPointLight(light, materialInfo, normal, view);
         }
-        else if (light.type == LightType_Spot)
+        else if (type == LightType_Spot)
         {
             color += applySpotLight(light, materialInfo, normal, view);
         }

@@ -384,7 +384,6 @@ void main() {
         node = parent_node;
     }
 
-    // TODO check .end() - 1
     Box bounding_box = {
         {std::min_element(
              mesh.vertices.begin(), mesh.vertices.end(),
@@ -418,9 +417,7 @@ void main() {
     auto camera = scene->GetAttachment<Camera>({0}).value().get();
 
     // Let's draw a cone with the fov angle from the camera to the bounding box
-    auto fovy = camera.h_fov * 600 /
-                800;  // TODO implement the full formula in the renderer
-    // TODO add absolute values (transformed might have min/max swapped)
+    auto fovy = camera.h_fov * 600 / 800;
     float dist = (transformed_bbox.max.x - transformed_bbox.min.x) /
                  (2 * tan(glm::radians(camera.h_fov)));
     dist = std::max(dist, (transformed_bbox.max.y - transformed_bbox.min.y) /

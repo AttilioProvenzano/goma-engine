@@ -396,8 +396,8 @@ result<void> Renderer::Render() {
                 scene->GetAttachment<Camera>(engine_.main_camera()));
     auto& camera = camera_ref.get();
 
-    // Get the camera node (TODO main camera index)
-    auto camera_nodes = scene->GetAttachedNodes<Camera>({0});
+    // Get the camera node
+    auto camera_nodes = scene->GetAttachedNodes<Camera>(engine_.main_camera());
     glm::mat4 camera_transform = glm::mat4(1.0f);
 
     if (camera_nodes && camera_nodes.value().get().size() > 0) {
@@ -518,7 +518,6 @@ result<void> Renderer::Render() {
         backend_->UpdateBuffer(*light_buffer, frame_id * padded_light_size,
                                sizeof(light_buffer_data), &light_buffer_data);
 
-        // TODO halt rendering on failure of a pass
         return outcome::success();
     };
 
@@ -527,7 +526,6 @@ result<void> Renderer::Render() {
         backend_->BindRasterizationState(RasterizationState{});
         backend_->BindMultisampleState(MultisampleState{});
 
-        // TODO better way to set viewport and scissor automatically
         backend_->SetViewport({{2048.0f, 2048.0f}});
         backend_->SetScissor({{2048, 2048}});
 
@@ -558,15 +556,12 @@ result<void> Renderer::Render() {
                 }
                 auto& material = material_result.value().get();
 
-                // TODO cleanup of error messages, just one pipeline (not
-                // per material)
                 auto pipeline_res = backend_->GetGraphicsPipeline(
                     {"../../../assets/shaders/shadow.vert",
                      ShaderSourceType::Filename,
                      GetVertexShaderPreamble(*mesh)});
                 if (!pipeline_res) {
-                    spdlog::error("Couldn't get pipeline for material {}.",
-                                  material.name);
+                    spdlog::error("Couldn't get pipeline for the shadow pass.");
                     continue;
                 }
 
@@ -575,10 +570,6 @@ result<void> Renderer::Render() {
                 backend_->BindVertexInputFormat(*mesh->vertex_input_format);
                 BindMeshBuffers(*mesh);
                 BindMaterialTextures(material);
-
-                if (!mesh->indices.empty()) {
-                    backend_->BindIndexBuffer(*mesh->buffers.index);
-                }
             }
 
             // Draw the mesh node
@@ -619,8 +610,8 @@ result<void> Renderer::Render() {
         return outcome::success();
     };
 
-    PassFn forward_pass = [&](FrameIndex frame_id, const RenderPassDesc* rp) {
-        // TODO pass color/depth images here
+    PassFn forward_pass = [&](FrameIndex frame_id,
+                              const RenderPassDesc* rp) -> result<void> {
         uint32_t sample_count = 1;
         auto image = backend_->render_plan().color_images.find("color");
         if (image != backend_->render_plan().color_images.end()) {
@@ -637,7 +628,6 @@ result<void> Renderer::Render() {
         backend_->BindMultisampleState(
             MultisampleState{sample_count, sample_count > 1});
 
-        // TODO dynamic offset needs to be multiple of 256?
         constexpr auto padded_light_size =
             (sizeof(light_buffer_data) / 256 + 1) * 256;
         auto light_buffer_res = backend_->GetUniformBuffer("lights");
@@ -693,11 +683,10 @@ result<void> Renderer::Render() {
                 BindMeshBuffers(*mesh);
                 BindMaterialTextures(material);
 
-                // TODO outcome_try with better error message?
                 auto shadow_depth_res =
                     backend_->GetRenderTarget(frame_id, "shadow_depth");
                 if (!shadow_depth_res) {
-                    spdlog::error("Couldn't get the shadow map image.");
+                    spdlog::error("Couldn't get the shadow map.");
                     continue;
                 }
 
@@ -709,10 +698,6 @@ result<void> Renderer::Render() {
                     frag_ubo_res = backend_->CreateUniformBuffer(
                         BufferType::PerNode, node_id, "frag_ubo", 3 * 256,
                         false);
-                }
-
-                if (!mesh->indices.empty()) {
-                    backend_->BindIndexBuffer(*mesh->buffers.index);
                 }
 
                 auto frag_ubo = frag_ubo_res.value();
@@ -787,24 +772,19 @@ result<void> Renderer::Render() {
              ShaderSourceType::Filename});
         if (!pipeline_res) {
             spdlog::error("Couldn't get pipeline for skybox.");
-            // TODO return
+            return Error::NotFound;
         }
 
         auto sphere_res = scene->FindAttachment<Mesh>("goma_sphere");
         if (!sphere_res) {
             spdlog::error("Couldn't find the sphere mesh for skybox.");
-            // TODO return
+            return Error::NotFound;
         }
         auto& sphere = sphere_res.value().second.get();
 
         backend_->BindGraphicsPipeline(*pipeline_res.value());
         backend_->BindVertexInputFormat(*sphere.vertex_input_format);
         BindMeshBuffers(sphere);
-
-        // TODO also bind index buffer in BindMeshBuffers
-        if (!sphere.indices.empty()) {
-            backend_->BindIndexBuffer(*sphere.buffers.index);
-        }
 
         // Set depth clamp to 1.0f and depth test to Equal
         backend_->BindDepthStencilState({true, false, CompareOp::Equal});
@@ -817,7 +797,7 @@ result<void> Renderer::Render() {
         auto skybox_tex_res = backend_->GetTexture("goma_skybox");
         if (!skybox_tex_res) {
             spdlog::error("Couldn't get skybox texture.");
-            // TODO return
+            return Error::NotFound;
         }
 
         auto skybox_ubo_res = backend_->GetUniformBuffer("skybox");
@@ -850,7 +830,6 @@ result<void> Renderer::Render() {
             spdlog::error("Couldn't get the blur image.");
         }
 
-        // TODO won't resolve depth, remove before
         auto depth_res = backend_->GetRenderTarget(frame_id, "depth");
         if (!depth_res) {
             spdlog::error("Couldn't get the resolved depth image.");
@@ -996,35 +975,34 @@ const char* Renderer::GetVertexShaderPreamble(
     if (res != vs_preamble_map_.end()) {
         return res->second.c_str();
     } else {
-        // TODO stringstream
-        std::string preamble;
+        std::stringstream preamble;
 
         if (desc.has_positions) {
-            preamble += "#define HAS_POSITIONS\n";
+            preamble << "#define HAS_POSITIONS\n";
         }
         if (desc.has_normals) {
-            preamble += "#define HAS_NORMALS\n";
+            preamble << "#define HAS_NORMALS\n";
         }
         if (desc.has_tangents) {
-            preamble += "#define HAS_TANGENTS\n";
+            preamble << "#define HAS_TANGENTS\n";
         }
         if (desc.has_bitangents) {
-            preamble += "#define HAS_BITANGENTS\n";
+            preamble << "#define HAS_BITANGENTS\n";
         }
         if (desc.has_colors) {
-            preamble += "#define HAS_COLORS\n";
+            preamble << "#define HAS_COLORS\n";
         }
         if (desc.has_uv0) {
-            preamble += "#define HAS_UV0\n";
+            preamble << "#define HAS_UV0\n";
         }
         if (desc.has_uv1) {
-            preamble += "#define HAS_UV1\n";
+            preamble << "#define HAS_UV1\n";
         }
         if (desc.has_uvw) {
-            preamble += "#define HAS_UVW\n";
+            preamble << "#define HAS_UVW\n";
         }
 
-        vs_preamble_map_[desc.int_repr] = std::move(preamble);
+        vs_preamble_map_[desc.int_repr] = preamble.str();
         return vs_preamble_map_[desc.int_repr].c_str();
     }
 }
@@ -1043,78 +1021,76 @@ const char* Renderer::GetFragmentShaderPreamble(
     if (res != fs_preamble_map_.end()) {
         return res->second.c_str();
     } else {
-        std::string preamble;
+        std::stringstream preamble;
 
         // Mesh
         if (desc.has_positions) {
-            preamble += "#define HAS_POSITIONS\n";
+            preamble << "#define HAS_POSITIONS\n";
         }
         if (desc.has_normals) {
-            preamble += "#define HAS_NORMALS\n";
+            preamble << "#define HAS_NORMALS\n";
         }
         if (desc.has_tangents) {
-            preamble += "#define HAS_TANGENTS\n";
+            preamble << "#define HAS_TANGENTS\n";
         }
         if (desc.has_bitangents) {
-            preamble += "#define HAS_BITANGENTS\n";
+            preamble << "#define HAS_BITANGENTS\n";
         }
         if (desc.has_colors) {
-            preamble += "#define HAS_COLORS\n";
+            preamble << "#define HAS_COLORS\n";
         }
         if (desc.has_uv0) {
-            preamble += "#define HAS_UV0\n";
+            preamble << "#define HAS_UV0\n";
         }
         if (desc.has_uv1) {
-            preamble += "#define HAS_UV1\n";
+            preamble << "#define HAS_UV1\n";
         }
         if (desc.has_uvw) {
-            preamble += "#define HAS_UVW\n";
+            preamble << "#define HAS_UVW\n";
         }
 
         // Material
         if (desc.has_diffuse_map) {
-            preamble += "#define HAS_DIFFUSE_MAP\n";
+            preamble << "#define HAS_DIFFUSE_MAP\n";
         }
         if (desc.has_specular_map) {
-            preamble += "#define HAS_SPECULAR_MAP\n";
+            preamble << "#define HAS_SPECULAR_MAP\n";
         }
         if (desc.has_ambient_map) {
-            preamble += "#define HAS_AMBIENT_MAP\n";
+            preamble << "#define HAS_AMBIENT_MAP\n";
         }
         if (desc.has_emissive_map) {
-            preamble += "#define HAS_EMISSIVE_MAP\n";
+            preamble << "#define HAS_EMISSIVE_MAP\n";
         }
         if (desc.has_metallic_roughness_map) {
-            preamble += "#define HAS_METALLIC_ROUGHNESS_MAP\n";
+            preamble << "#define HAS_METALLIC_ROUGHNESS_MAP\n";
         }
         if (desc.has_height_map) {
-            preamble += "#define HAS_HEIGHT_MAP\n";
+            preamble << "#define HAS_HEIGHT_MAP\n";
         }
         if (desc.has_normal_map) {
-            preamble += "#define HAS_NORMAL_MAP\n";
+            preamble << "#define HAS_NORMAL_MAP\n";
         }
         if (desc.has_shininess_map) {
-            preamble += "#define HAS_SHININESS_MAP\n";
+            preamble << "#define HAS_SHININESS_MAP\n";
         }
         if (desc.has_opacity_map) {
-            preamble += "#define HAS_OPACITY_MAP\n";
+            preamble << "#define HAS_OPACITY_MAP\n";
         }
         if (desc.has_displacement_map) {
-            preamble += "#define HAS_DISPLACEMENT_MAP\n";
+            preamble << "#define HAS_DISPLACEMENT_MAP\n";
         }
         if (desc.has_light_map) {
-            preamble += "#define HAS_LIGHT_MAP\n";
+            preamble << "#define HAS_LIGHT_MAP\n";
         }
         if (desc.has_reflection_map) {
-            preamble += "#define HAS_REFLECTION_MAP\n";
+            preamble << "#define HAS_REFLECTION_MAP\n";
         }
 
-        // TODO Assimp doesn't seem to mark materials where alpha discard should
-        // be enabled, it would be better to avoid calls to discard when
-        // unneeded
-        preamble += "#define ALPHAMODE_MASK\n";
+        // TODO figure out when alpha discard is not needed
+        preamble << "#define ALPHAMODE_MASK\n";
 
-        fs_preamble_map_[desc.int_repr] = std::move(preamble);
+        fs_preamble_map_[desc.int_repr] = preamble.str();
         return fs_preamble_map_[desc.int_repr].c_str();
     }
 }
@@ -1167,6 +1143,10 @@ result<void> Renderer::BindMeshBuffers(const Mesh& mesh) {
     bind(mesh.buffers.uv0);
     bind(mesh.buffers.uv1);
     bind(mesh.buffers.uvw);
+
+    if (!mesh.indices.empty()) {
+        backend_->BindIndexBuffer(*mesh.buffers.index);
+    }
 
     return outcome::success();
 }

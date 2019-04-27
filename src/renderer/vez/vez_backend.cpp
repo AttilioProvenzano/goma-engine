@@ -1837,18 +1837,6 @@ result<void> VezBackend::GetActiveCommandBuffer(uint32_t thread) {
             vezBeginCommandBuffer(per_frame.command_buffers[thread],
                                   VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT));
         per_frame.command_buffer_active[thread] = true;
-
-        // TODO separate scissor and viewport (also more details)
-        // TODO remove from here, they are now separate
-        VkRect2D scissor{{}, {800, 600}};
-        vezCmdSetScissor(0, 1, &scissor);
-
-        VkViewport viewport{};
-        viewport.width = 800;
-        viewport.height = 600;
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vezCmdSetViewport(0, 1, &viewport);
     }
 
     return outcome::success();

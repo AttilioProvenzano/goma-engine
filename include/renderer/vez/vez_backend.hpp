@@ -58,7 +58,7 @@ class VezBackend : public Backend {
     virtual result<void> UpdateBuffer(const Buffer& buffer, uint64_t offset,
                                       uint64_t size, void* contents) override;
 
-    virtual result<void> RenderFrame(std::vector<RenderPassFn> render_pass_fns,
+    virtual result<void> RenderFrame(std::vector<PassFn> pass_fns,
                                      const char* present_image) override;
 
     virtual result<void> BindVertexUniforms(

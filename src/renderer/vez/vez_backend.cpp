@@ -516,40 +516,51 @@ result<void> VezBackend::SetRenderPlan(RenderPlan render_plan) {
     return outcome::success();
 }
 
-result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
+result<void> VezBackend::RenderFrame(std::vector<PassFn> pass_fns,
                                      const char* present_image) {
     auto frame_id = StartFrame().value();
 
-    for (size_t i = 0; i < render_plan_.render_passes.size(); i++) {
-        auto& rp_entry = render_plan_.render_passes[i];
+    for (size_t i = 0; i < render_plan_.passes.size(); i++) {
+        auto& pass = render_plan_.passes[i];
+        const auto& pass_name =
+            pass.match([](const GeneralPassEntry& gp) { return gp.name; },
+                       [](const RenderPassEntry& rp) { return rp.name; });
 
-        // TODO clean up empty render pass name for commands outside rp
-        auto fb_result = GetFramebuffer(frame_id, rp_entry.first.c_str());
-
-        if (!fb_result) {
-            auto fb_create_result = CreateFramebuffer(
-                frame_id, rp_entry.first.c_str(), rp_entry.second);
-            if (!rp_entry.first.empty()) {
-                StartRenderPass(fb_create_result.value(), rp_entry.second);
-            }
-        } else {
-            if (!rp_entry.first.empty()) {
-                StartRenderPass(fb_result.value(), rp_entry.second);
-            }
-        }
-
-        if (i < render_pass_fns.size()) {
-            render_pass_fns[i](
-                rp_entry.first.empty() ? RenderPassDesc{} : rp_entry.second,
-                frame_id);
-        } else if (render_pass_fns.size() == 1) {
-            render_pass_fns[0](
-                rp_entry.first.empty() ? RenderPassDesc{} : rp_entry.second,
-                frame_id);
-        } else {
-            spdlog::error("Skipping render pass \"{}\", no function provided.",
-                          rp_entry.first);
+        if (pass_fns.size() != 1 && i >= pass_fns.size()) {
+            spdlog::error("Skipping pass \"{}\", no function provided.",
+                          pass_name);
             continue;
+        }
+        auto& pass_fn = (pass_fns.size() == 1) ? pass_fns[0] : pass_fns[i];
+
+        auto pass_res = pass.match(
+            [&pass_fn, frame_id](const GeneralPassEntry&) {
+                return pass_fn(frame_id, nullptr);
+            },
+            [this, &pass_fn,
+             frame_id](const RenderPassEntry& rp) -> result<void> {
+                auto fb_res = GetFramebuffer(frame_id, rp.name.c_str());
+                if (!fb_res) {
+                    fb_res =
+                        CreateFramebuffer(frame_id, rp.name.c_str(), rp.desc);
+
+                    if (!fb_res) {
+                        spdlog::error(
+                            "Skipping pass \"{}\", could not create "
+                            "framebuffer.",
+                            rp.name);
+                        return fb_res.error();
+                    }
+                }
+
+                StartRenderPass(fb_res.value(), rp.desc);
+                return pass_fn(frame_id, &rp.desc);
+            });
+
+        if (!pass_res) {
+            spdlog::error("Pass \"{}\" failed, terminating rendering.",
+                          pass_name);
+            return pass_res;
         }
 
         // TODO duplicate in begin render pass (remove)
@@ -557,6 +568,99 @@ result<void> VezBackend::RenderFrame(std::vector<RenderPassFn> render_pass_fns,
             vezCmdEndRenderPass();
         };
         rp_in_progress_ = false;
+
+        // Resolve attachments
+        pass.match(
+            [](const GeneralPassEntry&) { return outcome::success(); },
+            [&](const RenderPassEntry& rp) -> result<void> {
+                for (const auto& c : rp.desc.color_attachments) {
+                    if (!c.resolve_to_rt.empty()) {
+                        OUTCOME_TRY(
+                            src_image,
+                            GetRenderTarget(frame_id, c.rt_name.c_str()));
+                        OUTCOME_TRY(
+                            dst_image,
+                            GetRenderTarget(frame_id, c.resolve_to_rt.c_str()));
+
+                        const auto& rt_desc_res =
+                            render_plan_.color_images.find(c.rt_name);
+                        if (rt_desc_res != render_plan_.color_images.end()) {
+                            auto extent = rt_desc_res->second.extent;
+
+                            // TODO move to a function (this one doesn't do
+                            // round)
+                            if (extent.type ==
+                                ExtentType::RelativeToSwapchain) {
+                                auto w =
+                                    context_.capabilities.currentExtent.width;
+                                auto h =
+                                    context_.capabilities.currentExtent.height;
+                                extent.width *= w;
+                                extent.height *= h;
+                            }
+
+                            VezImageResolve resolve{};
+                            resolve.srcSubresource = {0, 0, 1};
+                            resolve.dstSubresource = {0, 0, 1};
+                            resolve.extent = {
+                                static_cast<uint32_t>(extent.width),
+                                static_cast<uint32_t>(extent.height), 1};
+                            vezCmdResolveImage(src_image->vez.image,
+                                               dst_image->vez.image, 1,
+                                               &resolve);
+                        } else {
+                            spdlog::error(
+                                "Resolve failed: color image \"{}\" not found.",
+                                c.rt_name);
+                            return Error::NotFound;
+                        }
+
+                        return outcome::success();
+                    }
+                }
+            });
+
+        // Blits
+        const auto& blits =
+            pass.match([](const GeneralPassEntry& gp) { return gp.blits; },
+                       [](const RenderPassEntry& rp) { return rp.blits; });
+
+        auto w = context_.capabilities.currentExtent.width;
+        auto h = context_.capabilities.currentExtent.height;
+        for (const auto& b : blits) {
+            OUTCOME_TRY(src_image, GetRenderTarget(frame_id, b.src.rt.c_str()));
+            OUTCOME_TRY(dst_image, GetRenderTarget(frame_id, b.dst.rt.c_str()));
+
+            VezImageBlit blit{};
+            blit.srcSubresource = {b.src.mip_level, b.src.base_array_layer,
+                                   b.src.layer_count};
+            blit.dstSubresource = {b.dst.mip_level, b.dst.base_array_layer,
+                                   b.dst.layer_count};
+
+            if (b.src.extent.type == ExtentType::Absolute) {
+                blit.srcOffsets[1] = {static_cast<int32_t>(b.src.extent.width),
+                                      static_cast<int32_t>(b.src.extent.height),
+                                      1};
+            } else {
+                blit.srcOffsets[1] = {
+                    static_cast<int32_t>(w * b.src.extent.width),
+                    static_cast<int32_t>(h * b.src.extent.height), 1};
+            }
+
+            if (b.dst.extent.type == ExtentType::Absolute) {
+                blit.dstOffsets[1] = {static_cast<int32_t>(b.dst.extent.width),
+                                      static_cast<int32_t>(b.dst.extent.height),
+                                      1};
+            } else {
+                blit.dstOffsets[1] = {
+                    static_cast<int32_t>(w * b.dst.extent.width),
+                    static_cast<int32_t>(h * b.dst.extent.height), 1};
+            }
+
+            // TODO use convenience function above, handle offsets
+            vezCmdBlitImage(src_image->vez.image, dst_image->vez.image, 1,
+                            &blit, VK_FILTER_LINEAR);
+        }
     }
 
     FinishFrame();

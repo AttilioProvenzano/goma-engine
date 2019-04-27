@@ -45,17 +45,28 @@ Renderer::Renderer(Engine& engine)
         },
     };
 
-    // TODO names are quite meaningless now, it's better to have objects instead
-    // of pairs which can account for non-render pass stuff
-    render_plan.render_passes = {
-        std::make_pair("", RenderPassDesc{}),
-        std::make_pair("shadow",
-                       RenderPassDesc{{}, DepthAttachmentDesc{"shadow_depth"}}),
-        std::make_pair("forward", RenderPassDesc{{ColorAttachmentDesc{"color"}},
-                                                 DepthAttachmentDesc{"depth"}}),
-        std::make_pair("", RenderPassDesc{}),
-        std::make_pair("postprocessing",
-                       RenderPassDesc{{ColorAttachmentDesc{"postprocessing"}}}),
+    std::vector<BlitDesc> blits;
+    blits.push_back({{"resolved_image", {}}, {"blur_half", {0.5f, 0.5f}}});
+    blits.push_back(
+        {{"blur_half", {0.5f, 0.5f}}, {"blur_quarter", {0.25f, 0.25f}}});
+    blits.push_back({{"blur_quarter", {0.25f, 0.25f}}, {"blur_full", {}}});
+
+    render_plan.passes = {
+        GeneralPassEntry{"update_light_buffer"},
+        RenderPassEntry{
+            "shadow", RenderPassDesc{{}, DepthAttachmentDesc{"shadow_depth"}}},
+        RenderPassEntry{
+            "forward",
+            RenderPassDesc{{ColorAttachmentDesc{"color",
+                                                true,
+                                                true,
+                                                {0.1f, 0.1f, 0.1f, 1.0f},
+                                                "resolved_image"}},
+                           DepthAttachmentDesc{"depth"}},
+            std::move(blits)},
+        RenderPassEntry{
+            "postprocessing",
+            RenderPassDesc{{ColorAttachmentDesc{"postprocessing"}}}},
     };
 
     // TODO Add blits to the plan (or outside render pass)
@@ -523,8 +534,8 @@ result<void> Renderer::Render() {
                   return a.cs_center.z < b.cs_center.z;
               });
 
-    RenderPassFn update_light_buffer = [&](RenderPassDesc rp,
-                                           FrameIndex frame_id) {
+    PassFn update_light_buffer = [&](FrameIndex frame_id,
+                                     const RenderPassDesc* rp) {
         constexpr auto padded_light_size =
             (sizeof(light_buffer_data) / 256 + 1) * 256;
         auto light_buffer_res = backend_->GetUniformBuffer("lights");
@@ -542,7 +553,7 @@ result<void> Renderer::Render() {
         return outcome::success();
     };
 
-    RenderPassFn shadow_pass = [&](RenderPassDesc rp, FrameIndex frame_id) {
+    PassFn shadow_pass = [&](FrameIndex frame_id, const RenderPassDesc* rp) {
         backend_->BindDepthStencilState(DepthStencilState{});
         backend_->BindRasterizationState(RasterizationState{});
         backend_->BindMultisampleState(MultisampleState{});
@@ -639,7 +650,7 @@ result<void> Renderer::Render() {
         return outcome::success();
     };
 
-    RenderPassFn forward_pass = [&](RenderPassDesc rp, FrameIndex frame_id) {
+    PassFn forward_pass = [&](FrameIndex frame_id, const RenderPassDesc* rp) {
         // TODO pass color/depth images here
         uint32_t sample_count = 1;
         auto image = backend_->render_plan().color_images.find("color");
@@ -847,85 +858,8 @@ result<void> Renderer::Render() {
         return outcome::success();
     };
 
-    RenderPassFn blit_pass = [&](RenderPassDesc rp, FrameIndex frame_id) {
-        auto color_image_res = backend_->GetRenderTarget(frame_id, "color");
-        if (!color_image_res) {
-            spdlog::error("Couldn't get the color image.");
-        }
-
-        auto resolved_image_res =
-            backend_->GetRenderTarget(frame_id, "resolved_image");
-        if (!resolved_image_res) {
-            spdlog::error("Couldn't get the resolved image.");
-        }
-
-        auto depth_image_res = backend_->GetRenderTarget(frame_id, "depth");
-        if (!depth_image_res) {
-            spdlog::error("Couldn't get the depth image.");
-        }
-
-        auto blur_full_res = backend_->GetRenderTarget(frame_id, "blur_full");
-        if (!blur_full_res) {
-            spdlog::error("Couldn't get the blur full image.");
-        }
-
-        auto blur_half_res = backend_->GetRenderTarget(frame_id, "blur_half");
-        if (!blur_half_res) {
-            spdlog::error("Couldn't get the blur half image.");
-        }
-
-        auto blur_quarter_res =
-            backend_->GetRenderTarget(frame_id, "blur_quarter");
-        if (!blur_quarter_res) {
-            spdlog::error("Couldn't get the blur quarter image.");
-        }
-
-        auto color_image = color_image_res.value();
-        auto resolved_image = resolved_image_res.value();
-        auto depth_image = depth_image_res.value();
-
-        auto w = engine_.platform().GetWidth();
-        auto h = engine_.platform().GetHeight();
-
-        VezImageResolve resolve{};
-        resolve.srcSubresource = {0, 0, 1};
-        resolve.dstSubresource = {0, 0, 1};
-        resolve.extent = {w, h, 1};
-        vezCmdResolveImage(color_image->vez.image, resolved_image->vez.image, 1,
-                           &resolve);
-
-        VezImageBlit blit{};
-        blit.srcSubresource = {0, 0, 1};
-        blit.dstSubresource = {0, 0, 1};
-        blit.srcOffsets[1] = {static_cast<int32_t>(w), static_cast<int32_t>(h),
-                              1};
-        blit.dstOffsets[1] = {static_cast<int32_t>(w / 2),
-                              static_cast<int32_t>(h / 2), 1};
-        vezCmdBlitImage(resolved_image->vez.image,
-                        blur_half_res.value()->vez.image, 1, &blit,
-                        VK_FILTER_LINEAR);
-
-        blit.srcOffsets[1] = {static_cast<int32_t>(w / 2),
-                              static_cast<int32_t>(h / 2), 1};
-        blit.dstOffsets[1] = {static_cast<int32_t>(w / 4),
-                              static_cast<int32_t>(h / 4), 1};
-        vezCmdBlitImage(blur_half_res.value()->vez.image,
-                        blur_quarter_res.value()->vez.image, 1, &blit,
-                        VK_FILTER_LINEAR);
-
-        blit.srcOffsets[1] = {static_cast<int32_t>(w / 4),
-                              static_cast<int32_t>(h / 4), 1};
-        blit.dstOffsets[1] = {static_cast<int32_t>(w), static_cast<int32_t>(h),
-                              1};
-        vezCmdBlitImage(blur_quarter_res.value()->vez.image,
-                        blur_full_res.value()->vez.image, 1, &blit,
-                        VK_FILTER_LINEAR);
-
-        return outcome::success();
-    };
-
-    RenderPassFn postprocessing_pass = [&](RenderPassDesc rp,
-                                           FrameIndex frame_id) {
+    PassFn postprocessing_pass = [&](FrameIndex frame_id,
+                                     const RenderPassDesc* rp) {
         auto resolved_image_res =
             backend_->GetRenderTarget(frame_id, "resolved_image");
         if (!resolved_image_res) {
@@ -981,8 +915,7 @@ result<void> Renderer::Render() {
 
     backend_->RenderFrame(
         {std::move(update_light_buffer), std::move(shadow_pass),
-         std::move(forward_pass), std::move(blit_pass),
-         std::move(postprocessing_pass)},
+         std::move(forward_pass), std::move(postprocessing_pass)},
         "postprocessing");
 
     return outcome::success();

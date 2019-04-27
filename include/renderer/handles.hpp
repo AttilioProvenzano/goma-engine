@@ -137,7 +137,6 @@ struct Extent {
 };
 
 struct ColorRenderTargetDesc {
-    // TODO initialize all objects with {}
     Extent extent{};
     uint32_t samples{1};
     uint32_t mip_levels{1};
@@ -160,6 +159,7 @@ struct ColorAttachmentDesc {
     bool clear{true};
     bool store{true};
     std::array<float, 4> clear_color{0.1f, 0.1f, 0.1f, 1.0f};
+    std::string resolve_to_rt{""};  // resolve to rt at the end of the pass
 };
 
 struct DepthAttachmentDesc {
@@ -175,15 +175,42 @@ struct RenderPassDesc {
     DepthAttachmentDesc depth_attachment{""};  // empty	rt_name for no depth
 };
 
+struct BlitTargetDesc {
+    std::string rt;
+    Extent extent;
+    Extent offset{0.0f, 0.0f, ExtentType::Absolute};
+
+    uint32_t mip_level{0};
+    uint32_t base_array_layer{0};
+    uint32_t layer_count{1};
+};
+
+struct BlitDesc {
+    BlitTargetDesc src;
+    BlitTargetDesc dst;
+};
+
 using RenderTargetName = std::string;
-using RenderPassName = std::string;
-using RenderPassEntry = std::pair<RenderPassName, RenderPassDesc>;
+using PassName = std::string;
+
+struct RenderPassEntry {
+    PassName name;
+    RenderPassDesc desc;
+    std::vector<BlitDesc> blits{};
+};
+
+struct GeneralPassEntry {
+    PassName name;
+    std::vector<BlitDesc> blits{};
+};
+
+using PassEntry = variant<RenderPassEntry, GeneralPassEntry>;
 
 struct RenderPlan {
     std::map<RenderTargetName, ColorRenderTargetDesc> color_images{};
     std::map<RenderTargetName, DepthRenderTargetDesc> depth_images{};
 
-    std::vector<RenderPassEntry> render_passes{};
+    std::vector<PassEntry> passes{};
 };
 
 struct VertexInputBindingDesc {

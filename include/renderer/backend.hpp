@@ -23,11 +23,7 @@ struct FragmentUniforms {};
 enum class Buffering { Double, Triple };
 
 using FrameIndex = size_t;
-using RenderPassFn = std::function<result<void>(
-    RenderPassDesc,
-    FrameIndex)>;  // TODO rename to "rendering commands fn", to account for the
-                   // fact that there may be fns outside of a render pass. Also
-                   // a pointer to render pass desc
+using PassFn = std::function<result<void>(FrameIndex, const RenderPassDesc*)>;
 
 class Backend {
   public:
@@ -92,7 +88,7 @@ class Backend {
     virtual result<void> UpdateBuffer(const Buffer& buffer, uint64_t offset,
                                       uint64_t size, void* contents) = 0;
 
-    virtual result<void> RenderFrame(std::vector<RenderPassFn> render_pass_fns,
+    virtual result<void> RenderFrame(std::vector<PassFn> pass_fns,
                                      const char* present_image) = 0;
 
     virtual result<void> BindVertexUniforms(

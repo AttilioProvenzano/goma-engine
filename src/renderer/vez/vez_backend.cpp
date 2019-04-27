@@ -620,27 +620,16 @@ result<void> VezBackend::RenderFrame(std::vector<PassFn> pass_fns,
             blit.dstSubresource = {b.dst.mip_level, b.dst.base_array_layer,
                                    b.dst.layer_count};
 
-            if (b.src.extent.type == ExtentType::Absolute) {
-                blit.srcOffsets[1] = {static_cast<int32_t>(b.src.extent.width),
-                                      static_cast<int32_t>(b.src.extent.height),
-                                      1};
-            } else {
-                blit.srcOffsets[1] = {
-                    static_cast<int32_t>(w * b.src.extent.width),
-                    static_cast<int32_t>(h * b.src.extent.height), 1};
-            }
+            auto src_extent = GetAbsoluteExtent(b.src.extent);
+            blit.srcOffsets[1] = {
+                static_cast<int32_t>(src_extent.rounded_width()),
+                static_cast<int32_t>(src_extent.rounded_height()), 1};
 
-            if (b.dst.extent.type == ExtentType::Absolute) {
-                blit.dstOffsets[1] = {static_cast<int32_t>(b.dst.extent.width),
-                                      static_cast<int32_t>(b.dst.extent.height),
-                                      1};
-            } else {
-                blit.dstOffsets[1] = {
-                    static_cast<int32_t>(w * b.dst.extent.width),
-                    static_cast<int32_t>(h * b.dst.extent.height), 1};
-            }
+            auto dst_extent = GetAbsoluteExtent(b.dst.extent);
+            blit.dstOffsets[1] = {
+                static_cast<int32_t>(dst_extent.rounded_width()),
+                static_cast<int32_t>(dst_extent.rounded_height()), 1};
 
-            // TODO use convenience function above, handle offsets
             vezCmdBlitImage(src_image->vez.image, dst_image->vez.image, 1,
                             &blit, VK_FILTER_LINEAR);
         }
@@ -1254,7 +1243,6 @@ result<VkDebugReportCallbackEXT> VezBackend::CreateDebugCallback(
     debug_callback_info.sType =
         VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
     debug_callback_info.flags =
-        // TODO configurable
         // VK_DEBUG_REPORT_DEBUG_BIT_EXT |
         // VK_DEBUG_REPORT_INFORMATION_BIT_EXT |
         // VK_DEBUG_REPORT_WARNING_BIT_EXT |
@@ -1688,7 +1676,8 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
     image_view_info.format = image_info.format;
     image_view_info.image = image;
     image_view_info.subresourceRange = range;
-    // TODO pass cubemap setting
+
+    // Check for cubemap
     image_view_info.viewType = image_info.arrayLayers == 6
                                    ? VK_IMAGE_VIEW_TYPE_CUBE
                                    : VK_IMAGE_VIEW_TYPE_2D;

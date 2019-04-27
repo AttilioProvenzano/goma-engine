@@ -274,21 +274,6 @@ result<void> Renderer::Render() {
         }
     });
 
-    // Ensure that all mesh nodes have world-space model matrices
-    scene->ForEach<Mesh>([&](auto id, auto, Mesh&) {
-        // TODO foreach already gives nodes
-        auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
-        if (!nodes_result) {
-            return;
-        }
-
-        for (auto& mesh_node : nodes_result.value().get()) {
-            if (!scene->HasCachedModel(mesh_node)) {
-                scene->ComputeCachedModel(mesh_node);
-            }
-        }
-    });
-
     // Upload textures
     scene->ForEach<Material>([&](auto, auto, Material& material) {
         const std::vector<TextureType> texture_types = {
@@ -365,22 +350,13 @@ result<void> Renderer::Render() {
     size_t i = 0;
     auto shadow_vp = glm::mat4(1.0f);
     bool shadow_map_found{false};
-    scene->ForEach<Light>([&](auto id, auto, Light& light) {
+    scene->ForEach<Light>([&](auto id, auto nodes, Light& light) {
         if (i >= num_lights) {
             return;
         }
 
-        // TODO foreach already gives nodes
-        auto light_nodes = scene->GetAttachedNodes<Light>(id).value().get();
-
-        for (const auto& light_node : light_nodes) {
-            if (!scene->HasCachedModel(light_node)) {
-                scene->ComputeCachedModel(light_node);
-            }
-            auto model =
-                scene->GetCachedModel(light_node)
-                    .value();  // TODO maybe just a get model matrix (we have
-                               // setTransform, no internal mutability)
+        for (const auto& light_node : nodes) {
+            auto model = scene->GetTransformMatrix(light_node).value();
 
             auto& buf_light = light_buffer_data.lights[i];
             buf_light.direction = model * glm::vec4(light.direction, 0.0f);
@@ -426,9 +402,7 @@ result<void> Renderer::Render() {
 
     if (camera_nodes && camera_nodes.value().get().size() > 0) {
         auto camera_node = *camera_nodes.value().get().begin();
-        // TODO compute cached model returns the model
-        scene->ComputeCachedModel(camera_node);
-        camera_transform = scene->GetCachedModel(camera_node).value();
+        camera_transform = scene->GetTransformMatrix(camera_node).value();
     }
 
     float aspect_ratio =
@@ -469,17 +443,12 @@ result<void> Renderer::Render() {
 
     // Frustum culling
     std::vector<glm::vec4> cs_vertices(8);
-    scene->ForEach<Mesh>([&](auto id, auto, Mesh& mesh) {
+    scene->ForEach<Mesh>([&](auto id, auto nodes, Mesh& mesh) {
         auto& culling_vp = vp_hold ? *vp_hold : vp;
 
-        auto nodes_result = scene->GetAttachedNodes<Mesh>(id);
-        if (!nodes_result) {
-            return;
-        }
-
-        for (auto& mesh_node : nodes_result.value().get()) {
+        for (auto& mesh_node : nodes) {
             glm::mat4 mvp =
-                culling_vp * scene->GetCachedModel(mesh_node).value();
+                culling_vp * scene->GetTransformMatrix(mesh_node).value();
 
             cs_vertices[0] = mvp * glm::vec4(mesh.bounding_box->min, 1.0f);
             cs_vertices[1] = mvp * glm::vec4(mesh.bounding_box->max, 1.0f);
@@ -613,7 +582,7 @@ result<void> Renderer::Render() {
             }
 
             // Draw the mesh node
-            auto model = scene->GetCachedModel(node_id).value();
+            auto model = scene->GetTransformMatrix(node_id).value();
             glm::mat4 mvp = shadow_vp * model;
 
             auto vtx_ubo_res = backend_->GetUniformBuffer(
@@ -768,7 +737,7 @@ result<void> Renderer::Render() {
             }
 
             // Draw the mesh node
-            auto model = scene->GetCachedModel(node_id).value();
+            auto model = scene->GetTransformMatrix(node_id).value();
             glm::mat4 mvp = vp * model;
 
             // Shadow correction maps X and Y for the shadow MVP

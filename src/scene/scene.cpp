@@ -93,34 +93,28 @@ result<void> Scene::SetTransform(NodeIndex id, const Transform& transform) {
     if (!ValidateNode(id)) {
         return Error::InvalidNode;
     }
+
     nodes_[id.id].transform = transform;
+    nodes_[id.id].cached_model.reset();
     return outcome::success();
 }
 
-bool Scene::HasCachedModel(NodeIndex id) {
-    if (!ValidateNode(id)) {
-        return false;
-    }
-    return static_cast<bool>(nodes_[id.id].cached_model);
-}
-
-result<glm::mat4> Scene::GetCachedModel(NodeIndex id) {
+result<glm::mat4> Scene::GetTransformMatrix(NodeIndex id) {
     if (!ValidateNode(id)) {
         return Error::InvalidNode;
     }
-    return *nodes_[id.id].cached_model.get();
-}
 
-result<void> Scene::SetCachedModel(NodeIndex id, const glm::mat4& model) {
-    if (!ValidateNode(id)) {
-        return Error::InvalidNode;
+    auto t_mat = nodes_[id.id].cached_model.get();
+    if (t_mat) {
+        return *t_mat;
+    } else {
+        OUTCOME_TRY(ComputeTransformMatrix(id));
+        t_mat = nodes_[id.id].cached_model.get();
+        return *t_mat;
     }
-    nodes_[id.id].cached_model = std::make_unique<glm::mat4>(model);
-
-    return outcome::success();
 }
 
-result<void> Scene::ComputeCachedModel(NodeIndex id) {
+result<void> Scene::ComputeTransformMatrix(NodeIndex id) {
     std::stack<NodeIndex> node_stack;
 
     // Fill the stack with nodes for which we need
@@ -135,7 +129,7 @@ result<void> Scene::ComputeCachedModel(NodeIndex id) {
         } else {
             current_node = parent.value();
         }
-    } while (!HasCachedModel(current_node));
+    } while (!nodes_[current_node.id].cached_model);
 
     // Compute model matrices
     auto current_model = glm::mat4(1.0f);
@@ -143,8 +137,8 @@ result<void> Scene::ComputeCachedModel(NodeIndex id) {
         auto parent_res = GetParent(node_stack.top());
         if (parent_res.has_value()) {
             auto& parent = parent_res.value();
-            if (HasCachedModel(parent)) {
-                current_model = GetCachedModel(parent).value();
+            if (nodes_[parent.id].cached_model) {
+                current_model = *nodes_[parent.id].cached_model;
             }
         }
     }
@@ -159,17 +153,8 @@ result<void> Scene::ComputeCachedModel(NodeIndex id) {
                            glm::scale(transform.scale);
 
         current_model = current_model * local_model;
-        SetCachedModel(id, current_model);
+        nodes_[id.id].cached_model = std::make_unique<glm::mat4>(current_model);
     }
-
-    return outcome::success();
-}
-
-result<void> Scene::InvalidateCachedModel(NodeIndex id) {
-    if (!ValidateNode(id)) {
-        return Error::InvalidNode;
-    }
-    nodes_[id.id].cached_model = std::unique_ptr<glm::mat4>();
 
     return outcome::success();
 }

@@ -851,8 +851,19 @@ result<void> Renderer::Render() {
             // TODO return
         }
 
+        auto skybox_ubo_res = backend_->GetUniformBuffer("skybox");
+        if (!skybox_ubo_res) {
+            skybox_ubo_res = backend_->CreateUniformBuffer(
+                "skybox", 3 * 256, false);
+        }
+        auto skybox_ubo = skybox_ubo_res.value();
+
+        backend_->UpdateBuffer(*skybox_ubo, frame_id * 256,
+            sizeof(vp), &vp);
+        backend_->BindUniformBuffer(*skybox_ubo, frame_id * 256,
+            sizeof(vp), 12);
+
         backend_->BindTexture(skybox_tex_res.value()->vez, 0);
-        backend_->BindVertexUniforms({vp});
         backend_->DrawIndexed(static_cast<uint32_t>(sphere.indices.size()));
 
         return outcome::success();

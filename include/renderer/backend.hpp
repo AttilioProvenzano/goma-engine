@@ -11,15 +11,6 @@ namespace goma {
 
 class Engine;
 
-// TODO rework binding push constants
-// (potentially just a memory range,
-// but does it work in OpenGL?)
-struct VertexUniforms {
-    glm::mat4 mvp;
-};
-
-struct FragmentUniforms {};
-
 enum class Buffering { Double, Triple };
 
 using FrameIndex = size_t;
@@ -91,10 +82,6 @@ class Backend {
     virtual result<void> RenderFrame(std::vector<PassFn> pass_fns,
                                      const char* present_image) = 0;
 
-    virtual result<void> BindVertexUniforms(
-        const VertexUniforms& vertex_uniforms) = 0;
-    virtual result<void> BindFragmentUniforms(
-        const FragmentUniforms& fragment_uniforms) = 0;
     virtual result<void> BindUniformBuffer(const Buffer& buffer,
                                            uint64_t offset, uint64_t size,
                                            uint32_t binding,

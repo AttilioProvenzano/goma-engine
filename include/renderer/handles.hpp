@@ -12,28 +12,28 @@ struct VulkanImage {
 };
 
 struct Image {
-    const VulkanImage vez{};
+    VulkanImage vez{};
     bool valid{false};
 
     Image(VulkanImage vez_) : vez(vez_), valid(true) {}
 };
 
 struct Framebuffer {
-    const VezFramebuffer vez{};
+    VezFramebuffer vez{};
     bool valid{false};
 
     Framebuffer(VezFramebuffer vez_) : vez(vez_), valid(true) {}
 };
 
 struct Pipeline {
-    const VezPipeline vez{VK_NULL_HANDLE};
+    VezPipeline vez{VK_NULL_HANDLE};
     bool valid{false};
 
     Pipeline(VezPipeline vez_) : vez(vez_), valid(true) {}
 };
 
 struct Buffer {
-    const VkBuffer vez{VK_NULL_HANDLE};
+    VkBuffer vez{VK_NULL_HANDLE};
     bool valid{false};
 
     Buffer(VkBuffer vez_) : vez(vez_), valid(true) {}

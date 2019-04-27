@@ -17,6 +17,9 @@
 namespace outcome = OUTCOME_V2_NAMESPACE;
 using outcome::result;
 
+#include <mapbox/variant.hpp>
+using mapbox::util::variant;
+
 #include <algorithm>
 #include <array>
 #include <fstream>

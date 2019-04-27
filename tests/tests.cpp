@@ -19,6 +19,10 @@
 
 using namespace goma;
 
+#ifndef GOMA_ASSETS_DIR
+#define GOMA_ASSETS_DIR "assets/"
+#endif
+
 namespace {
 
 TEST(SceneTest, CanCreateScene) {
@@ -493,7 +497,7 @@ void main() {
 
 TEST(RendererTest, RenderDuck) {
     Engine e;
-    e.LoadScene("../../../assets/models/Duck/glTF/Duck.gltf");
+    e.LoadScene(GOMA_ASSETS_DIR "models/Duck/glTF/Duck.gltf");
     auto res = e.renderer().Render();
 
     ASSERT_TRUE(res) << res.error().message();
@@ -503,7 +507,7 @@ TEST(RendererTest, RenderDuck) {
 
 TEST(RendererTest, RenderLantern) {
     Engine e;
-    e.LoadScene("../../../assets/models/Lantern/glTF/Lantern.gltf");
+    e.LoadScene(GOMA_ASSETS_DIR "models/Lantern/glTF/Lantern.gltf");
 
     for (size_t i = 0; i < 300; i++) {
         auto res = e.renderer().Render();
@@ -516,7 +520,7 @@ TEST(RendererTest, RenderLantern) {
 
 TEST(RendererTest, RenderSponza) {
     Engine e;
-    e.LoadScene("../../../assets/models/Sponza/glTF/Sponza.gltf");
+    e.LoadScene(GOMA_ASSETS_DIR "models/Sponza/glTF/Sponza.gltf");
 
     for (size_t i = 0; i < 300; i++) {
         auto res = e.renderer().Render();
@@ -528,7 +532,7 @@ TEST(RendererTest, RenderSponza) {
 
 TEST(EngineTest, RenderLantern) {
     Engine e;
-    e.LoadScene("../../../assets/models/Lantern/glTF/Lantern.gltf");
+    e.LoadScene(GOMA_ASSETS_DIR "models/Lantern/glTF/Lantern.gltf");
 
     auto res = e.MainLoop([&]() {
         // Stop after 300 frames
@@ -541,7 +545,7 @@ TEST(EngineTest, RenderLantern) {
 
 TEST(EngineTest, RenderHelmet) {
     Engine e;
-    e.LoadScene("../../../assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf");
+    e.LoadScene(GOMA_ASSETS_DIR "models/DamagedHelmet/glTF/DamagedHelmet.gltf");
 
     auto res = e.MainLoop([&]() {
         // Stop after 300 frames
@@ -554,7 +558,7 @@ TEST(EngineTest, RenderHelmet) {
 
 TEST(EngineTest, RenderSponza) {
     Engine e;
-    e.LoadScene("../../../assets/models/Sponza/glTF/Sponza.gltf");
+    e.LoadScene(GOMA_ASSETS_DIR "models/Sponza/glTF/Sponza.gltf");
 
     auto res = e.MainLoop([&]() {
         // Stop after 300 frames

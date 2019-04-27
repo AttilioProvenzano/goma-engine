@@ -9,6 +9,10 @@
 
 #include <stb_image.h>
 
+#ifndef GOMA_ASSETS_DIR
+#define GOMA_ASSETS_DIR "assets/"
+#endif
+
 namespace goma {
 
 Renderer::Renderer(Engine& engine)
@@ -557,7 +561,7 @@ result<void> Renderer::Render() {
                 auto& material = material_result.value().get();
 
                 auto pipeline_res = backend_->GetGraphicsPipeline(
-                    {"../../../assets/shaders/shadow.vert",
+                    {GOMA_ASSETS_DIR "shaders/shadow.vert",
                      ShaderSourceType::Filename,
                      GetVertexShaderPreamble(*mesh)});
                 if (!pipeline_res) {
@@ -665,10 +669,10 @@ result<void> Renderer::Render() {
                 auto& material = material_result.value().get();
 
                 auto pipeline_res = backend_->GetGraphicsPipeline(
-                    {"../../../assets/shaders/pbr.vert",
+                    {GOMA_ASSETS_DIR "/shaders/pbr.vert",
                      ShaderSourceType::Filename,
                      GetVertexShaderPreamble(*mesh)},
-                    {"../../../assets/shaders/pbr.frag",
+                    {GOMA_ASSETS_DIR "/shaders/pbr.frag",
                      ShaderSourceType::Filename,
                      GetFragmentShaderPreamble(*mesh, material)});
                 if (!pipeline_res) {
@@ -767,8 +771,9 @@ result<void> Renderer::Render() {
 
         // Draw skybox
         auto pipeline_res = backend_->GetGraphicsPipeline(
-            {"../../../assets/shaders/skybox.vert", ShaderSourceType::Filename},
-            {"../../../assets/shaders/skybox.frag",
+            {GOMA_ASSETS_DIR "/shaders/skybox.vert",
+             ShaderSourceType::Filename},
+            {GOMA_ASSETS_DIR "shaders/skybox.frag",
              ShaderSourceType::Filename});
         if (!pipeline_res) {
             spdlog::error("Couldn't get pipeline for skybox.");
@@ -852,9 +857,9 @@ result<void> Renderer::Render() {
         backend_->BindVertexInputFormat(*no_input.value());
 
         auto pipeline_res = backend_->GetGraphicsPipeline(
-            {"../../../assets/shaders/fullscreen.vert",
+            {GOMA_ASSETS_DIR "shaders/fullscreen.vert",
              ShaderSourceType::Filename},
-            {"../../../assets/shaders/postprocessing.frag",
+            {GOMA_ASSETS_DIR "shaders/postprocessing.frag",
              ShaderSourceType::Filename});
         if (!pipeline_res) {
             spdlog::error(
@@ -885,7 +890,7 @@ result<void> Renderer::CreateSkybox() {
     const std::vector<char*> filenames{"posx.jpg", "negx.jpg", "posy.jpg",
                                        "negy.jpg", "posz.jpg", "negz.jpg"};
 
-    std::string base_path{"../../../assets/textures/skybox/yokohama/"};
+    std::string base_path{GOMA_ASSETS_DIR "textures/skybox/yokohama/"};
 
     std::vector<void*> stbi_images;
 

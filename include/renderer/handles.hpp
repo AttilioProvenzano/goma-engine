@@ -134,6 +134,19 @@ struct Extent {
     float width{1.0f};
     float height{1.0f};
     ExtentType type{ExtentType::RelativeToSwapchain};
+
+    inline uint32_t rounded_width() {
+        return static_cast<uint32_t>(round(width));
+    }
+    inline uint32_t rounded_height() {
+        return static_cast<uint32_t>(round(height));
+    }
+
+    bool operator==(const Extent& other) const {
+        return (memcmp(this, &other, sizeof(*this)) == 0);
+    }
+
+    bool operator!=(const Extent& other) const { return !(*this == other); }
 };
 
 struct ColorRenderTargetDesc {

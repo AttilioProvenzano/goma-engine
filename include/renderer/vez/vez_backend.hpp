@@ -151,6 +151,7 @@ class VezBackend : public Backend {
     result<void> GetSetupCommandBuffer();
     result<void> GetActiveCommandBuffer(uint32_t thread = 0);
     VkFormat GetVkFormat(Format format);
+    Extent GetAbsoluteExtent(Extent extent);
 
     result<Framebuffer> CreateFramebuffer(FrameIndex frame_id, const char* name,
                                           RenderPassDesc fb_desc);

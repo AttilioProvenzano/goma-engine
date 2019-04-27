@@ -371,7 +371,7 @@ result<void> Renderer::Render() {
 
             if (!shadow_map_found && light.type == LightType::Directional) {
                 shadow_map_found = true;
-                light_buffer_data.shadow_ids[0] = i;
+                light_buffer_data.shadow_ids[0] = static_cast<int32_t>(i);
 
                 glm::vec3 ws_eye = model * glm::vec4(light.position, 1.0f);
                 glm::vec3 ws_direction =
@@ -1126,23 +1126,22 @@ const char* Renderer::GetFragmentShaderPreamble(const Mesh& mesh,
 }
 
 result<void> Renderer::BindMeshBuffers(const Mesh& mesh) {
-    // TODO this copies shared pointers
     uint32_t binding = 0;
-    auto bind = [&](std::shared_ptr<Buffer> buf) {
+    auto bind = [&](const Buffer* buf) {
         if (buf && buf->valid) {
             backend_->BindVertexBuffer(*buf, binding, 0);
         }
         binding++;
     };
 
-    bind(mesh.buffers.vertex);
-    bind(mesh.buffers.normal);
-    bind(mesh.buffers.tangent);
-    bind(mesh.buffers.bitangent);
-    bind(mesh.buffers.color);
-    bind(mesh.buffers.uv0);
-    bind(mesh.buffers.uv1);
-    bind(mesh.buffers.uvw);
+    bind(mesh.buffers.vertex.get());
+    bind(mesh.buffers.normal.get());
+    bind(mesh.buffers.tangent.get());
+    bind(mesh.buffers.bitangent.get());
+    bind(mesh.buffers.color.get());
+    bind(mesh.buffers.uv0.get());
+    bind(mesh.buffers.uv1.get());
+    bind(mesh.buffers.uvw.get());
 
     if (!mesh.indices.empty()) {
         backend_->BindIndexBuffer(*mesh.buffers.index);

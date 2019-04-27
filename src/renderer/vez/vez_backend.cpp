@@ -240,7 +240,6 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
     const std::vector<void*>& initial_contents) {
     OUTCOME_TRY(image, CreateTexture(name, texture_desc));
 
-    // TODO refactor into a single block (with the other CreateTexture)
     uint32_t layer = 0;
     for (auto& layer_contents : initial_contents) {
         VezImageSubresourceLayers layers{};
@@ -254,8 +253,7 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
         sub_data_info.imageOffset = {0, 0, 0};
         sub_data_info.imageSubresource = layers;
 
-        // TODO layered + mipmapped is currently not supported,
-        // this functionality should be unified in CreateImage
+        // TODO support layered + mipmapped
         vezImageSubData(context_.device, image->vez.image, &sub_data_info,
                         layer_contents);
     }
@@ -286,40 +284,37 @@ result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
         vezDestroyFramebuffer(context_.device, result->second);
     }
 
-    uint32_t width = 0;
-    uint32_t height = 0;
+    Extent extent{};
 
     std::vector<VkImageView> attachments;
     for (auto& attachment : rp_desc.color_attachments) {
         auto image_desc_res =
             render_plan_.color_images.find(attachment.rt_name);
         if (image_desc_res != render_plan_.color_images.end()) {
-            // TODO better logging for "not found"
-            OUTCOME_TRY(image,
-                        GetRenderTarget(frame_id, attachment.rt_name.c_str()));
+            auto image_res =
+                GetRenderTarget(frame_id, attachment.rt_name.c_str());
+            if (!image_res) {
+                spdlog::error(
+                    "Could not find color target \"{}\" when creating "
+                    "framebuffer \"{}\"",
+                    attachment.rt_name, name);
+                return image_res.error();
+            }
+            auto image = image_res.value();
+
             attachments.push_back(image->vez.image_view);
 
-            const auto& extent = image_desc_res->second.extent;
-            auto w = static_cast<uint32_t>(
-                round(extent.width *
-                      (extent.type == ExtentType::Absolute
-                           ? 1U
-                           : context_.capabilities.currentExtent.width)));
-            auto h = static_cast<uint32_t>(
-                round(extent.height *
-                      (extent.type == ExtentType::Absolute
-                           ? 1U
-                           : context_.capabilities.currentExtent.height)));
+            if (extent == Extent{}) {
+                extent = image_desc_res->second.extent;
+            }
 
-            if ((width && width != w) || (height && height != h)) {
+            if (image_desc_res->second.extent != extent) {
                 spdlog::error(
                     "Dimensions for color image \"{}\" not matching dimensions "
                     "of other images when creating framebuffer \"{}\".",
                     attachment.rt_name, name);
                 return Error::DimensionsNotMatching;
             }
-            width = w;
-            height = h;
         } else {
             spdlog::error(
                 "Color image \"{}\" not found when creating framebuffer "
@@ -333,40 +328,40 @@ result<Framebuffer> VezBackend::CreateFramebuffer(FrameIndex frame_id,
         auto depth_image_desc_res =
             render_plan_.depth_images.find(rp_desc.depth_attachment.rt_name);
         if (depth_image_desc_res != render_plan_.depth_images.end()) {
-            OUTCOME_TRY(image,
-                        CreateRenderTarget(
-                            frame_id, rp_desc.depth_attachment.rt_name.c_str(),
-                            depth_image_desc_res->second));
+            auto image_res = GetRenderTarget(
+                frame_id, rp_desc.depth_attachment.rt_name.c_str());
+            if (!image_res) {
+                spdlog::error(
+                    "Could not find depth target \"{}\" when creating "
+                    "framebuffer \"{}\"",
+                    rp_desc.depth_attachment.rt_name, name);
+                return image_res.error();
+            }
+            auto image = image_res.value();
+
             attachments.push_back(image->vez.image_view);
 
-            // TODO we can actually compare extents directly
-            const auto& extent = depth_image_desc_res->second.extent;
-            auto w = static_cast<uint32_t>(
-                round(extent.width *
-                      (extent.type == ExtentType::Absolute
-                           ? 1U
-                           : context_.capabilities.currentExtent.width)));
-            auto h = static_cast<uint32_t>(
-                round(extent.height *
-                      (extent.type == ExtentType::Absolute
-                           ? 1U
-                           : context_.capabilities.currentExtent.height)));
+            if (extent == Extent{}) {
+                extent = depth_image_desc_res->second.extent;
+            }
 
-            if ((width && width != w) || (height && height != h)) {
+            if (depth_image_desc_res->second.extent != extent) {
                 spdlog::error(
-                    "Dimensions for color image \"{}\" not matching dimensions "
+                    "Dimensions for depth image \"{}\" not matching dimensions "
                     "of other images when creating framebuffer \"{}\".",
                     rp_desc.depth_attachment.rt_name, name);
                 return Error::DimensionsNotMatching;
             }
-            width = w;
-            height = h;
+            extent = depth_image_desc_res->second.extent;
         }
     }
 
+    // Convert to absolute extent
+    extent = GetAbsoluteExtent(extent);
+
     VezFramebufferCreateInfo fb_info{};
-    fb_info.width = width;
-    fb_info.height = height;
+    fb_info.width = extent.rounded_width();
+    fb_info.height = extent.rounded_height();
     fb_info.layers = 1;
     fb_info.attachmentCount = static_cast<uint32_t>(attachments.size());
     fb_info.pAttachments = attachments.data();
@@ -563,7 +558,6 @@ result<void> VezBackend::RenderFrame(std::vector<PassFn> pass_fns,
             return pass_res;
         }
 
-        // TODO duplicate in begin render pass (remove)
         if (rp_in_progress_) {
             vezCmdEndRenderPass();
         };
@@ -585,19 +579,8 @@ result<void> VezBackend::RenderFrame(std::vector<PassFn> pass_fns,
                         const auto& rt_desc_res =
                             render_plan_.color_images.find(c.rt_name);
                         if (rt_desc_res != render_plan_.color_images.end()) {
-                            auto extent = rt_desc_res->second.extent;
-
-                            // TODO move to a function (this one doesn't do
-                            // round)
-                            if (extent.type ==
-                                ExtentType::RelativeToSwapchain) {
-                                auto w =
-                                    context_.capabilities.currentExtent.width;
-                                auto h =
-                                    context_.capabilities.currentExtent.height;
-                                extent.width *= w;
-                                extent.height *= h;
-                            }
+                            auto extent =
+                                GetAbsoluteExtent(rt_desc_res->second.extent);
 
                             VezImageResolve resolve{};
                             resolve.srcSubresource = {0, 0, 1};
@@ -1195,14 +1178,12 @@ result<void> VezBackend::TeardownContext() {
 }
 
 result<VkInstance> VezBackend::CreateInstance() {
-    // TODO application name and version to be filled
     VezApplicationInfo appInfo{};
     appInfo.pApplicationName = "Goma App";
     appInfo.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
     appInfo.pEngineName = "Goma Engine";
     appInfo.engineVersion = VK_MAKE_VERSION(0, 0, 1);
 
-    // TODO layer names based on macros for names
     std::vector<const char*> enabled_layers{
         // "VK_LAYER_LUNARG_standard_validation",
         "VK_LAYER_LUNARG_monitor",
@@ -1352,7 +1333,7 @@ result<VezSwapchain> VezBackend::CreateSwapchain(VkSurfaceKHR surface) {
 
     VezSwapchainCreateInfo swapchain_info{};
     swapchain_info.surface = surface;
-    swapchain_info.tripleBuffer = VK_TRUE;  // TODO configurable
+    swapchain_info.tripleBuffer = VK_TRUE;
     swapchain_info.format = {VK_FORMAT_R8G8B8A8_UNORM,
                              VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 
@@ -1537,25 +1518,10 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
     }
 
     VkFormat format = GetVkFormat(image_desc.format);
-
-    uint32_t width, height;
-    if (image_desc.extent.type == ExtentType::RelativeToSwapchain) {
-        // TODO Ensure we have the latest surface size (e.g. when recreating
-        // the swapchain)
-        width = static_cast<uint32_t>(
-            round(image_desc.extent.width *
-                  context_.capabilities.currentExtent.width));
-        height = static_cast<uint32_t>(
-            round(image_desc.extent.height *
-                  context_.capabilities.currentExtent.height));
-    } else {
-        // ExtentType::Absolute
-        width = static_cast<uint32_t>(round(image_desc.extent.width));
-        height = static_cast<uint32_t>(round(image_desc.extent.height));
-    }
+    Extent extent = GetAbsoluteExtent(image_desc.extent);
 
     VezImageCreateInfo image_info{};
-    image_info.extent = {width, height, 1};
+    image_info.extent = {extent.rounded_width(), extent.rounded_height(), 1};
     image_info.imageType = VK_IMAGE_TYPE_2D;
     image_info.arrayLayers = 1;
     image_info.mipLevels = image_desc.mip_levels;
@@ -1586,25 +1552,10 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
     }
 
     VkFormat format = GetVkFormat(image_desc.format);
-
-    uint32_t width, height;
-    if (image_desc.extent.type == ExtentType::RelativeToSwapchain) {
-        // TODO Ensure we have the latest surface size (e.g. when recreating
-        // the swapchain) or switch to platform_
-        width = static_cast<uint32_t>(
-            round(image_desc.extent.width *
-                  context_.capabilities.currentExtent.width));
-        height = static_cast<uint32_t>(
-            round(image_desc.extent.height *
-                  context_.capabilities.currentExtent.height));
-    } else {
-        // ExtentType::Absolute
-        width = static_cast<uint32_t>(round(image_desc.extent.width));
-        height = static_cast<uint32_t>(round(image_desc.extent.height));
-    }
+    Extent extent = GetAbsoluteExtent(image_desc.extent);
 
     VezImageCreateInfo image_info{};
-    image_info.extent = {width, height, 1};
+    image_info.extent = {extent.rounded_width(), extent.rounded_height(), 1};
     image_info.imageType = VK_IMAGE_TYPE_2D;
     image_info.arrayLayers = 1;
     image_info.mipLevels = 1;
@@ -1866,6 +1817,18 @@ VkFormat VezBackend::GetVkFormat(Format format) {
             // We default to the swapchain format even
             // if the format is undefined
             return context_.swapchain_format.format;
+    }
+}
+
+Extent VezBackend::GetAbsoluteExtent(Extent extent) {
+    switch (extent.type) {
+        case ExtentType::Absolute:
+            return extent;
+        case ExtentType::RelativeToSwapchain:
+            auto w = context_.capabilities.currentExtent.width;
+            auto h = context_.capabilities.currentExtent.height;
+            return Extent{extent.width * w, extent.height * h,
+                          ExtentType::Absolute};
     }
 }
 

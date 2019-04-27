@@ -348,7 +348,7 @@ result<void> Renderer::Render() {
 
     uint32_t num_lights = static_cast<uint32_t>(
         std::min(kMaxLights, scene->GetAttachmentCount<Light>()));
-    LightBufferData light_buffer_data{glm::vec3(0.01f),
+    LightBufferData light_buffer_data{glm::vec3(0.05f),
                                       static_cast<int32_t>(num_lights)};
 
     size_t i = 0;
@@ -669,10 +669,10 @@ result<void> Renderer::Render() {
                 auto& material = material_result.value().get();
 
                 auto pipeline_res = backend_->GetGraphicsPipeline(
-                    {GOMA_ASSETS_DIR "/shaders/pbr.vert",
+                    {GOMA_ASSETS_DIR "shaders/pbr.vert",
                      ShaderSourceType::Filename,
                      GetVertexShaderPreamble(*mesh)},
-                    {GOMA_ASSETS_DIR "/shaders/pbr.frag",
+                    {GOMA_ASSETS_DIR "shaders/pbr.frag",
                      ShaderSourceType::Filename,
                      GetFragmentShaderPreamble(*mesh, material)});
                 if (!pipeline_res) {
@@ -771,7 +771,7 @@ result<void> Renderer::Render() {
 
         // Draw skybox
         auto pipeline_res = backend_->GetGraphicsPipeline(
-            {GOMA_ASSETS_DIR "/shaders/skybox.vert",
+            {GOMA_ASSETS_DIR "shaders/skybox.vert",
              ShaderSourceType::Filename},
             {GOMA_ASSETS_DIR "shaders/skybox.frag",
              ShaderSourceType::Filename});
@@ -890,7 +890,7 @@ result<void> Renderer::CreateSkybox() {
     const std::vector<char*> filenames{"posx.jpg", "negx.jpg", "posy.jpg",
                                        "negy.jpg", "posz.jpg", "negz.jpg"};
 
-    std::string base_path{GOMA_ASSETS_DIR "textures/skybox/yokohama/"};
+    std::string base_path{GOMA_ASSETS_DIR "textures/skybox/cloudy/"};
 
     std::vector<void*> stbi_images;
 

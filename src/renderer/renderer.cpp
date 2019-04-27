@@ -25,7 +25,6 @@ Renderer::Renderer(Engine& engine)
         spdlog::error(result.error().message());
     }
 
-    // TODO review multisampling for shadow mapping, remove default render plan
     RenderPlan render_plan{};
 
     render_plan.color_images = {
@@ -69,8 +68,6 @@ Renderer::Renderer(Engine& engine)
             RenderPassDesc{{ColorAttachmentDesc{"postprocessing"}}}},
     };
 
-    // TODO Add blits to the plan (or outside render pass)
-    // TODO remove default render plan
     backend_->SetRenderPlan(std::move(render_plan));
 }
 
@@ -314,7 +311,6 @@ result<void> Renderer::Render() {
 
                     // Upload texture if necessary
                     if (!texture.image || !texture.image->valid) {
-                        // TODO compressed textures
                         if (!texture.compressed) {
                             TextureDesc tex_desc{texture.width, texture.height};
                             auto image_res = backend_->CreateTexture(
@@ -324,6 +320,10 @@ result<void> Renderer::Render() {
                             if (image_res) {
                                 texture.image = image_res.value();
                             }
+                        } else {
+                            spdlog::warn(
+                                "Compressed texture \"{}\" not supported.",
+                                texture.path);
                         }
                     }
                 }
@@ -853,15 +853,14 @@ result<void> Renderer::Render() {
 
         auto skybox_ubo_res = backend_->GetUniformBuffer("skybox");
         if (!skybox_ubo_res) {
-            skybox_ubo_res = backend_->CreateUniformBuffer(
-                "skybox", 3 * 256, false);
+            skybox_ubo_res =
+                backend_->CreateUniformBuffer("skybox", 3 * 256, false);
         }
         auto skybox_ubo = skybox_ubo_res.value();
 
-        backend_->UpdateBuffer(*skybox_ubo, frame_id * 256,
-            sizeof(vp), &vp);
-        backend_->BindUniformBuffer(*skybox_ubo, frame_id * 256,
-            sizeof(vp), 12);
+        backend_->UpdateBuffer(*skybox_ubo, frame_id * 256, sizeof(vp), &vp);
+        backend_->BindUniformBuffer(*skybox_ubo, frame_id * 256, sizeof(vp),
+                                    12);
 
         backend_->BindTexture(skybox_tex_res.value()->vez, 0);
         backend_->DrawIndexed(static_cast<uint32_t>(sphere.indices.size()));
@@ -1023,10 +1022,10 @@ result<void> Renderer::CreateSphere() {
 
 const char* Renderer::GetVertexShaderPreamble(
     const VertexShaderPreambleDesc& desc) {
-    auto result = vs_preamble_map_.find(desc.int_repr);
+    auto res = vs_preamble_map_.find(desc.int_repr);
 
-    if (result != vs_preamble_map_.end()) {
-        return result->second.c_str();
+    if (res != vs_preamble_map_.end()) {
+        return res->second.c_str();
     } else {
         // TODO stringstream
         std::string preamble;
@@ -1070,10 +1069,10 @@ const char* Renderer::GetVertexShaderPreamble(const Mesh& mesh) {
 
 const char* Renderer::GetFragmentShaderPreamble(
     const FragmentShaderPreambleDesc& desc) {
-    auto result = fs_preamble_map_.find(desc.int_repr);
+    auto res = fs_preamble_map_.find(desc.int_repr);
 
-    if (result != fs_preamble_map_.end()) {
-        return result->second.c_str();
+    if (res != fs_preamble_map_.end()) {
+        return res->second.c_str();
     } else {
         std::string preamble;
 

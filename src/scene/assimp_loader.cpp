@@ -39,6 +39,87 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
     std::unique_ptr<Scene> scene = std::make_unique<Scene>();
 
     std::map<std::string, NodeIndex> node_name_map;
+    std::map<unsigned int, AttachmentIndex<Material>> material_map;
+
+    // Convert materials
+    if (ai_scene->HasMaterials()) {
+        for (size_t i = 0; i < ai_scene->mNumMaterials; i++) {
+            aiMaterial *ai_material = ai_scene->mMaterials[i];
+            Material material{ai_material->GetName().C_Str()};
+
+            static const std::vector<std::pair<aiTextureType, TextureType>>
+                texture_types{
+                    {aiTextureType_DIFFUSE, TextureType::Diffuse},
+                    {aiTextureType_SPECULAR, TextureType::Specular},
+                    {aiTextureType_AMBIENT, TextureType::Ambient},
+                    {aiTextureType_EMISSIVE, TextureType::Emissive},
+                    {aiTextureType_HEIGHT, TextureType::HeightMap},
+                    {aiTextureType_NORMALS, TextureType::NormalMap},
+                    {aiTextureType_SHININESS, TextureType::Shininess},
+                    {aiTextureType_OPACITY, TextureType::Opacity},
+                    {aiTextureType_DISPLACEMENT, TextureType::Displacement},
+                    {aiTextureType_LIGHTMAP, TextureType::LightMap},
+                    {aiTextureType_REFLECTION, TextureType::Reflection},
+                    {aiTextureType_UNKNOWN, TextureType::MetallicRoughness}};
+
+            for (const auto &texture_type : texture_types) {
+                for (uint32_t j = 0;
+                     j < ai_material->GetTextureCount(texture_type.first);
+                     j++) {
+                    auto tex_binding = LoadMaterialTexture(
+                        scene.get(), ai_material, base_path, texture_type, j);
+
+                    if (tex_binding.has_value()) {
+                        material.texture_bindings[texture_type.second]
+                            .push_back(std::move(tex_binding.value()));
+                    }
+                }
+
+                aiColor3D diffuse(0, 0, 0);
+                aiColor3D specular(0, 0, 0);
+                aiColor3D ambient(0, 0, 0);
+                aiColor3D emissive(0, 0, 0);
+                aiColor3D transparent(0, 0, 0);
+                ai_material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
+                ai_material->Get(AI_MATKEY_COLOR_SPECULAR, specular);
+                ai_material->Get(AI_MATKEY_COLOR_AMBIENT, ambient);
+                ai_material->Get(AI_MATKEY_COLOR_EMISSIVE, emissive);
+                ai_material->Get(AI_MATKEY_COLOR_TRANSPARENT, transparent);
+                material.diffuse_color = {diffuse.r, diffuse.g, diffuse.b};
+                material.specular_color = {specular.r, specular.g, specular.b};
+                material.ambient_color = {ambient.r, ambient.g, ambient.b};
+                material.emissive_color = {emissive.r, emissive.g, emissive.b};
+                material.transparent_color = {transparent.r, transparent.g,
+                                              transparent.b};
+
+                int two_sided = 0;
+                float opacity = 1.0f;
+                float shininess_exponent = 0.0f;
+                float specular_strength = 1.0f;
+                ai_material->Get(AI_MATKEY_TWOSIDED, two_sided);
+                ai_material->Get(AI_MATKEY_OPACITY, opacity);
+                ai_material->Get(AI_MATKEY_SHININESS, shininess_exponent);
+                ai_material->Get(AI_MATKEY_SHININESS_STRENGTH,
+                                 specular_strength);
+                material.two_sided = (two_sided > 0);
+                material.opacity = opacity;
+                material.shininess_exponent = shininess_exponent;
+                material.specular_strength = specular_strength;
+            }
+
+            auto material_result = scene->CreateAttachment(std::move(material));
+
+            if (material_result.has_value()) {
+                auto m = material_result.value();
+                scene->RegisterAttachment<Material>(
+                    m, ai_material->GetName().C_Str());
+                material_map[i] = m;
+            } else {
+                spdlog::warn("Material creation failed for material \"{}\".",
+                             ai_material->GetName().C_Str());
+            }
+        }
+    }
 
     // Convert meshes
     if (ai_scene->HasMeshes()) {
@@ -141,10 +222,13 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 }
             }
 
-            // TODO this relies on all materials being converted.
-            // The correct approach would be with a map from materialIndex
-            // to Material attachments.
-            mesh.material = {ai_mesh->mMaterialIndex};
+            auto material_res = material_map.find(ai_mesh->mMaterialIndex);
+            if (material_res != material_map.end()) {
+                mesh.material = material_res->second;
+            } else {
+                spdlog::warn("Could not find material for mesh \"{}\".",
+                             ai_mesh->mName.C_Str());
+            }
 
             auto mesh_result = scene->CreateAttachment(std::move(mesh));
 
@@ -320,85 +404,6 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                     spdlog::warn("Loading texture \"{}\" failed with error: {}",
                                  path, error.message());
                 }
-            }
-        }
-    }
-
-    // Convert materials
-    if (ai_scene->HasMaterials()) {
-        for (size_t i = 0; i < ai_scene->mNumMaterials; i++) {
-            aiMaterial *ai_material = ai_scene->mMaterials[i];
-            Material material{ai_material->GetName().C_Str()};
-
-            static const std::vector<std::pair<aiTextureType, TextureType>>
-                texture_types{
-                    {aiTextureType_DIFFUSE, TextureType::Diffuse},
-                    {aiTextureType_SPECULAR, TextureType::Specular},
-                    {aiTextureType_AMBIENT, TextureType::Ambient},
-                    {aiTextureType_EMISSIVE, TextureType::Emissive},
-                    {aiTextureType_HEIGHT, TextureType::HeightMap},
-                    {aiTextureType_NORMALS, TextureType::NormalMap},
-                    {aiTextureType_SHININESS, TextureType::Shininess},
-                    {aiTextureType_OPACITY, TextureType::Opacity},
-                    {aiTextureType_DISPLACEMENT, TextureType::Displacement},
-                    {aiTextureType_LIGHTMAP, TextureType::LightMap},
-                    {aiTextureType_REFLECTION, TextureType::Reflection},
-                    {aiTextureType_UNKNOWN, TextureType::MetallicRoughness}};
-
-            for (const auto &texture_type : texture_types) {
-                for (uint32_t j = 0;
-                     j < ai_material->GetTextureCount(texture_type.first);
-                     j++) {
-                    auto tex_binding = LoadMaterialTexture(
-                        scene.get(), ai_material, base_path, texture_type, j);
-
-                    if (tex_binding.has_value()) {
-                        material.texture_bindings[texture_type.second]
-                            .push_back(std::move(tex_binding.value()));
-                    }
-                }
-
-                aiColor3D diffuse(0, 0, 0);
-                aiColor3D specular(0, 0, 0);
-                aiColor3D ambient(0, 0, 0);
-                aiColor3D emissive(0, 0, 0);
-                aiColor3D transparent(0, 0, 0);
-                ai_material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
-                ai_material->Get(AI_MATKEY_COLOR_SPECULAR, specular);
-                ai_material->Get(AI_MATKEY_COLOR_AMBIENT, ambient);
-                ai_material->Get(AI_MATKEY_COLOR_EMISSIVE, emissive);
-                ai_material->Get(AI_MATKEY_COLOR_TRANSPARENT, transparent);
-                material.diffuse_color = {diffuse.r, diffuse.g, diffuse.b};
-                material.specular_color = {specular.r, specular.g, specular.b};
-                material.ambient_color = {ambient.r, ambient.g, ambient.b};
-                material.emissive_color = {emissive.r, emissive.g, emissive.b};
-                material.transparent_color = {transparent.r, transparent.g,
-                                              transparent.b};
-
-                int two_sided = 0;
-                float opacity = 1.0f;
-                float shininess_exponent = 0.0f;
-                float specular_strength = 1.0f;
-                ai_material->Get(AI_MATKEY_TWOSIDED, two_sided);
-                ai_material->Get(AI_MATKEY_OPACITY, opacity);
-                ai_material->Get(AI_MATKEY_SHININESS, shininess_exponent);
-                ai_material->Get(AI_MATKEY_SHININESS_STRENGTH,
-                                 specular_strength);
-                material.two_sided = (two_sided > 0);
-                material.opacity = opacity;
-                material.shininess_exponent = shininess_exponent;
-                material.specular_strength = specular_strength;
-            }
-
-            auto material_result = scene->CreateAttachment(std::move(material));
-
-            if (material_result.has_value()) {
-                auto m = material_result.value();
-                scene->RegisterAttachment<Material>(
-                    m, ai_material->GetName().C_Str());
-            } else {
-                spdlog::warn("Material creation failed for material \"{}\".",
-                             ai_material->GetName().C_Str());
             }
         }
     }

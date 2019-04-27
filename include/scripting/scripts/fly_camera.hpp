@@ -17,7 +17,8 @@ class FlyCamera : public Script {
 
         auto camera_res = scene->GetAttachment<Camera>(camera_id_);
         if (!camera_res) {
-            return;  // TODO error code
+            spdlog::error("FlyCamera: attached camera not found.");
+            return;
         }
 
         auto& camera = camera_res.value().get();

@@ -237,17 +237,18 @@ void main() {
     ASSERT_TRUE(create_pipeline_result)
         << create_pipeline_result.error().message();
 
-    vez.SetRenderPlan(
-        {{{"color", {}}},
-         {{"depth", {}}},
-         {
-             std::make_pair("forward",
+    vez.SetRenderPlan({
+        {{"color", {}}},
+        {{"depth", {}}},
+        {
+            RenderPassEntry{"forward",
                             RenderPassDesc{{ColorAttachmentDesc{"color"}},
-                                           DepthAttachmentDesc{"depth"}}),
-         }});
+                                           DepthAttachmentDesc{"depth"}}},
+        },
+    });
 
     vez.RenderFrame(
-        {[&](RenderPassDesc rp, FrameIndex) {
+        {[&](FrameIndex, const RenderPassDesc*) {
             vez.BindGraphicsPipeline(*create_pipeline_result.value());
             vez.BindVertexInputFormat(*vertex_input_format_result.value());
             vez.BindVertexBuffers({*create_pos_buffer_result.value(),
@@ -447,18 +448,19 @@ void main() {
 
     auto mvp_buffer = create_unif_buffer_result.value();
 
-    vez.SetRenderPlan(
-        {{{"color", {}}},
-         {{"depth", {}}},
-         {
-             std::make_pair("forward",
+    vez.SetRenderPlan({
+        {{"color", {}}},
+        {{"depth", {}}},
+        {
+            RenderPassEntry{"forward",
                             RenderPassDesc{{ColorAttachmentDesc{"color"}},
-                                           DepthAttachmentDesc{"depth"}}),
-         }});
+                                           DepthAttachmentDesc{"depth"}}},
+        },
+    });
 
     for (size_t i = 0; i < 100; i++) {
         vez.RenderFrame(
-            {[&](RenderPassDesc rp, FrameIndex frame_id) {
+            {[&](FrameIndex frame_id, const RenderPassDesc*) {
                 vez.BindGraphicsPipeline(*create_pipeline_result.value());
 
                 model = glm::rotate(model, glm::radians(2.0f), camera.up);

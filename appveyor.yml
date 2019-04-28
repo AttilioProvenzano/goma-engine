@@ -1,0 +1,20 @@
+image:
+  - Visual Studio 2017
+
+platform: x64
+
+configuration:
+  - Debug
+  - Release
+
+init:
+  - cmd: cmake --version
+  - cmd: msbuild /version
+
+branches:
+  - master
+
+build_script:
+  - cmd: mkdir build && cd build
+  - cmd: cmake -G "Visual Studio 15 2017" -DCMAKE_BUILD_TYPE=%configuration% ..
+  - cmd: cmake --build . --target ALL_BUILD --config %configuration%

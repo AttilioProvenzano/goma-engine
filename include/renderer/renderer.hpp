@@ -58,12 +58,26 @@ class Renderer {
         std::array<LightData, kMaxLights> lights{};
     };
 
+    // Rendering setup
     void CreateMeshBuffers(Scene& scene);
     void CreateVertexInputFormats(Scene& scene);
     void UploadTextures(Scene& scene);
     RenderSequence Cull(Scene& scene, const RenderSequence& render_seq,
                         const glm::mat4& vp);
     LightBufferData GetLightBufferData(Scene& scene);
+
+    // Render passes
+    result<void> UpdateLightBuffer(FrameIndex frame_id, Scene& scene,
+                                   const LightBufferData& light_buffer_data);
+    result<void> ShadowPass(FrameIndex frame_id, Scene& scene,
+                            const RenderSequence& render_seq,
+                            const glm::mat4& shadow_vp);
+    result<void> ForwardPass(FrameIndex frame_id, Scene& scene,
+                             const RenderSequence& render_seq,
+                             const glm::vec3& camera_ws_pos,
+                             const glm::mat4& camera_vp,
+                             const glm::mat4& shadow_vp);
+    result<void> PostprocessingPass(FrameIndex frame_id);
 
     union VertexShaderPreambleDesc {
         struct {

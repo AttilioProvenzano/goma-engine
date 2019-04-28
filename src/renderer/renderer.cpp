@@ -76,35 +76,34 @@ Renderer::Renderer(Engine& engine)
 }
 
 result<void> Renderer::Render() {
-    Scene* scene = engine_.scene();
-    if (!scene) {
+    if (!engine_.scene()) {
         return Error::NoSceneLoaded;
     }
+    Scene& scene = *engine_.scene();
 
     // Ensure that all meshes have their own buffers
-    CreateMeshBuffers(*scene);
+    CreateMeshBuffers(scene);
 
     // Ensure that all meshes have their own vertex input format
-    CreateVertexInputFormats(*scene);
+    CreateVertexInputFormats(scene);
 
     // Upload textures
-    UploadTextures(*scene);
+    UploadTextures(scene);
 
     // Set up light buffer
-    auto light_buffer_data = GetLightBufferData(*scene);
+    auto light_buffer_data = GetLightBufferData(scene);
 
     // Get the VP matrix
-    OUTCOME_TRY(camera_ref,
-                scene->GetAttachment<Camera>(engine_.main_camera()));
+    OUTCOME_TRY(camera_ref, scene.GetAttachment<Camera>(engine_.main_camera()));
     auto& camera = camera_ref.get();
 
     // Get the camera node
-    auto camera_nodes = scene->GetAttachedNodes<Camera>(engine_.main_camera());
+    auto camera_nodes = scene.GetAttachedNodes<Camera>(engine_.main_camera());
     glm::mat4 camera_transform = glm::mat4(1.0f);
 
     if (camera_nodes && camera_nodes.value().get().size() > 0) {
         auto camera_node = *camera_nodes.value().get().begin();
-        camera_transform = scene->GetTransformMatrix(camera_node).value();
+        camera_transform = scene.GetTransformMatrix(camera_node).value();
     }
 
     float aspect_ratio =
@@ -130,9 +129,9 @@ result<void> Renderer::Render() {
     bool shadow_map_found{false};
     int32_t i{0};
 
-    scene->ForEach<Light>([&](auto id, auto nodes, Light& light) {
+    scene.ForEach<Light>([&](auto id, auto nodes, Light& light) {
         for (const auto& light_node : nodes) {
-            auto model = scene->GetTransformMatrix(light_node).value();
+            auto model = scene.GetTransformMatrix(light_node).value();
 
             if (!shadow_map_found && light.type == LightType::Directional) {
                 shadow_map_found = true;
@@ -165,400 +164,48 @@ result<void> Renderer::Render() {
     }
 
     // Get main render sequence
-    RenderSequence render_sequence;
-    render_sequence.reserve(scene->GetAttachmentCount<Mesh>());
+    RenderSequence render_seq;
+    render_seq.reserve(scene.GetAttachmentCount<Mesh>());
 
-    scene->ForEach<Mesh>([&](auto id, auto nodes, Mesh& mesh) {
+    scene.ForEach<Mesh>([&](auto id, auto nodes, Mesh& mesh) {
         for (auto& mesh_node : nodes) {
-            glm::mat4 mvp = vp * scene->GetTransformMatrix(mesh_node).value();
+            glm::mat4 mvp = vp * scene.GetTransformMatrix(mesh_node).value();
             glm::vec3 bbox_center =
                 (mesh.bounding_box->min + mesh.bounding_box->max) * 0.5f;
             glm::vec4 cs_center = mvp * glm::vec4(bbox_center, 1.0f);
             cs_center /= cs_center.w;
-            render_sequence.push_back({id, mesh_node, cs_center});
+            render_seq.push_back({id, mesh_node, cs_center});
         }
     });
 
     // Frustum culling
-    RenderSequence visible_sequence = Cull(*scene, render_sequence, vp);
+    RenderSequence visible_seq = Cull(scene, render_seq, vp);
 
     // Sorting
-    std::sort(visible_sequence.begin(), visible_sequence.end(),
+    std::sort(visible_seq.begin(), visible_seq.end(),
               [](const auto& a, const auto& b) {
                   return a.cs_center.z < b.cs_center.z;
               });
 
-    PassFn update_light_buffer = [&](FrameIndex frame_id,
-                                     const RenderPassDesc* rp) {
-        constexpr auto padded_light_size =
-            (sizeof(light_buffer_data) / 256 + 1) * 256;
-        auto light_buffer_res = backend_->GetUniformBuffer("lights");
-        if (!light_buffer_res) {
-            light_buffer_res = backend_->CreateUniformBuffer(
-                "lights", 3 * padded_light_size, false);
-        }
-
-        auto light_buffer = light_buffer_res.value();
-
-        backend_->UpdateBuffer(*light_buffer, frame_id * padded_light_size,
-                               sizeof(light_buffer_data), &light_buffer_data);
-
-        return outcome::success();
-    };
-
-    PassFn shadow_pass = [&](FrameIndex frame_id, const RenderPassDesc* rp) {
-        backend_->BindDepthStencilState(DepthStencilState{});
-        backend_->BindRasterizationState(RasterizationState{});
-        backend_->BindMultisampleState(MultisampleState{});
-
-        backend_->SetViewport({{2048.0f, 2048.0f}});
-        backend_->SetScissor({{2048, 2048}});
-
-        // Render meshes
-        AttachmentIndex<Mesh> last_mesh_id{0, 0};
-        Mesh* mesh{nullptr};
-        for (const auto& seq_entry : render_sequence) {
-            auto mesh_id = seq_entry.mesh;
-            auto node_id = seq_entry.node;
-
-            if (mesh_id != last_mesh_id) {
-                auto mesh_res = scene->GetAttachment<Mesh>(mesh_id);
-                if (!mesh_res) {
-                    spdlog::error("Couldn't find mesh {}.", mesh_id);
-                    continue;
-                }
-
-                mesh = &mesh_res.value().get();
-                last_mesh_id = mesh_id;
-
-                // Bind the new mesh
-                auto material_result =
-                    scene->GetAttachment<Material>(mesh->material);
-                if (!material_result) {
-                    spdlog::error("Couldn't find material for mesh {}.",
-                                  mesh->name);
-                    continue;
-                }
-                auto& material = material_result.value().get();
-
-                auto pipeline_res = backend_->GetGraphicsPipeline(
-                    {GOMA_ASSETS_DIR "shaders/shadow.vert",
-                     ShaderSourceType::Filename,
-                     GetVertexShaderPreamble(*mesh)});
-                if (!pipeline_res) {
-                    spdlog::error("Couldn't get pipeline for the shadow pass.");
-                    continue;
-                }
-
-                backend_->BindGraphicsPipeline(*pipeline_res.value());
-
-                backend_->BindVertexInputFormat(*mesh->vertex_input_format);
-                BindMeshBuffers(*mesh);
-                BindMaterialTextures(material);
-            }
-
-            // Draw the mesh node
-            auto model = scene->GetTransformMatrix(node_id).value();
-            glm::mat4 mvp = shadow_vp * model;
-
-            auto vtx_ubo_res = backend_->GetUniformBuffer(
-                BufferType::PerNode, node_id, "shadow_vtx_ubo");
-            if (!vtx_ubo_res) {
-                vtx_ubo_res = backend_->CreateUniformBuffer(
-                    BufferType::PerNode, node_id, "shadow_vtx_ubo", 3 * 256,
-                    false);
-            }
-
-            auto vtx_ubo = vtx_ubo_res.value();
-
-            struct VtxUBO {
-                glm::mat4 mvp;
-                glm::mat4 model;
-                glm::mat4 normals;
-            };
-            VtxUBO vtx_ubo_data{std::move(mvp), model,
-                                glm::inverseTranspose(model)};
-
-            backend_->UpdateBuffer(*vtx_ubo, frame_id * 256,
-                                   sizeof(vtx_ubo_data), &vtx_ubo_data);
-            backend_->BindUniformBuffer(*vtx_ubo, frame_id * 256,
-                                        sizeof(vtx_ubo_data), 12);
-
-            if (!mesh->indices.empty()) {
-                backend_->DrawIndexed(
-                    static_cast<uint32_t>(mesh->indices.size()));
-            } else {
-                backend_->Draw(static_cast<uint32_t>(mesh->vertices.size()));
-            }
-        }
-
-        return outcome::success();
-    };
-
-    PassFn forward_pass = [&](FrameIndex frame_id,
-                              const RenderPassDesc* rp) -> result<void> {
-        uint32_t sample_count = 1;
-        auto image = backend_->render_plan().color_images.find("color");
-        if (image != backend_->render_plan().color_images.end()) {
-            sample_count = image->second.samples;
-        }
-
-        auto w = engine_.platform().GetWidth();
-        auto h = engine_.platform().GetHeight();
-        backend_->SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
-        backend_->SetScissor({{w, h}});
-
-        backend_->BindDepthStencilState(DepthStencilState{});
-        backend_->BindRasterizationState(RasterizationState{});
-        backend_->BindMultisampleState(
-            MultisampleState{sample_count, sample_count > 1});
-
-        constexpr auto padded_light_size =
-            (sizeof(light_buffer_data) / 256 + 1) * 256;
-        auto light_buffer_res = backend_->GetUniformBuffer("lights");
-        if (light_buffer_res) {
-            backend_->BindUniformBuffer(*light_buffer_res.value(),
-                                        frame_id * padded_light_size,
-                                        sizeof(light_buffer_data), 15);
-        }
-
-        // Render meshes
-        AttachmentIndex<Mesh> last_mesh_id{0, 0};
-        Mesh* mesh{nullptr};
-        for (const auto& seq_entry : visible_sequence) {
-            auto mesh_id = seq_entry.mesh;
-            auto node_id = seq_entry.node;
-
-            if (mesh_id != last_mesh_id) {
-                auto mesh_res = scene->GetAttachment<Mesh>(mesh_id);
-                if (!mesh_res) {
-                    spdlog::error("Couldn't find mesh {}.", mesh_id);
-                    continue;
-                }
-
-                mesh = &mesh_res.value().get();
-                last_mesh_id = mesh_id;
-
-                // Bind the new mesh
-                auto material_result =
-                    scene->GetAttachment<Material>(mesh->material);
-                if (!material_result) {
-                    spdlog::error("Couldn't find material for mesh {}.",
-                                  mesh->name);
-                    continue;
-                }
-                auto& material = material_result.value().get();
-
-                auto pipeline_res = backend_->GetGraphicsPipeline(
-                    {GOMA_ASSETS_DIR "shaders/pbr.vert",
-                     ShaderSourceType::Filename,
-                     GetVertexShaderPreamble(*mesh)},
-                    {GOMA_ASSETS_DIR "shaders/pbr.frag",
-                     ShaderSourceType::Filename,
-                     GetFragmentShaderPreamble(*mesh, material)});
-                if (!pipeline_res) {
-                    spdlog::error("Couldn't get pipeline for material {}.",
-                                  material.name);
-                    continue;
-                }
-
-                backend_->BindGraphicsPipeline(*pipeline_res.value());
-
-                backend_->BindVertexInputFormat(*mesh->vertex_input_format);
-                BindMeshBuffers(*mesh);
-                BindMaterialTextures(material);
-
-                auto shadow_depth_res =
-                    backend_->GetRenderTarget(frame_id, "shadow_depth");
-                if (!shadow_depth_res) {
-                    spdlog::error("Couldn't get the shadow map.");
-                    continue;
-                }
-
-                backend_->BindTexture(*shadow_depth_res.value(), 14);
-
-                auto frag_ubo_res = backend_->GetUniformBuffer(
-                    BufferType::PerNode, node_id, "frag_ubo");
-                if (!frag_ubo_res) {
-                    frag_ubo_res = backend_->CreateUniformBuffer(
-                        BufferType::PerNode, node_id, "frag_ubo", 3 * 256,
-                        false);
-                }
-
-                auto frag_ubo = frag_ubo_res.value();
-
-                struct FragUBO {
-                    float exposure;
-                    float gamma;
-                    float metallic;
-                    float roughness;
-                    glm::vec4 base_color;
-                    glm::vec3 camera;
-                    float alpha_cutoff;
-                };
-                FragUBO frag_ubo_data{
-                    4.5f,   2.2f, 0.2f, 0.5f, {material.diffuse_color, 1.0f},
-                    ws_pos, 0.5f};
-
-                backend_->UpdateBuffer(*frag_ubo, frame_id * 256,
-                                       sizeof(frag_ubo_data), &frag_ubo_data);
-                backend_->BindUniformBuffer(*frag_ubo, frame_id * 256,
-                                            sizeof(frag_ubo_data), 13);
-            }
-
-            // Draw the mesh node
-            auto model = scene->GetTransformMatrix(node_id).value();
-            glm::mat4 mvp = vp * model;
-
-            // Shadow correction maps X and Y for the shadow MVP
-            // to the range [0, 1], useful to sample from the shadow map
-            const glm::mat4 shadow_correction = {{0.5f, 0.0f, 0.0f, 0.0f},
-                                                 {0.0f, 0.5f, 0.0f, 0.0f},
-                                                 {0.0f, 0.0f, 1.0f, 0.0f},
-                                                 {0.5f, 0.5f, 0.0f, 1.0f}};
-            glm::mat4 shadow_mvp = shadow_correction * shadow_vp * model;
-
-            auto vtx_ubo_res = backend_->GetUniformBuffer(BufferType::PerNode,
-                                                          node_id, "vtx_ubo");
-            if (!vtx_ubo_res) {
-                vtx_ubo_res = backend_->CreateUniformBuffer(
-                    BufferType::PerNode, node_id, "vtx_ubo", 3 * 256, false);
-            }
-
-            auto vtx_ubo = vtx_ubo_res.value();
-
-            struct VtxUBO {
-                glm::mat4 mvp;
-                glm::mat4 model;
-                glm::mat4 normals;
-                glm::mat4 shadow_mvp;
-            };
-            VtxUBO vtx_ubo_data{std::move(mvp), model,
-                                glm::inverseTranspose(model),
-                                std::move(shadow_mvp)};
-
-            backend_->UpdateBuffer(*vtx_ubo, frame_id * 256,
-                                   sizeof(vtx_ubo_data), &vtx_ubo_data);
-            backend_->BindUniformBuffer(*vtx_ubo, frame_id * 256,
-                                        sizeof(vtx_ubo_data), 12);
-
-            if (!mesh->indices.empty()) {
-                backend_->DrawIndexed(
-                    static_cast<uint32_t>(mesh->indices.size()));
-            } else {
-                backend_->Draw(static_cast<uint32_t>(mesh->vertices.size()));
-            }
-        }
-
-        // Draw skybox
-        auto pipeline_res = backend_->GetGraphicsPipeline(
-            {GOMA_ASSETS_DIR "shaders/skybox.vert", ShaderSourceType::Filename},
-            {GOMA_ASSETS_DIR "shaders/skybox.frag",
-             ShaderSourceType::Filename});
-        if (!pipeline_res) {
-            spdlog::error("Couldn't get pipeline for skybox.");
-            return Error::NotFound;
-        }
-
-        auto sphere_res = scene->FindAttachment<Mesh>("goma_sphere");
-        if (!sphere_res) {
-            spdlog::error("Couldn't find the sphere mesh for skybox.");
-            return Error::NotFound;
-        }
-        auto& sphere = sphere_res.value().second.get();
-
-        backend_->BindGraphicsPipeline(*pipeline_res.value());
-        backend_->BindVertexInputFormat(*sphere.vertex_input_format);
-        BindMeshBuffers(sphere);
-
-        // Set depth clamp to 1.0f and depth test to Equal
-        backend_->BindDepthStencilState({true, false, CompareOp::Equal});
-        backend_->BindRasterizationState(
-            RasterizationState{true, false, PolygonMode::Fill, CullMode::None});
-        backend_->SetViewport(
-            {{float(engine_.platform().GetWidth()),
-              float(engine_.platform().GetHeight()), 0.0f, 0.0f, 1.0f, 1.0f}});
-
-        auto skybox_tex_res = backend_->GetTexture("goma_skybox");
-        if (!skybox_tex_res) {
-            spdlog::error("Couldn't get skybox texture.");
-            return Error::NotFound;
-        }
-
-        auto skybox_ubo_res = backend_->GetUniformBuffer("skybox");
-        if (!skybox_ubo_res) {
-            skybox_ubo_res =
-                backend_->CreateUniformBuffer("skybox", 3 * 256, false);
-        }
-        auto skybox_ubo = skybox_ubo_res.value();
-
-        backend_->UpdateBuffer(*skybox_ubo, frame_id * 256, sizeof(vp), &vp);
-        backend_->BindUniformBuffer(*skybox_ubo, frame_id * 256, sizeof(vp),
-                                    12);
-
-        backend_->BindTexture(skybox_tex_res.value()->vez, 0);
-        backend_->DrawIndexed(static_cast<uint32_t>(sphere.indices.size()));
-
-        return outcome::success();
-    };
-
-    PassFn postprocessing_pass = [&](FrameIndex frame_id,
-                                     const RenderPassDesc* rp) {
-        auto resolved_image_res =
-            backend_->GetRenderTarget(frame_id, "resolved_image");
-        if (!resolved_image_res) {
-            spdlog::error("Couldn't get the resolved image.");
-        }
-
-        auto blur_full_res = backend_->GetRenderTarget(frame_id, "blur_full");
-        if (!blur_full_res) {
-            spdlog::error("Couldn't get the blur image.");
-        }
-
-        auto depth_res = backend_->GetRenderTarget(frame_id, "depth");
-        if (!depth_res) {
-            spdlog::error("Couldn't get the resolved depth image.");
-        }
-
-        auto blur_full = blur_full_res.value();
-        auto resolved_image = resolved_image_res.value();
-        auto depth = depth_res.value();
-
-        auto w = engine_.platform().GetWidth();
-        auto h = engine_.platform().GetHeight();
-        backend_->SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
-        backend_->SetScissor({{w, h}});
-
-        backend_->BindDepthStencilState(DepthStencilState{});
-        backend_->BindRasterizationState(RasterizationState{});
-        backend_->BindMultisampleState(MultisampleState{});
-
-        auto no_input = backend_->GetVertexInputFormat({});
-        backend_->BindVertexInputFormat(*no_input.value());
-
-        auto pipeline_res = backend_->GetGraphicsPipeline(
-            {GOMA_ASSETS_DIR "shaders/fullscreen.vert",
-             ShaderSourceType::Filename},
-            {GOMA_ASSETS_DIR "shaders/postprocessing.frag",
-             ShaderSourceType::Filename});
-        if (!pipeline_res) {
-            spdlog::error(
-                "Couldn't get pipeline for "
-                "postprocessing");
-        }
-
-        backend_->BindGraphicsPipeline(*pipeline_res.value());
-        backend_->BindTexture(resolved_image->vez, 0);
-        backend_->BindTexture(blur_full->vez, 1);
-        backend_->BindTexture(depth->vez, 2);
-        backend_->Draw(3);
-
-        return outcome::success();
-    };
-
     backend_->RenderFrame(
-        {std::move(update_light_buffer), std::move(shadow_pass),
-         std::move(forward_pass), std::move(postprocessing_pass)},
+        {
+            [this, &scene, &light_buffer_data](FrameIndex frame_id,
+                                               const RenderPassDesc*) {
+                return UpdateLightBuffer(frame_id, scene, light_buffer_data);
+            },
+            [this, &scene, &render_seq, &shadow_vp](FrameIndex frame_id,
+                                                    const RenderPassDesc*) {
+                return ShadowPass(frame_id, scene, render_seq, shadow_vp);
+            },
+            [this, &scene, &visible_seq, &ws_pos, &vp, &shadow_vp](
+                FrameIndex frame_id, const RenderPassDesc*) {
+                return ForwardPass(frame_id, scene, visible_seq, ws_pos, vp,
+                                   shadow_vp);
+            },
+            [this, &scene](FrameIndex frame_id, const RenderPassDesc*) {
+                return PostprocessingPass(frame_id);
+            },
+        },
         "postprocessing");
 
     return outcome::success();
@@ -985,6 +632,370 @@ Renderer::LightBufferData Renderer::GetLightBufferData(Scene& scene) {
     });
 
     return light_buffer_data;
+}
+
+result<void> Renderer::UpdateLightBuffer(
+    FrameIndex frame_id, Scene& scene,
+    const LightBufferData& light_buffer_data) {
+    constexpr auto padded_light_size =
+        (sizeof(LightBufferData) / 256 + 1) * 256;
+    auto light_buffer_res = backend_->GetUniformBuffer("lights");
+    if (!light_buffer_res) {
+        light_buffer_res = backend_->CreateUniformBuffer(
+            "lights", 3 * padded_light_size, false);
+    }
+
+    auto light_buffer = light_buffer_res.value();
+
+    backend_->UpdateBuffer(*light_buffer, frame_id * padded_light_size,
+                           sizeof(LightBufferData), &light_buffer_data);
+
+    return outcome::success();
+}
+
+result<void> Renderer::ShadowPass(FrameIndex frame_id, Scene& scene,
+                                  const RenderSequence& render_seq,
+                                  const glm::mat4& shadow_vp) {
+    backend_->BindDepthStencilState(DepthStencilState{});
+    backend_->BindRasterizationState(RasterizationState{});
+    backend_->BindMultisampleState(MultisampleState{});
+
+    backend_->SetViewport({{2048.0f, 2048.0f}});
+    backend_->SetScissor({{2048, 2048}});
+
+    // Render meshes
+    AttachmentIndex<Mesh> last_mesh_id{0, 0};
+    Mesh* mesh{nullptr};
+    for (const auto& seq_entry : render_seq) {
+        auto mesh_id = seq_entry.mesh;
+        auto node_id = seq_entry.node;
+
+        if (mesh_id != last_mesh_id) {
+            auto mesh_res = scene.GetAttachment<Mesh>(mesh_id);
+            if (!mesh_res) {
+                spdlog::error("Couldn't find mesh {}.", mesh_id);
+                continue;
+            }
+
+            mesh = &mesh_res.value().get();
+            last_mesh_id = mesh_id;
+
+            // Bind the new mesh
+            auto material_result =
+                scene.GetAttachment<Material>(mesh->material);
+            if (!material_result) {
+                spdlog::error("Couldn't find material for mesh {}.",
+                              mesh->name);
+                continue;
+            }
+            auto& material = material_result.value().get();
+
+            auto pipeline_res = backend_->GetGraphicsPipeline(
+                {GOMA_ASSETS_DIR "shaders/shadow.vert",
+                 ShaderSourceType::Filename, GetVertexShaderPreamble(*mesh)});
+            if (!pipeline_res) {
+                spdlog::error("Couldn't get pipeline for the shadow pass.");
+                continue;
+            }
+
+            backend_->BindGraphicsPipeline(*pipeline_res.value());
+
+            backend_->BindVertexInputFormat(*mesh->vertex_input_format);
+            BindMeshBuffers(*mesh);
+            BindMaterialTextures(material);
+        }
+
+        // Draw the mesh node
+        auto model = scene.GetTransformMatrix(node_id).value();
+        glm::mat4 mvp = shadow_vp * model;
+
+        auto vtx_ubo_res = backend_->GetUniformBuffer(
+            BufferType::PerNode, node_id, "shadow_vtx_ubo");
+        if (!vtx_ubo_res) {
+            vtx_ubo_res = backend_->CreateUniformBuffer(
+                BufferType::PerNode, node_id, "shadow_vtx_ubo", 3 * 256, false);
+        }
+
+        auto vtx_ubo = vtx_ubo_res.value();
+
+        struct VtxUBO {
+            glm::mat4 mvp;
+            glm::mat4 model;
+            glm::mat4 normals;
+        };
+        VtxUBO vtx_ubo_data{std::move(mvp), model,
+                            glm::inverseTranspose(model)};
+
+        backend_->UpdateBuffer(*vtx_ubo, frame_id * 256, sizeof(vtx_ubo_data),
+                               &vtx_ubo_data);
+        backend_->BindUniformBuffer(*vtx_ubo, frame_id * 256,
+                                    sizeof(vtx_ubo_data), 12);
+
+        if (!mesh->indices.empty()) {
+            backend_->DrawIndexed(static_cast<uint32_t>(mesh->indices.size()));
+        } else {
+            backend_->Draw(static_cast<uint32_t>(mesh->vertices.size()));
+        }
+    }
+
+    return outcome::success();
+}
+
+result<void> Renderer::ForwardPass(FrameIndex frame_id, Scene& scene,
+                                   const RenderSequence& render_seq,
+                                   const glm::vec3& camera_ws_pos,
+                                   const glm::mat4& camera_vp,
+                                   const glm::mat4& shadow_vp) {
+    uint32_t sample_count = 1;
+    auto image = backend_->render_plan().color_images.find("color");
+    if (image != backend_->render_plan().color_images.end()) {
+        sample_count = image->second.samples;
+    }
+
+    auto w = engine_.platform().GetWidth();
+    auto h = engine_.platform().GetHeight();
+    backend_->SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+    backend_->SetScissor({{w, h}});
+
+    backend_->BindDepthStencilState(DepthStencilState{});
+    backend_->BindRasterizationState(RasterizationState{});
+    backend_->BindMultisampleState(
+        MultisampleState{sample_count, sample_count > 1});
+
+    constexpr auto padded_light_size =
+        (sizeof(LightBufferData) / 256 + 1) * 256;
+    auto light_buffer_res = backend_->GetUniformBuffer("lights");
+    if (light_buffer_res) {
+        backend_->BindUniformBuffer(*light_buffer_res.value(),
+                                    frame_id * padded_light_size,
+                                    sizeof(LightBufferData), 15);
+    }
+
+    // Render meshes
+    AttachmentIndex<Mesh> last_mesh_id{0, 0};
+    Mesh* mesh{nullptr};
+    for (const auto& seq_entry : render_seq) {
+        auto mesh_id = seq_entry.mesh;
+        auto node_id = seq_entry.node;
+
+        if (mesh_id != last_mesh_id) {
+            auto mesh_res = scene.GetAttachment<Mesh>(mesh_id);
+            if (!mesh_res) {
+                spdlog::error("Couldn't find mesh {}.", mesh_id);
+                continue;
+            }
+
+            mesh = &mesh_res.value().get();
+            last_mesh_id = mesh_id;
+
+            // Bind the new mesh
+            auto material_result =
+                scene.GetAttachment<Material>(mesh->material);
+            if (!material_result) {
+                spdlog::error("Couldn't find material for mesh {}.",
+                              mesh->name);
+                continue;
+            }
+            auto& material = material_result.value().get();
+
+            auto pipeline_res = backend_->GetGraphicsPipeline(
+                {GOMA_ASSETS_DIR "shaders/pbr.vert", ShaderSourceType::Filename,
+                 GetVertexShaderPreamble(*mesh)},
+                {GOMA_ASSETS_DIR "shaders/pbr.frag", ShaderSourceType::Filename,
+                 GetFragmentShaderPreamble(*mesh, material)});
+            if (!pipeline_res) {
+                spdlog::error("Couldn't get pipeline for material {}.",
+                              material.name);
+                continue;
+            }
+
+            backend_->BindGraphicsPipeline(*pipeline_res.value());
+
+            backend_->BindVertexInputFormat(*mesh->vertex_input_format);
+            BindMeshBuffers(*mesh);
+            BindMaterialTextures(material);
+
+            auto shadow_depth_res =
+                backend_->GetRenderTarget(frame_id, "shadow_depth");
+            if (!shadow_depth_res) {
+                spdlog::error("Couldn't get the shadow map.");
+                continue;
+            }
+
+            backend_->BindTexture(*shadow_depth_res.value(), 14);
+
+            auto frag_ubo_res = backend_->GetUniformBuffer(BufferType::PerNode,
+                                                           node_id, "frag_ubo");
+            if (!frag_ubo_res) {
+                frag_ubo_res = backend_->CreateUniformBuffer(
+                    BufferType::PerNode, node_id, "frag_ubo", 3 * 256, false);
+            }
+
+            auto frag_ubo = frag_ubo_res.value();
+
+            struct FragUBO {
+                float exposure;
+                float gamma;
+                float metallic;
+                float roughness;
+                glm::vec4 base_color;
+                glm::vec3 camera;
+                float alpha_cutoff;
+            };
+            FragUBO frag_ubo_data{
+                4.5f,          2.2f, 0.2f, 0.5f, {material.diffuse_color, 1.0f},
+                camera_ws_pos, 0.5f};
+
+            backend_->UpdateBuffer(*frag_ubo, frame_id * 256,
+                                   sizeof(frag_ubo_data), &frag_ubo_data);
+            backend_->BindUniformBuffer(*frag_ubo, frame_id * 256,
+                                        sizeof(frag_ubo_data), 13);
+        }
+
+        // Draw the mesh node
+        auto model = scene.GetTransformMatrix(node_id).value();
+        glm::mat4 mvp = camera_vp * model;
+
+        // Shadow correction maps X and Y for the shadow MVP
+        // to the range [0, 1], useful to sample from the shadow map
+        const glm::mat4 shadow_correction = {{0.5f, 0.0f, 0.0f, 0.0f},
+                                             {0.0f, 0.5f, 0.0f, 0.0f},
+                                             {0.0f, 0.0f, 1.0f, 0.0f},
+                                             {0.5f, 0.5f, 0.0f, 1.0f}};
+        glm::mat4 shadow_mvp = shadow_correction * shadow_vp * model;
+
+        auto vtx_ubo_res =
+            backend_->GetUniformBuffer(BufferType::PerNode, node_id, "vtx_ubo");
+        if (!vtx_ubo_res) {
+            vtx_ubo_res = backend_->CreateUniformBuffer(
+                BufferType::PerNode, node_id, "vtx_ubo", 3 * 256, false);
+        }
+
+        auto vtx_ubo = vtx_ubo_res.value();
+
+        struct VtxUBO {
+            glm::mat4 mvp;
+            glm::mat4 model;
+            glm::mat4 normals;
+            glm::mat4 shadow_mvp;
+        };
+        VtxUBO vtx_ubo_data{std::move(mvp), model, glm::inverseTranspose(model),
+                            std::move(shadow_mvp)};
+
+        backend_->UpdateBuffer(*vtx_ubo, frame_id * 256, sizeof(vtx_ubo_data),
+                               &vtx_ubo_data);
+        backend_->BindUniformBuffer(*vtx_ubo, frame_id * 256,
+                                    sizeof(vtx_ubo_data), 12);
+
+        if (!mesh->indices.empty()) {
+            backend_->DrawIndexed(static_cast<uint32_t>(mesh->indices.size()));
+        } else {
+            backend_->Draw(static_cast<uint32_t>(mesh->vertices.size()));
+        }
+    }
+
+    // Draw skybox
+    auto pipeline_res = backend_->GetGraphicsPipeline(
+        {GOMA_ASSETS_DIR "shaders/skybox.vert", ShaderSourceType::Filename},
+        {GOMA_ASSETS_DIR "shaders/skybox.frag", ShaderSourceType::Filename});
+    if (!pipeline_res) {
+        spdlog::error("Couldn't get pipeline for skybox.");
+        return Error::NotFound;
+    }
+
+    auto sphere_res = scene.FindAttachment<Mesh>("goma_sphere");
+    if (!sphere_res) {
+        spdlog::error("Couldn't find the sphere mesh for skybox.");
+        return Error::NotFound;
+    }
+    auto& sphere = sphere_res.value().second.get();
+
+    backend_->BindGraphicsPipeline(*pipeline_res.value());
+    backend_->BindVertexInputFormat(*sphere.vertex_input_format);
+    BindMeshBuffers(sphere);
+
+    // Set depth clamp to 1.0f and depth test to Equal
+    backend_->BindDepthStencilState({true, false, CompareOp::Equal});
+    backend_->BindRasterizationState(
+        RasterizationState{true, false, PolygonMode::Fill, CullMode::None});
+    backend_->SetViewport(
+        {{float(engine_.platform().GetWidth()),
+          float(engine_.platform().GetHeight()), 0.0f, 0.0f, 1.0f, 1.0f}});
+
+    auto skybox_tex_res = backend_->GetTexture("goma_skybox");
+    if (!skybox_tex_res) {
+        spdlog::error("Couldn't get skybox texture.");
+        return Error::NotFound;
+    }
+
+    auto skybox_ubo_res = backend_->GetUniformBuffer("skybox");
+    if (!skybox_ubo_res) {
+        skybox_ubo_res =
+            backend_->CreateUniformBuffer("skybox", 3 * 256, false);
+    }
+    auto skybox_ubo = skybox_ubo_res.value();
+
+    backend_->UpdateBuffer(*skybox_ubo, frame_id * 256, sizeof(camera_vp),
+                           &camera_vp);
+    backend_->BindUniformBuffer(*skybox_ubo, frame_id * 256, sizeof(camera_vp),
+                                12);
+
+    backend_->BindTexture(skybox_tex_res.value()->vez, 0);
+    backend_->DrawIndexed(static_cast<uint32_t>(sphere.indices.size()));
+
+    return outcome::success();
+}
+
+result<void> Renderer::PostprocessingPass(FrameIndex frame_id) {
+    auto resolved_image_res =
+        backend_->GetRenderTarget(frame_id, "resolved_image");
+    if (!resolved_image_res) {
+        spdlog::error("Couldn't get the resolved image.");
+    }
+
+    auto blur_full_res = backend_->GetRenderTarget(frame_id, "blur_full");
+    if (!blur_full_res) {
+        spdlog::error("Couldn't get the blur image.");
+    }
+
+    auto depth_res = backend_->GetRenderTarget(frame_id, "depth");
+    if (!depth_res) {
+        spdlog::error("Couldn't get the resolved depth image.");
+    }
+
+    auto blur_full = blur_full_res.value();
+    auto resolved_image = resolved_image_res.value();
+    auto depth = depth_res.value();
+
+    auto w = engine_.platform().GetWidth();
+    auto h = engine_.platform().GetHeight();
+    backend_->SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+    backend_->SetScissor({{w, h}});
+
+    backend_->BindDepthStencilState(DepthStencilState{});
+    backend_->BindRasterizationState(RasterizationState{});
+    backend_->BindMultisampleState(MultisampleState{});
+
+    auto no_input = backend_->GetVertexInputFormat({});
+    backend_->BindVertexInputFormat(*no_input.value());
+
+    auto pipeline_res = backend_->GetGraphicsPipeline(
+        {GOMA_ASSETS_DIR "shaders/fullscreen.vert", ShaderSourceType::Filename},
+        {GOMA_ASSETS_DIR "shaders/postprocessing.frag",
+         ShaderSourceType::Filename});
+    if (!pipeline_res) {
+        spdlog::error(
+            "Couldn't get pipeline for "
+            "postprocessing");
+    }
+
+    backend_->BindGraphicsPipeline(*pipeline_res.value());
+    backend_->BindTexture(resolved_image->vez, 0);
+    backend_->BindTexture(blur_full->vez, 1);
+    backend_->BindTexture(depth->vez, 2);
+    backend_->Draw(3);
+
+    return outcome::success();
 }
 
 const char* Renderer::GetVertexShaderPreamble(

@@ -6,6 +6,8 @@ This is a learning project, meant for experimenting with graphics techniques. It
 
 The current plan is to add more features along the way, but I won't be developing/supporting continuously. If you like the project and would like to contribute, issues/PRs are very welcome! :)
 
+![Helmet screenshot](https://user-images.githubusercontent.com/14922868/56866395-e5288080-69d8-11e9-884a-3a3ce0f8e88a.jpg)
+
 # Features
 
 Goma currently supports Windows with a [V-EZ](https://github.com/GPUOpen-LibrariesAndSDKs/V-EZ) backend. I have plans to port it to Android, but it will require a native Vulkan backend first.

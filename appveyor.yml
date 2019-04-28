@@ -10,6 +10,8 @@ configuration:
 init:
   - cmd: cmake --version
   - cmd: msbuild /version
+  - cmd: curl --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.0.51.0/windows/VulkanSDK-1.0.51.0-Installer.exe
+  - cmd: .\VulkanSDK.exe /S
 
 branches:
   only:

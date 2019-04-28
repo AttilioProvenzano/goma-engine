@@ -7,6 +7,7 @@
 namespace goma {
 
 class Engine;
+class Scene;
 
 class Renderer {
   public:
@@ -24,6 +25,45 @@ class Renderer {
     std::map<uint32_t, std::string> vs_preamble_map_{};
     std::map<uint32_t, std::string> fs_preamble_map_{};
     std::unique_ptr<glm::mat4> vp_hold{};
+
+    struct RenderSequenceElement {
+        AttachmentIndex<Mesh> mesh;
+        NodeIndex node;
+        glm::vec3 cs_center;
+    };
+    using RenderSequence = std::vector<RenderSequenceElement>;
+
+    struct LightData {
+        glm::vec3 direction;
+        int32_t type;
+
+        glm::vec3 color;
+        float intensity;
+
+        glm::vec3 position;
+        float range;
+
+        float innerConeCos;
+        float outerConeCos;
+
+        glm::vec2 padding;
+    };
+
+    static constexpr size_t kMaxLights{64};
+    struct LightBufferData {
+        glm::vec3 ambient_color{glm::vec3(0.0f)};
+        int32_t num_lights{0};
+        std::array<int32_t, 4> shadow_ids{-1};
+
+        std::array<LightData, kMaxLights> lights{};
+    };
+
+    void CreateMeshBuffers(Scene& scene);
+    void CreateVertexInputFormats(Scene& scene);
+    void UploadTextures(Scene& scene);
+    RenderSequence Cull(Scene& scene, const RenderSequence& render_seq,
+                        const glm::mat4& vp);
+    LightBufferData GetLightBufferData(Scene& scene);
 
     union VertexShaderPreambleDesc {
         struct {

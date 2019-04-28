@@ -82,318 +82,16 @@ result<void> Renderer::Render() {
     }
 
     // Ensure that all meshes have their own buffers
-    scene->ForEach<Mesh>([&](auto id, auto, Mesh& mesh) {
-        // Create vertex buffer
-        if (!mesh.vertices.empty() &&
-            (!mesh.buffers.vertex || !mesh.buffers.vertex->valid)) {
-            auto vb_result = backend_->CreateVertexBuffer(
-                id, "vertex", mesh.vertices.size() * sizeof(mesh.vertices[0]),
-                true, mesh.vertices.data());
-
-            if (vb_result) {
-                auto& vb = vb_result.value();
-                mesh.buffers.vertex = vb;
-            }
-        }
-
-        // Create normal buffer
-        if (!mesh.normals.empty() &&
-            (!mesh.buffers.normal || !mesh.buffers.normal->valid)) {
-            auto vb_result = backend_->CreateVertexBuffer(
-                id, "normal", mesh.normals.size() * sizeof(mesh.normals[0]),
-                true, mesh.normals.data());
-
-            if (vb_result) {
-                auto& vb = vb_result.value();
-                mesh.buffers.normal = vb;
-            }
-        }
-
-        // Create tangent buffer
-        if (!mesh.tangents.empty() &&
-            (!mesh.buffers.tangent || !mesh.buffers.tangent->valid)) {
-            auto vb_result = backend_->CreateVertexBuffer(
-                id, "tangent", mesh.tangents.size() * sizeof(mesh.tangents[0]),
-                true, mesh.tangents.data());
-
-            if (vb_result) {
-                auto& vb = vb_result.value();
-                mesh.buffers.tangent = vb;
-            }
-        }
-
-        // Create bitangent buffer
-        if (!mesh.bitangents.empty() &&
-            (!mesh.buffers.bitangent || !mesh.buffers.bitangent->valid)) {
-            auto vb_result = backend_->CreateVertexBuffer(
-                id, "bitangent",
-                mesh.bitangents.size() * sizeof(mesh.bitangents[0]), true,
-                mesh.bitangents.data());
-
-            if (vb_result) {
-                auto& vb = vb_result.value();
-                mesh.buffers.bitangent = vb;
-            }
-        }
-
-        // Create index buffer
-        if (!mesh.indices.empty() &&
-            (!mesh.buffers.index || !mesh.buffers.index->valid)) {
-            auto ib_result = backend_->CreateIndexBuffer(
-                id, "index", mesh.indices.size() * sizeof(mesh.indices[0]),
-                true, mesh.indices.data());
-
-            if (ib_result) {
-                auto& ib = ib_result.value();
-                mesh.buffers.index = ib;
-            }
-        }
-
-        // Create color buffer
-        if (!mesh.colors.empty() &&
-            (!mesh.buffers.color || !mesh.buffers.color->valid)) {
-            auto vb_result = backend_->CreateVertexBuffer(
-                id, "color", mesh.colors.size() * sizeof(mesh.colors[0]), true,
-                mesh.colors.data());
-
-            if (vb_result) {
-                auto& vb = vb_result.value();
-                mesh.buffers.color = vb;
-            }
-        }
-
-        // Create UV0 buffer
-        if (mesh.uv_sets.size() > 0 &&
-            (!mesh.buffers.uv0 || !mesh.buffers.uv0->valid)) {
-            auto vb_result = backend_->CreateVertexBuffer(
-                id, "uv0", mesh.uv_sets[0].size() * sizeof(mesh.uv_sets[0][0]),
-                true, mesh.uv_sets[0].data());
-
-            if (vb_result) {
-                auto& vb = vb_result.value();
-                mesh.buffers.uv0 = vb;
-            }
-        }
-
-        // Create UV1 buffer
-        if (mesh.uv_sets.size() > 1 &&
-            (!mesh.buffers.uv1 || !mesh.buffers.uv1->valid)) {
-            auto vb_result = backend_->CreateVertexBuffer(
-                id, "uv1", mesh.uv_sets[1].size() * sizeof(mesh.uv_sets[1][0]),
-                true, mesh.uv_sets[1].data());
-
-            if (vb_result) {
-                auto& vb = vb_result.value();
-                mesh.buffers.uv1 = vb;
-            }
-        }
-
-        // Create UVW buffer
-        if (mesh.uvw_sets.size() > 0 &&
-            (!mesh.buffers.uvw || !mesh.buffers.uvw->valid)) {
-            auto vb_result = backend_->CreateVertexBuffer(
-                id, "uvw",
-                mesh.uvw_sets[0].size() * sizeof(mesh.uvw_sets[0][0]), true,
-                mesh.uvw_sets[0].data());
-
-            if (vb_result) {
-                auto& vb = vb_result.value();
-                mesh.buffers.uvw = vb;
-            }
-        }
-    });
+    CreateMeshBuffers(*scene);
 
     // Ensure that all meshes have their own vertex input format
-    scene->ForEach<Mesh>([&](auto, auto, Mesh& mesh) {
-        VertexInputFormatDesc input_format_desc;
-
-        uint32_t binding_id = 0;
-        if (!mesh.vertices.empty()) {
-            input_format_desc.bindings.push_back(
-                {binding_id, sizeof(mesh.vertices[0])});
-            input_format_desc.attributes.push_back(
-                {binding_id, binding_id, Format::SFloatRGB32, 0});
-        }
-
-        binding_id++;
-        if (!mesh.normals.empty()) {
-            input_format_desc.bindings.push_back(
-                {binding_id, sizeof(mesh.normals[0])});
-            input_format_desc.attributes.push_back(
-                {binding_id, binding_id, Format::SFloatRGB32, 0});
-        }
-
-        binding_id++;
-        if (!mesh.tangents.empty()) {
-            input_format_desc.bindings.push_back(
-                {binding_id, sizeof(mesh.tangents[0])});
-            input_format_desc.attributes.push_back(
-                {binding_id, binding_id, Format::SFloatRGB32, 0});
-        }
-
-        binding_id++;
-        if (!mesh.bitangents.empty()) {
-            input_format_desc.bindings.push_back(
-                {binding_id, sizeof(mesh.bitangents[0])});
-            input_format_desc.attributes.push_back(
-                {binding_id, binding_id, Format::SFloatRGB32, 0});
-        }
-
-        binding_id++;
-        if (!mesh.colors.empty()) {
-            input_format_desc.bindings.push_back(
-                {binding_id, sizeof(mesh.colors[0])});
-            input_format_desc.attributes.push_back(
-                {binding_id, binding_id, Format::SFloatRGBA32, 0});
-        }
-
-        binding_id++;
-        if (mesh.uv_sets.size() > 0 && !mesh.uv_sets[0].empty()) {
-            input_format_desc.bindings.push_back(
-                {binding_id, sizeof(mesh.uv_sets[0][0])});
-            input_format_desc.attributes.push_back(
-                {binding_id, binding_id, Format::SFloatRG32, 0});
-        }
-
-        binding_id++;
-        if (mesh.uv_sets.size() > 1 && !mesh.uv_sets[1].empty()) {
-            input_format_desc.bindings.push_back(
-                {binding_id, sizeof(mesh.uv_sets[1][0])});
-            input_format_desc.attributes.push_back(
-                {binding_id, binding_id, Format::SFloatRG32, 0});
-        }
-
-        binding_id++;
-        if (mesh.uvw_sets.size() > 0 && !mesh.uvw_sets[0].empty()) {
-            input_format_desc.bindings.push_back(
-                {binding_id, sizeof(mesh.uvw_sets[0][0])});
-            input_format_desc.attributes.push_back(
-                {binding_id, binding_id, Format::SFloatRGB32, 0});
-        }
-
-        auto input_format_res =
-            backend_->GetVertexInputFormat(input_format_desc);
-        if (input_format_res) {
-            mesh.vertex_input_format = input_format_res.value();
-        }
-    });
+    CreateVertexInputFormats(*scene);
 
     // Upload textures
-    scene->ForEach<Material>([&](auto, auto, Material& material) {
-        const std::vector<TextureType> texture_types = {
-            TextureType::Diffuse,           TextureType::Specular,
-            TextureType::Ambient,           TextureType::Emissive,
-            TextureType::MetallicRoughness, TextureType::HeightMap,
-            TextureType::NormalMap,         TextureType::Shininess,
-            TextureType::Opacity,           TextureType::Displacement,
-            TextureType::LightMap,          TextureType::Reflection};
-
-        for (const auto& texture_type : texture_types) {
-            auto binding = material.texture_bindings.find(texture_type);
-
-            if (binding != material.texture_bindings.end() &&
-                !binding->second.empty()) {
-                auto texture_res =
-                    scene->GetAttachment<Texture>(binding->second[0].index);
-                if (texture_res) {
-                    auto& texture = texture_res.value().get();
-
-                    // Upload texture if necessary
-                    if (!texture.image || !texture.image->valid) {
-                        if (!texture.compressed) {
-                            TextureDesc tex_desc{texture.width, texture.height};
-                            auto image_res = backend_->CreateTexture(
-                                texture.path.c_str(), tex_desc,
-                                texture.data.data());
-
-                            if (image_res) {
-                                texture.image = image_res.value();
-                            }
-                        } else {
-                            spdlog::warn(
-                                "Compressed texture \"{}\" not supported.",
-                                texture.path);
-                        }
-                    }
-                }
-            }
-        }
-    });
+    UploadTextures(*scene);
 
     // Set up light buffer
-    struct LightData {
-        glm::vec3 direction;
-        int32_t type;
-
-        glm::vec3 color;
-        float intensity;
-
-        glm::vec3 position;
-        float range;
-
-        float innerConeCos;
-        float outerConeCos;
-
-        glm::vec2 padding;
-    };
-
-    constexpr size_t kMaxLights = 64;
-    struct LightBufferData {
-        glm::vec3 ambient_color{glm::vec3(0.0f)};
-        int32_t num_lights{0};
-        std::array<int32_t, 4> shadow_ids{-1};
-
-        std::array<LightData, kMaxLights> lights{};
-    };
-
-    uint32_t num_lights = static_cast<uint32_t>(
-        std::min(kMaxLights, scene->GetAttachmentCount<Light>()));
-    LightBufferData light_buffer_data{glm::vec3(0.05f),
-                                      static_cast<int32_t>(num_lights)};
-
-    size_t i = 0;
-    auto shadow_vp = glm::mat4(1.0f);
-    bool shadow_map_found{false};
-    scene->ForEach<Light>([&](auto id, auto nodes, Light& light) {
-        if (i >= num_lights) {
-            return;
-        }
-
-        for (const auto& light_node : nodes) {
-            auto model = scene->GetTransformMatrix(light_node).value();
-
-            auto& buf_light = light_buffer_data.lights[i];
-            buf_light.direction = model * glm::vec4(light.direction, 0.0f);
-            buf_light.type = static_cast<int32_t>(light.type);
-            buf_light.color = light.diffuse_color;
-            buf_light.intensity = light.intensity;
-            buf_light.position = model * glm::vec4(light.position, 1.0f);
-            buf_light.range = (100 + light.attenuation[0]) /
-                              light.attenuation[1];  // range for 99% reduction
-            buf_light.innerConeCos = std::cos(light.inner_cone_angle);
-            buf_light.outerConeCos = std::cos(light.outer_cone_angle);
-
-            if (!shadow_map_found && light.type == LightType::Directional) {
-                shadow_map_found = true;
-                light_buffer_data.shadow_ids[0] = static_cast<int32_t>(i);
-
-                glm::vec3 ws_eye = model * glm::vec4(light.position, 1.0f);
-                glm::vec3 ws_direction =
-                    glm::normalize(model * glm::vec4(light.direction, 0.0f));
-                glm::vec3 ws_up =
-                    glm::normalize(model * glm::vec4(light.up, 0.0f));
-                auto shadow_view =
-                    glm::lookAt(ws_eye, ws_eye + ws_direction, ws_up);
-
-                constexpr float size = 20.0f;
-                auto shadow_proj =
-                    glm::ortho(-size, size, -size, size, -size, size);
-                shadow_vp = shadow_proj * shadow_view;
-            }
-
-            i++;
-        }
-    });
+    auto light_buffer_data = GetLightBufferData(*scene);
 
     // Get the VP matrix
     OUTCOME_TRY(camera_ref,
@@ -427,6 +125,38 @@ result<void> Renderer::Render() {
 
     glm::mat4 vp = proj * view;
 
+    // Compute transform matrices for shadow maps
+    auto shadow_vp = glm::mat4(1.0f);
+    bool shadow_map_found{false};
+    int32_t i{0};
+
+    scene->ForEach<Light>([&](auto id, auto nodes, Light& light) {
+        for (const auto& light_node : nodes) {
+            auto model = scene->GetTransformMatrix(light_node).value();
+
+            if (!shadow_map_found && light.type == LightType::Directional) {
+                shadow_map_found = true;
+                light_buffer_data.shadow_ids[0] = i;
+
+                glm::vec3 ws_eye = model * glm::vec4(light.position, 1.0f);
+                glm::vec3 ws_direction =
+                    glm::normalize(model * glm::vec4(light.direction, 0.0f));
+                glm::vec3 ws_up =
+                    glm::normalize(model * glm::vec4(light.up, 0.0f));
+                auto shadow_view =
+                    glm::lookAt(ws_eye, ws_eye + ws_direction, ws_up);
+
+                constexpr float size = 20.0f;
+                auto shadow_proj =
+                    glm::ortho(-size, size, -size, size, -size, size);
+                shadow_vp = shadow_proj * shadow_view;
+            }
+
+            i++;
+        }
+    });
+
+    // Hold/release the current culling state
     const auto keypresses = engine_.input_system().GetFrameInput().keypresses;
     if (keypresses.find(KeyInput::H) != keypresses.end()) {
         vp_hold = std::make_unique<glm::mat4>(vp);
@@ -434,72 +164,23 @@ result<void> Renderer::Render() {
         vp_hold = {};
     }
 
-    struct RenderSequenceElement {
-        AttachmentIndex<Mesh> mesh;
-        NodeIndex node;
-        glm::vec3 cs_center;
-    };
-    std::vector<RenderSequenceElement> render_sequence;
+    // Get main render sequence
+    RenderSequence render_sequence;
     render_sequence.reserve(scene->GetAttachmentCount<Mesh>());
 
-    std::vector<RenderSequenceElement> visible_sequence;
-    visible_sequence.reserve(scene->GetAttachmentCount<Mesh>());
-
-    // Frustum culling
-    std::vector<glm::vec4> cs_vertices(8);
     scene->ForEach<Mesh>([&](auto id, auto nodes, Mesh& mesh) {
-        auto& culling_vp = vp_hold ? *vp_hold : vp;
-
         for (auto& mesh_node : nodes) {
-            glm::mat4 mvp =
-                culling_vp * scene->GetTransformMatrix(mesh_node).value();
-
-            cs_vertices[0] = mvp * glm::vec4(mesh.bounding_box->min, 1.0f);
-            cs_vertices[1] = mvp * glm::vec4(mesh.bounding_box->max, 1.0f);
-            cs_vertices[2] = mvp * glm::vec4(mesh.bounding_box->min.x,
-                                             mesh.bounding_box->min.y,
-                                             mesh.bounding_box->max.z, 1.0f);
-            cs_vertices[3] = mvp * glm::vec4(mesh.bounding_box->min.x,
-                                             mesh.bounding_box->max.y,
-                                             mesh.bounding_box->max.z, 1.0f);
-            cs_vertices[4] = mvp * glm::vec4(mesh.bounding_box->min.x,
-                                             mesh.bounding_box->max.y,
-                                             mesh.bounding_box->min.z, 1.0f);
-            cs_vertices[5] = mvp * glm::vec4(mesh.bounding_box->max.x,
-                                             mesh.bounding_box->max.y,
-                                             mesh.bounding_box->min.z, 1.0f);
-            cs_vertices[6] = mvp * glm::vec4(mesh.bounding_box->max.x,
-                                             mesh.bounding_box->min.y,
-                                             mesh.bounding_box->min.z, 1.0f);
-            cs_vertices[7] = mvp * glm::vec4(mesh.bounding_box->max.x,
-                                             mesh.bounding_box->min.y,
-                                             mesh.bounding_box->max.z, 1.0f);
-
-            bool culled =
-                std::all_of(cs_vertices.begin(), cs_vertices.end(),
-                            [](const auto& v) { return v.x <= -v.w; }) ||
-                std::all_of(cs_vertices.begin(), cs_vertices.end(),
-                            [](const auto& v) { return v.x >= v.w; }) ||
-                std::all_of(cs_vertices.begin(), cs_vertices.end(),
-                            [](const auto& v) { return v.y <= -v.w; }) ||
-                std::all_of(cs_vertices.begin(), cs_vertices.end(),
-                            [](const auto& v) { return v.y >= v.w; }) ||
-                std::all_of(cs_vertices.begin(), cs_vertices.end(),
-                            [](const auto& v) { return v.z <= 0; }) ||
-                std::all_of(cs_vertices.begin(), cs_vertices.end(),
-                            [](const auto& v) { return v.z >= v.w; });
-
+            glm::mat4 mvp = vp * scene->GetTransformMatrix(mesh_node).value();
             glm::vec3 bbox_center =
                 (mesh.bounding_box->min + mesh.bounding_box->max) * 0.5f;
             glm::vec4 cs_center = mvp * glm::vec4(bbox_center, 1.0f);
             cs_center /= cs_center.w;
             render_sequence.push_back({id, mesh_node, cs_center});
-
-            if (!culled) {
-                visible_sequence.push_back({id, mesh_node, cs_center});
-            }
         }
     });
+
+    // Frustum culling
+    RenderSequence visible_sequence = Cull(*scene, render_sequence, vp);
 
     // Sorting
     std::sort(visible_sequence.begin(), visible_sequence.end(),
@@ -771,8 +452,7 @@ result<void> Renderer::Render() {
 
         // Draw skybox
         auto pipeline_res = backend_->GetGraphicsPipeline(
-            {GOMA_ASSETS_DIR "shaders/skybox.vert",
-             ShaderSourceType::Filename},
+            {GOMA_ASSETS_DIR "shaders/skybox.vert", ShaderSourceType::Filename},
             {GOMA_ASSETS_DIR "shaders/skybox.frag",
              ShaderSourceType::Filename});
         if (!pipeline_res) {
@@ -971,6 +651,340 @@ result<void> Renderer::CreateSphere() {
     engine_.scene()->RegisterAttachment<Mesh>(attachment, "goma_sphere");
 
     return outcome::success();
+}
+
+void Renderer::CreateMeshBuffers(Scene& scene) {
+    scene.ForEach<Mesh>([&](auto id, auto, Mesh& mesh) {
+        // Create vertex buffer
+        if (!mesh.vertices.empty() &&
+            (!mesh.buffers.vertex || !mesh.buffers.vertex->valid)) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "vertex", mesh.vertices.size() * sizeof(mesh.vertices[0]),
+                true, mesh.vertices.data());
+
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.vertex = vb;
+            }
+        }
+
+        // Create normal buffer
+        if (!mesh.normals.empty() &&
+            (!mesh.buffers.normal || !mesh.buffers.normal->valid)) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "normal", mesh.normals.size() * sizeof(mesh.normals[0]),
+                true, mesh.normals.data());
+
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.normal = vb;
+            }
+        }
+
+        // Create tangent buffer
+        if (!mesh.tangents.empty() &&
+            (!mesh.buffers.tangent || !mesh.buffers.tangent->valid)) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "tangent", mesh.tangents.size() * sizeof(mesh.tangents[0]),
+                true, mesh.tangents.data());
+
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.tangent = vb;
+            }
+        }
+
+        // Create bitangent buffer
+        if (!mesh.bitangents.empty() &&
+            (!mesh.buffers.bitangent || !mesh.buffers.bitangent->valid)) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "bitangent",
+                mesh.bitangents.size() * sizeof(mesh.bitangents[0]), true,
+                mesh.bitangents.data());
+
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.bitangent = vb;
+            }
+        }
+
+        // Create index buffer
+        if (!mesh.indices.empty() &&
+            (!mesh.buffers.index || !mesh.buffers.index->valid)) {
+            auto ib_result = backend_->CreateIndexBuffer(
+                id, "index", mesh.indices.size() * sizeof(mesh.indices[0]),
+                true, mesh.indices.data());
+
+            if (ib_result) {
+                auto& ib = ib_result.value();
+                mesh.buffers.index = ib;
+            }
+        }
+
+        // Create color buffer
+        if (!mesh.colors.empty() &&
+            (!mesh.buffers.color || !mesh.buffers.color->valid)) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "color", mesh.colors.size() * sizeof(mesh.colors[0]), true,
+                mesh.colors.data());
+
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.color = vb;
+            }
+        }
+
+        // Create UV0 buffer
+        if (mesh.uv_sets.size() > 0 &&
+            (!mesh.buffers.uv0 || !mesh.buffers.uv0->valid)) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "uv0", mesh.uv_sets[0].size() * sizeof(mesh.uv_sets[0][0]),
+                true, mesh.uv_sets[0].data());
+
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.uv0 = vb;
+            }
+        }
+
+        // Create UV1 buffer
+        if (mesh.uv_sets.size() > 1 &&
+            (!mesh.buffers.uv1 || !mesh.buffers.uv1->valid)) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "uv1", mesh.uv_sets[1].size() * sizeof(mesh.uv_sets[1][0]),
+                true, mesh.uv_sets[1].data());
+
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.uv1 = vb;
+            }
+        }
+
+        // Create UVW buffer
+        if (mesh.uvw_sets.size() > 0 &&
+            (!mesh.buffers.uvw || !mesh.buffers.uvw->valid)) {
+            auto vb_result = backend_->CreateVertexBuffer(
+                id, "uvw",
+                mesh.uvw_sets[0].size() * sizeof(mesh.uvw_sets[0][0]), true,
+                mesh.uvw_sets[0].data());
+
+            if (vb_result) {
+                auto& vb = vb_result.value();
+                mesh.buffers.uvw = vb;
+            }
+        }
+    });
+}
+
+void Renderer::CreateVertexInputFormats(Scene& scene) {
+    scene.ForEach<Mesh>([&](auto, auto, Mesh& mesh) {
+        VertexInputFormatDesc input_format_desc;
+
+        uint32_t binding_id = 0;
+        if (!mesh.vertices.empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.vertices[0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGB32, 0});
+        }
+
+        binding_id++;
+        if (!mesh.normals.empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.normals[0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGB32, 0});
+        }
+
+        binding_id++;
+        if (!mesh.tangents.empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.tangents[0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGB32, 0});
+        }
+
+        binding_id++;
+        if (!mesh.bitangents.empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.bitangents[0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGB32, 0});
+        }
+
+        binding_id++;
+        if (!mesh.colors.empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.colors[0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGBA32, 0});
+        }
+
+        binding_id++;
+        if (mesh.uv_sets.size() > 0 && !mesh.uv_sets[0].empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.uv_sets[0][0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRG32, 0});
+        }
+
+        binding_id++;
+        if (mesh.uv_sets.size() > 1 && !mesh.uv_sets[1].empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.uv_sets[1][0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRG32, 0});
+        }
+
+        binding_id++;
+        if (mesh.uvw_sets.size() > 0 && !mesh.uvw_sets[0].empty()) {
+            input_format_desc.bindings.push_back(
+                {binding_id, sizeof(mesh.uvw_sets[0][0])});
+            input_format_desc.attributes.push_back(
+                {binding_id, binding_id, Format::SFloatRGB32, 0});
+        }
+
+        auto input_format_res =
+            backend_->GetVertexInputFormat(input_format_desc);
+        if (input_format_res) {
+            mesh.vertex_input_format = input_format_res.value();
+        }
+    });
+}
+
+void Renderer::UploadTextures(Scene& scene) {
+    scene.ForEach<Material>([&](auto, auto, Material& material) {
+        const std::vector<TextureType> texture_types = {
+            TextureType::Diffuse,           TextureType::Specular,
+            TextureType::Ambient,           TextureType::Emissive,
+            TextureType::MetallicRoughness, TextureType::HeightMap,
+            TextureType::NormalMap,         TextureType::Shininess,
+            TextureType::Opacity,           TextureType::Displacement,
+            TextureType::LightMap,          TextureType::Reflection};
+
+        for (const auto& texture_type : texture_types) {
+            auto binding = material.texture_bindings.find(texture_type);
+
+            if (binding != material.texture_bindings.end() &&
+                !binding->second.empty()) {
+                auto texture_res =
+                    scene.GetAttachment<Texture>(binding->second[0].index);
+                if (texture_res) {
+                    auto& texture = texture_res.value().get();
+
+                    // Upload texture if necessary
+                    if (!texture.image || !texture.image->valid) {
+                        if (!texture.compressed) {
+                            TextureDesc tex_desc{texture.width, texture.height};
+                            auto image_res = backend_->CreateTexture(
+                                texture.path.c_str(), tex_desc,
+                                texture.data.data());
+
+                            if (image_res) {
+                                texture.image = image_res.value();
+                            }
+                        } else {
+                            spdlog::warn(
+                                "Compressed texture \"{}\" not supported.",
+                                texture.path);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+Renderer::RenderSequence Renderer::Cull(Scene& scene,
+                                        const RenderSequence& render_seq,
+                                        const glm::mat4& vp) {
+    RenderSequence visible_seq;
+    visible_seq.reserve(render_seq.size());
+
+    std::vector<glm::vec4> cs_vertices(8);
+    const auto& culling_vp = vp_hold ? *vp_hold : vp;
+
+    std::copy_if(
+        render_seq.begin(), render_seq.end(), std::back_inserter(visible_seq),
+        [&culling_vp, &cs_vertices, &scene](const RenderSequenceElement& e) {
+            glm::mat4 mvp =
+                culling_vp * scene.GetTransformMatrix(e.node).value();
+            auto& mesh = scene.GetAttachment<Mesh>(e.mesh).value().get();
+
+            cs_vertices[0] = mvp * glm::vec4(mesh.bounding_box->min, 1.0f);
+            cs_vertices[1] = mvp * glm::vec4(mesh.bounding_box->max, 1.0f);
+            cs_vertices[2] = mvp * glm::vec4(mesh.bounding_box->min.x,
+                                             mesh.bounding_box->min.y,
+                                             mesh.bounding_box->max.z, 1.0f);
+            cs_vertices[3] = mvp * glm::vec4(mesh.bounding_box->min.x,
+                                             mesh.bounding_box->max.y,
+                                             mesh.bounding_box->max.z, 1.0f);
+            cs_vertices[4] = mvp * glm::vec4(mesh.bounding_box->min.x,
+                                             mesh.bounding_box->max.y,
+                                             mesh.bounding_box->min.z, 1.0f);
+            cs_vertices[5] = mvp * glm::vec4(mesh.bounding_box->max.x,
+                                             mesh.bounding_box->max.y,
+                                             mesh.bounding_box->min.z, 1.0f);
+            cs_vertices[6] = mvp * glm::vec4(mesh.bounding_box->max.x,
+                                             mesh.bounding_box->min.y,
+                                             mesh.bounding_box->min.z, 1.0f);
+            cs_vertices[7] = mvp * glm::vec4(mesh.bounding_box->max.x,
+                                             mesh.bounding_box->min.y,
+                                             mesh.bounding_box->max.z, 1.0f);
+
+            bool culled =
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.x <= -v.w; }) ||
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.x >= v.w; }) ||
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.y <= -v.w; }) ||
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.y >= v.w; }) ||
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.z <= 0; }) ||
+                std::all_of(cs_vertices.begin(), cs_vertices.end(),
+                            [](const auto& v) { return v.z >= v.w; });
+
+            return !culled;
+        });
+
+    visible_seq.shrink_to_fit();
+    return visible_seq;
+}
+
+Renderer::LightBufferData Renderer::GetLightBufferData(Scene& scene) {
+    uint32_t num_lights = static_cast<uint32_t>(
+        std::min(kMaxLights, scene.GetAttachmentCount<Light>()));
+    LightBufferData light_buffer_data{glm::vec3(0.05f),
+                                      static_cast<int32_t>(num_lights)};
+
+    size_t i = 0;
+    auto shadow_vp = glm::mat4(1.0f);
+    scene.ForEach<Light>([&](auto id, auto nodes, Light& light) {
+        if (i >= num_lights) {
+            return;
+        }
+
+        for (const auto& light_node : nodes) {
+            auto model = scene.GetTransformMatrix(light_node).value();
+
+            auto& buf_light = light_buffer_data.lights[i];
+            buf_light.direction = model * glm::vec4(light.direction, 0.0f);
+            buf_light.type = static_cast<int32_t>(light.type);
+            buf_light.color = light.diffuse_color;
+            buf_light.intensity = light.intensity;
+            buf_light.position = model * glm::vec4(light.position, 1.0f);
+            buf_light.range = (100 + light.attenuation[0]) /
+                              light.attenuation[1];  // range for 99% reduction
+            buf_light.innerConeCos = std::cos(light.inner_cone_angle);
+            buf_light.outerConeCos = std::cos(light.outer_cone_angle);
+
+            i++;
+        }
+    });
+
+    return light_buffer_data;
 }
 
 const char* Renderer::GetVertexShaderPreamble(

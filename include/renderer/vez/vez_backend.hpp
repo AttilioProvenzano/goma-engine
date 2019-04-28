@@ -56,7 +56,8 @@ class VezBackend : public Backend {
     virtual result<std::shared_ptr<Buffer>> GetIndexBuffer(
         const AttachmentIndex<Mesh>& mesh, const char* name) override;
     virtual result<void> UpdateBuffer(const Buffer& buffer, uint64_t offset,
-                                      uint64_t size, void* contents) override;
+                                      uint64_t size,
+                                      const void* contents) override;
 
     virtual result<void> RenderFrame(std::vector<PassFn> pass_fns,
                                      const char* present_image) override;

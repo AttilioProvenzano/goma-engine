@@ -481,7 +481,7 @@ result<std::shared_ptr<Buffer>> VezBackend::GetIndexBuffer(
 }
 
 result<void> VezBackend::UpdateBuffer(const Buffer& buffer, uint64_t offset,
-                                      uint64_t size, void* contents) {
+                                      uint64_t size, const void* contents) {
     uint8_t* data;
     auto res = vezMapBuffer(context_.device, buffer.vez, offset, size,
                             reinterpret_cast<void**>(&data));

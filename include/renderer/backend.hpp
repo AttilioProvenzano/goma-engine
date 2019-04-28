@@ -77,7 +77,7 @@ class Backend {
     virtual result<std::shared_ptr<Buffer>> GetIndexBuffer(
         const AttachmentIndex<Mesh>& mesh, const char* name) = 0;
     virtual result<void> UpdateBuffer(const Buffer& buffer, uint64_t offset,
-                                      uint64_t size, void* contents) = 0;
+                                      uint64_t size, const void* contents) = 0;
 
     virtual result<void> RenderFrame(std::vector<PassFn> pass_fns,
                                      const char* present_image) = 0;

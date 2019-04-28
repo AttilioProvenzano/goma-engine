@@ -138,11 +138,6 @@ target_link_libraries(goma-engine PUBLIC assimp glfw VEZ volk)
 target_compile_definitions(goma-engine PUBLIC
 	GOMA_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets/")
 
-add_executable(goma-run
-	src/main.cpp
-)
-target_link_libraries(goma-run PUBLIC goma-engine)
-
 add_executable(goma-tests
 	tests/tests.cpp
 )

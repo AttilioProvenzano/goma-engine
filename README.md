@@ -1,5 +1,7 @@
 # Goma :ocean:
 
+[![Build status](https://ci.appveyor.com/api/projects/status/kshyaf2ocy3cb0ot/branch/master?svg=true)](https://ci.appveyor.com/project/AttilioProvenzano/goma-engine)
+
 Goma is a simple 3D C++ game engine with Vulkan support.
 
 This is a learning project, meant for experimenting with graphics techniques. It currently lacks most basic features of a full-fledged engine, so it should not be used for anything resembling production! :stuck_out_tongue:

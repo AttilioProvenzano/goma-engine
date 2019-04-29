@@ -11,16 +11,16 @@ init:
   - cmd: cmake --version
   - cmd: msbuild /version
 
-branches:
-  only:
-    - master
-
 install:
   - cmd: git submodule update --init --recursive
-  - cmd: curl --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.0.51.0/windows/VulkanSDK-1.0.51.0-Installer.exe
+  - cmd: curl -L --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe
+  - cmd: dir VulkanSDK.exe
   - cmd: .\VulkanSDK.exe /S
+
+environment:
+  VULKAN_SDK: C:\VulkanSDK\1.1.106.0
 
 build_script:
   - cmd: mkdir build && cd build
-  - cmd: cmake -G "Visual Studio 15 2017" -DCMAKE_BUILD_TYPE=%configuration% ..
+  - cmd: cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=%configuration% ..
   - cmd: cmake --build . --target ALL_BUILD --config %configuration%

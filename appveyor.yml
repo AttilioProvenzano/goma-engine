@@ -13,7 +13,7 @@ init:
 
 install:
   - cmd: git submodule update --init --recursive
-  - cmd: curl --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe
+  - cmd: curl --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe
   - cmd: dir
   - cmd: .\VulkanSDK.exe /S
 

@@ -12,11 +12,12 @@ The current plan is to add more features along the way, but I won't be developin
 
 Goma currently supports Windows with a [V-EZ](https://github.com/GPUOpen-LibrariesAndSDKs/V-EZ) backend. I have plans to port it to Android, but it will require a native Vulkan backend first.
 
-Here are some of the features that Goma supports:
+These are some of the features that Goma supports:
 
  * PBR
  * Runtime shader compilation with variants
  * Mipmapping
+ * MSAA
  * Mesh culling and sorting
  * Shadow maps (directional lights only)
  * Very basic DoF
@@ -35,7 +36,7 @@ Then run CMake:
 
 ```
 mkdir build && cd build
-cmake .. -G "Visual Studio 2017"
+cmake .. -G "Visual Studio 2017 Win64"
 ```
 
 Then you can open the Visual Studio solution inside `build` and build it from there.

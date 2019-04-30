@@ -21,7 +21,7 @@ environment:
   VULKAN_SDK: C:\VulkanSDK\1.1.106.0
 
 build_script:
-  - cmd: mkdir build && cd build
+  - cmd: mkdir -p build && cd build
   - cmd: cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=%configuration% ..
   - cmd: cmake --build . --target ALL_BUILD --config %configuration%
 

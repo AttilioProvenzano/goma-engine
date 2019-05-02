@@ -13,6 +13,8 @@
 #include "renderer/vez/vez_backend.hpp"
 #include "platform/win32_platform.hpp"
 
+#include "infrastructure/cache.hpp"
+
 #include <chrono>
 #include <thread>
 #include <set>
@@ -113,6 +115,53 @@ TEST(SceneTest, CanCreateATexture) {
     Scene s;
     auto texture = s.CreateAttachment<Texture>(s.GetRootNode(), {});
     ASSERT_TRUE(texture);
+}
+
+TEST(InfrastructureTest, CanCreateCache) {
+    struct Cached {
+        struct Key {
+            std::string name{};
+
+            bool operator==(const Key& rhs) const { return name == rhs.name; }
+        };
+
+        struct KeyHash {
+            size_t operator()(Key k) const {
+                return std::hash<std::string>()(k.name);
+            }
+        };
+
+        int value{};
+
+        Cached(int value) : value{value} {}
+    };
+
+    Cache<Cached> cache;
+
+    {
+        auto test0 = cache.create({"test0"}, 0);
+        auto test1 = cache.create({"test1"}, 1);
+    }
+
+    {
+        auto test0_get = cache.get({"test0"});
+        auto test1_get = cache.get({"test1"});
+        auto test2_get = cache.get({"test2"});
+
+        EXPECT_EQ(test0_get->value, 0);
+        EXPECT_EQ(test1_get->value, 1);
+        EXPECT_FALSE(test2_get);
+    }
+
+    {
+        ASSERT_EQ(cache.erase({"test0"}), 1);
+
+        auto test0_get = cache.get({"test0"});
+        auto test1_get = cache.get({"test1"});
+
+        EXPECT_FALSE(test0_get);
+        EXPECT_EQ(test1_get->value, 1);
+    }
 }
 
 TEST(AssimpLoaderTest, CanLoadAModel) {

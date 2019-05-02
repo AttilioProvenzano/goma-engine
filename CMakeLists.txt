@@ -22,6 +22,7 @@ set(PUBLIC_HEADERS
 	include/common/error_codes.hpp
 	include/common/include.hpp
 	include/common/vez.hpp
+	include/infrastructure/cache.hpp
 	include/input/input.hpp
 	include/input/input_system.hpp
 	include/renderer/renderer.hpp

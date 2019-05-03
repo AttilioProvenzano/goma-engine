@@ -140,27 +140,23 @@ TEST(InfrastructureTest, CanCreateCache) {
 
     {
         auto test0 = cache.create({"test0"}, 0);
-        auto test1 = cache.create({"test1"}, 1);
-    }
+        {
+            auto test1 = cache.create({"test1"}, 1);
 
-    {
+            auto test0_get = cache.get({"test0"});
+            auto test1_get = cache.get({"test1"});
+            auto test2_get = cache.get({"test2"});
+
+            EXPECT_EQ(test0_get->value, 0);
+            EXPECT_EQ(test1_get->value, 1);
+            EXPECT_FALSE(test2_get);
+        }
+
         auto test0_get = cache.get({"test0"});
         auto test1_get = cache.get({"test1"});
-        auto test2_get = cache.get({"test2"});
 
         EXPECT_EQ(test0_get->value, 0);
-        EXPECT_EQ(test1_get->value, 1);
-        EXPECT_FALSE(test2_get);
-    }
-
-    {
-        ASSERT_EQ(cache.erase({"test0"}), 1);
-
-        auto test0_get = cache.get({"test0"});
-        auto test1_get = cache.get({"test1"});
-
-        EXPECT_FALSE(test0_get);
-        EXPECT_EQ(test1_get->value, 1);
+        EXPECT_FALSE(test1_get);
     }
 }
 

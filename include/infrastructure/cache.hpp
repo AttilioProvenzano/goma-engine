@@ -18,15 +18,17 @@ class Cache {
     std::shared_ptr<T> get(KeyT key) {
         auto res = map_.find(key);
         if (res != map_.end()) {
-            return res->second;
+            return res->second.lock();
         }
         return {};
     }
 
     size_t erase(KeyT key) { return map_.erase(key); }
 
+    void clear() { map_.clear(); }
+
   private:
-    using MapT = std::unordered_map<KeyT, std::shared_ptr<T>, KeyHashT>;
+    using MapT = std::unordered_map<KeyT, std::weak_ptr<T>, KeyHashT>;
     MapT map_{};
 };
 

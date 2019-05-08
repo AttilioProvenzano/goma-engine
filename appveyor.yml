@@ -28,4 +28,4 @@ build_script:
   - cmd: cmake --build . --target ALL_BUILD --config %configuration%
 
 cache:
-  - build
+  - build -> appveyor.yml

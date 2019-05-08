@@ -15,6 +15,7 @@ install:
   - cmd: mv third_party third_party_cached & exit 0 # ignore errors
   - cmd: git submodule init
   - cmd: cp -a third_party_cached third_party & exit 0 # ignore errors
+  - cmd: dir
   - cmd: git submodule update --recursive
   - cmd: curl -L --retry 5 1--silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe?Human=true
   - cmd: dir VulkanSDK.exe

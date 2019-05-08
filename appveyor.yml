@@ -29,3 +29,4 @@ build_script:
 
 cache:
   - build -> appveyor.yml
+  - third_party -> appveyor.yml

@@ -23,6 +23,7 @@ environment:
 build_script:
   - cmd: mkdir -p build & exit 0 # ignore errors
   - cmd: cd build
+  - cmd: dir # check the contents (useful to check if caching works)
   - cmd: cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=%configuration% ..
   - cmd: cmake --build . --target ALL_BUILD --config %configuration%
 

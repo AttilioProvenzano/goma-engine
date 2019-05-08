@@ -597,10 +597,10 @@ result<void> VezBackend::RenderFrame(std::vector<PassFn> pass_fns,
                                 c.rt_name);
                             return Error::NotFound;
                         }
-
-                        return outcome::success();
                     }
                 }
+
+                return outcome::success();
             });
 
         // Blits
@@ -1814,6 +1814,7 @@ Extent VezBackend::GetAbsoluteExtent(Extent extent) {
         case ExtentType::Absolute:
             return extent;
         case ExtentType::RelativeToSwapchain:
+        default:
             auto w = context_.capabilities.currentExtent.width;
             auto h = context_.capabilities.currentExtent.height;
             return Extent{extent.width * w, extent.height * h,

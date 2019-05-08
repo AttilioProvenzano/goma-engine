@@ -13,7 +13,7 @@ init:
 
 install:
   - cmd: mv third_party third_party_cached & exit 0 # ignore errors
-  - cmd: git submodule init
+  - cmd: git submodule init --recursive
   - cmd: cp -a third_party_cached third_party & exit 0 # ignore errors
   - cmd: dir
   - cmd: git submodule update --recursive

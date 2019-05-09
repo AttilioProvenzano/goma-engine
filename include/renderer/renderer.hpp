@@ -121,6 +121,7 @@ class Renderer {
             bool has_displacement_map : 1;
             bool has_light_map : 1;
             bool has_reflection_map : 1;
+            bool alpha_mask : 1;
         };
 
         uint32_t int_repr;

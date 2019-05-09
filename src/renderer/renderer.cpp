@@ -852,9 +852,13 @@ result<void> Renderer::ForwardPass(FrameIndex frame_id, Scene& scene,
                 glm::vec3 camera;
                 float alpha_cutoff;
             };
-            FragUBO frag_ubo_data{
-                4.5f,          2.2f, 0.2f, 0.5f, {material.diffuse_color, 1.0f},
-                camera_ws_pos, 0.5f};
+            FragUBO frag_ubo_data{4.5f,
+                                  2.2f,
+                                  material.metallic_factor,
+                                  material.roughness_factor,
+                                  {material.diffuse_color, 1.0f},
+                                  camera_ws_pos,
+                                  material.alpha_cutoff};
 
             backend_->UpdateBuffer(*frag_ubo, frame_id * 256,
                                    sizeof(frag_ubo_data), &frag_ubo_data);
@@ -1126,9 +1130,9 @@ const char* Renderer::GetFragmentShaderPreamble(
         if (desc.has_reflection_map) {
             preamble << "#define HAS_REFLECTION_MAP\n";
         }
-
-        // TODO figure out when alpha discard is not needed
-        preamble << "#define ALPHAMODE_MASK\n";
+        if (desc.alpha_mask) {
+            preamble << "#define ALPHAMODE_MASK\n";
+        }
 
         fs_preamble_map_[desc.int_repr] = preamble.str();
         return fs_preamble_map_[desc.int_repr].c_str();
@@ -1142,27 +1146,29 @@ const char* Renderer::GetFragmentShaderPreamble(const Mesh& mesh,
                material.texture_bindings.end();
     };
 
-    return GetFragmentShaderPreamble(
-        FragmentShaderPreambleDesc{!mesh.vertices.empty(),
-                                   !mesh.normals.empty(),
-                                   !mesh.tangents.empty(),
-                                   !mesh.bitangents.empty(),
-                                   !mesh.colors.empty(),
-                                   mesh.uv_sets.size() > 0,
-                                   mesh.uv_sets.size() > 1,
-                                   mesh.uvw_sets.size() > 0,
-                                   check_type(TextureType::Diffuse),
-                                   check_type(TextureType::Specular),
-                                   check_type(TextureType::Ambient),
-                                   check_type(TextureType::Emissive),
-                                   check_type(TextureType::MetallicRoughness),
-                                   check_type(TextureType::HeightMap),
-                                   check_type(TextureType::NormalMap),
-                                   check_type(TextureType::Shininess),
-                                   check_type(TextureType::Opacity),
-                                   check_type(TextureType::Displacement),
-                                   check_type(TextureType::LightMap),
-                                   check_type(TextureType::Reflection)});
+    return GetFragmentShaderPreamble(FragmentShaderPreambleDesc{
+        !mesh.vertices.empty(),
+        !mesh.normals.empty(),
+        !mesh.tangents.empty(),
+        !mesh.bitangents.empty(),
+        !mesh.colors.empty(),
+        mesh.uv_sets.size() > 0,
+        mesh.uv_sets.size() > 1,
+        mesh.uvw_sets.size() > 0,
+        check_type(TextureType::Diffuse),
+        check_type(TextureType::Specular),
+        check_type(TextureType::Ambient),
+        check_type(TextureType::Emissive),
+        check_type(TextureType::MetallicRoughness),
+        check_type(TextureType::HeightMap),
+        check_type(TextureType::NormalMap),
+        check_type(TextureType::Shininess),
+        check_type(TextureType::Opacity),
+        check_type(TextureType::Displacement),
+        check_type(TextureType::LightMap),
+        check_type(TextureType::Reflection),
+        material.alpha_cutoff < 1.0f,
+    });
 }
 
 result<void> Renderer::BindMeshBuffers(const Mesh& mesh) {

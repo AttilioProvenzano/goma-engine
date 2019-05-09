@@ -8,6 +8,7 @@
 
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
+#include "assimp/pbrmaterial.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_FAILURE_USERMSG
@@ -94,17 +95,31 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
 
                 int two_sided = 0;
                 float opacity = 1.0f;
+                float alpha_cutoff = 1.0f;
                 float shininess_exponent = 0.0f;
                 float specular_strength = 1.0f;
+                float metallic_factor = 0.2f;
+                float roughness_factor = 0.5f;
+
                 ai_material->Get(AI_MATKEY_TWOSIDED, two_sided);
                 ai_material->Get(AI_MATKEY_OPACITY, opacity);
+                ai_material->Get(AI_MATKEY_GLTF_ALPHACUTOFF, alpha_cutoff);
                 ai_material->Get(AI_MATKEY_SHININESS, shininess_exponent);
                 ai_material->Get(AI_MATKEY_SHININESS_STRENGTH,
                                  specular_strength);
+                ai_material->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR,
+                    metallic_factor);
+                ai_material->Get(
+                    AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR,
+                    roughness_factor);
+
                 material.two_sided = (two_sided > 0);
                 material.opacity = opacity;
+                material.alpha_cutoff = alpha_cutoff;
                 material.shininess_exponent = shininess_exponent;
                 material.specular_strength = specular_strength;
+                material.metallic_factor = metallic_factor;
+                material.roughness_factor = roughness_factor;
             }
 
             auto material_result = scene->CreateAttachment(std::move(material));

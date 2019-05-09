@@ -146,6 +146,31 @@ result<std::shared_ptr<Pipeline>> VezBackend::GetGraphicsPipeline(
     }
 }
 
+result<void> VezBackend::ClearShaderCache() {
+    auto& per_frame = context_.per_frame[context_.current_frame];
+
+    for (auto& shader : context_.vertex_shader_cache) {
+        vezDestroyShaderModule(context_.device, shader.second);
+    }
+    context_.vertex_shader_cache.clear();
+
+    for (auto& shader : context_.fragment_shader_cache) {
+        vezDestroyShaderModule(context_.device, shader.second);
+    }
+    context_.fragment_shader_cache.clear();
+
+    // Pipelines may still be in use, so we add them to a list of orphaned
+    // ones and delete them after the next fence for this frame index.
+    // This guarantees that they will not be in use anymore.
+    for (auto& pipeline : context_.pipeline_cache) {
+        per_frame.orphaned_pipelines.push_back(pipeline.second->vez);
+        pipeline.second->valid = false;
+    }
+    context_.pipeline_cache.clear();
+
+    return outcome::success();
+}
+
 result<std::shared_ptr<VertexInputFormat>> VezBackend::GetVertexInputFormat(
     const VertexInputFormatDesc& desc) {
     assert(context_.device && "Context must be initialized");
@@ -641,6 +666,30 @@ result<void> VezBackend::RenderFrame(std::vector<PassFn> pass_fns,
     uint32_t buf_size = config_.buffering == Buffering::Triple ? 3 : 2;
     context_.current_frame = (context_.current_frame + 1) % buf_size;
 
+    // Ensure resources for the next frame are not in use
+    auto& per_frame = context_.per_frame[context_.current_frame];
+    if (per_frame.setup_fence != VK_NULL_HANDLE) {
+        VK_CHECK(vezWaitForFences(context_.device, 1, &per_frame.setup_fence,
+                                  VK_TRUE, ~0ULL));
+        vezDestroyFence(context_.device, per_frame.setup_fence);
+        per_frame.setup_fence = VK_NULL_HANDLE;
+    }
+    per_frame.setup_semaphore = VK_NULL_HANDLE;
+
+    if (per_frame.submission_fence != VK_NULL_HANDLE) {
+        VK_CHECK(vezWaitForFences(context_.device, 1,
+                                  &per_frame.submission_fence, VK_TRUE, ~0ULL));
+        vezDestroyFence(context_.device, per_frame.submission_fence);
+        per_frame.submission_fence = VK_NULL_HANDLE;
+    }
+
+    // Destroy any orphaned pipelines
+    std::for_each(
+        std::begin(per_frame.orphaned_pipelines),
+        std::end(per_frame.orphaned_pipelines),
+        [this](VezPipeline p) { vezDestroyPipeline(context_.device, p); });
+    per_frame.orphaned_pipelines.clear();
+
     return outcome::success();
 }
 
@@ -919,20 +968,6 @@ result<size_t> VezBackend::StartFrame(uint32_t threads) {
     }
 
     auto& per_frame = context_.per_frame[context_.current_frame];
-    if (per_frame.setup_fence != VK_NULL_HANDLE) {
-        VK_CHECK(vezWaitForFences(context_.device, 1, &per_frame.setup_fence,
-                                  VK_TRUE, ~0ULL));
-        vezDestroyFence(context_.device, per_frame.setup_fence);
-        per_frame.setup_fence = VK_NULL_HANDLE;
-    }
-    per_frame.setup_semaphore = VK_NULL_HANDLE;
-
-    if (per_frame.submission_fence != VK_NULL_HANDLE) {
-        VK_CHECK(vezWaitForFences(context_.device, 1,
-                                  &per_frame.submission_fence, VK_TRUE, ~0ULL));
-        vezDestroyFence(context_.device, per_frame.submission_fence);
-        per_frame.submission_fence = VK_NULL_HANDLE;
-    }
 
     auto command_buffer_count = per_frame.command_buffers.size();
     if (threads > command_buffer_count) {

@@ -157,10 +157,20 @@ result<void> Renderer::Render() {
 
     // Hold/release the current culling state
     const auto keypresses = engine_.input_system().GetFrameInput().keypresses;
+    const auto last_keypresses =
+        engine_.input_system().GetLastFrameInput().keypresses;
+
     if (keypresses.find(KeyInput::H) != keypresses.end()) {
         vp_hold = std::make_unique<glm::mat4>(vp);
     } else if (keypresses.find(KeyInput::R) != keypresses.end()) {
         vp_hold = {};
+    }
+
+    // Clear the shader cache (reload shaders)
+    if (keypresses.find(KeyInput::C) != keypresses.end() &&
+        last_keypresses.find(KeyInput::C) == last_keypresses.end()) {
+        spdlog::info("Reloading shaders!");
+        backend_->ClearShaderCache();
     }
 
     // Get main render sequence

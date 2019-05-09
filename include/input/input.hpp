@@ -4,7 +4,7 @@
 
 namespace goma {
 
-enum class KeyInput { W, A, S, D, H, R, Up, Down, Left, Right };
+enum class KeyInput { W, A, S, D, C, H, R, Up, Down, Left, Right };
 
 struct InputState {
     std::set<KeyInput> keypresses{};

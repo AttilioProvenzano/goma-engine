@@ -55,6 +55,7 @@ class Backend {
     virtual result<std::shared_ptr<Image>> GetTexture(const char* name) = 0;
     virtual result<std::shared_ptr<Image>> GetRenderTarget(
         FrameIndex frame_id, const char* name) = 0;
+    virtual Extent GetAbsoluteExtent(Extent extent) = 0;
 
     virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
         BufferType type, const GenIndex& index, const char* name, uint64_t size,

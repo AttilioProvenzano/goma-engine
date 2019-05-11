@@ -34,6 +34,7 @@ class VezBackend : public Backend {
         const char* name) override;
     virtual result<std::shared_ptr<Image>> GetRenderTarget(
         FrameIndex frame_id, const char* name) override;
+    virtual Extent GetAbsoluteExtent(Extent extent) override;
 
     virtual result<std::shared_ptr<Buffer>> CreateUniformBuffer(
         BufferType type, const GenIndex& index, const char* name, uint64_t size,
@@ -153,7 +154,6 @@ class VezBackend : public Backend {
     result<void> GetSetupCommandBuffer();
     result<void> GetActiveCommandBuffer(uint32_t thread = 0);
     VkFormat GetVkFormat(Format format);
-    Extent GetAbsoluteExtent(Extent extent);
 
     result<Framebuffer> CreateFramebuffer(FrameIndex frame_id, const char* name,
                                           RenderPassDesc fb_desc);

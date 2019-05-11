@@ -81,6 +81,9 @@ result<void> Renderer::Render() {
     }
     Scene& scene = *engine_.scene();
 
+    downscale_index_ = 0;
+    upscale_index_ = 0;
+
     // Ensure that all meshes have their own buffers
     CreateMeshBuffers(scene);
 
@@ -956,6 +959,140 @@ result<void> Renderer::ForwardPass(FrameIndex frame_id, Scene& scene,
 
     backend_->BindTexture(skybox_tex_res.value()->vez, 0);
     backend_->DrawIndexed(static_cast<uint32_t>(sphere.indices.size()));
+
+    return outcome::success();
+}
+
+result<void> Renderer::DownscalePass(FrameIndex frame_id,
+                                     const std::string& src,
+                                     const std::string& dst) {
+    auto src_image_res = backend_->GetRenderTarget(frame_id, src.c_str());
+    if (!src_image_res) {
+        spdlog::error("Couldn't get the source image.");
+    }
+
+    auto src_image = src_image_res.value();
+
+    auto src_desc_res = backend_->render_plan().color_images.find(src);
+    if (src_desc_res == backend_->render_plan().color_images.end()) {
+        spdlog::error("Couldn't get the source image from the render plan.");
+    }
+
+    auto dst_desc_res = backend_->render_plan().color_images.find(dst);
+    if (dst_desc_res == backend_->render_plan().color_images.end()) {
+        spdlog::error(
+            "Couldn't get the destination image from the render plan.");
+    }
+
+    auto extent = backend_->GetAbsoluteExtent(dst_desc_res->second.extent);
+    backend_->SetViewport({{extent.width, extent.height}});
+    backend_->SetScissor({{static_cast<uint32_t>(extent.width),
+                           static_cast<uint32_t>(extent.height)}});
+
+    backend_->BindDepthStencilState(DepthStencilState{});
+    backend_->BindRasterizationState(RasterizationState{});
+    backend_->BindMultisampleState(MultisampleState{});
+
+    auto no_input = backend_->GetVertexInputFormat({});
+    backend_->BindVertexInputFormat(*no_input.value());
+
+    auto pipeline_res = backend_->GetGraphicsPipeline(
+        {GOMA_ASSETS_DIR "shaders/fullscreen.vert", ShaderSourceType::Filename},
+        {GOMA_ASSETS_DIR "shaders/downscale.frag", ShaderSourceType::Filename});
+    if (!pipeline_res) {
+        spdlog::error("Couldn't get pipeline for downscaling!");
+    }
+
+    auto ubo_name = "downscale_" + std::to_string(downscale_index_++);
+    auto downscale_ubo_res = backend_->GetUniformBuffer(ubo_name.c_str());
+    if (!downscale_ubo_res) {
+        downscale_ubo_res =
+            backend_->CreateUniformBuffer(ubo_name.c_str(), 3 * 256, false);
+    }
+    auto downscale_ubo = downscale_ubo_res.value();
+
+    struct DownscaleUbo {
+        glm::vec2 half_pixel;
+    } ubo_data;
+
+    auto src_extent = backend_->GetAbsoluteExtent(src_desc_res->second.extent);
+    ubo_data.half_pixel = {1.0f / (2 * extent.width),
+                           1.0f / (2 * extent.height)};
+
+    backend_->UpdateBuffer(*downscale_ubo, frame_id * 256, sizeof(ubo_data),
+                           &ubo_data);
+    backend_->BindUniformBuffer(*downscale_ubo, frame_id * 256,
+                                sizeof(ubo_data), 1);
+
+    backend_->BindGraphicsPipeline(*pipeline_res.value());
+    backend_->BindTexture(src_image->vez, 0);
+    backend_->Draw(3);
+
+    return outcome::success();
+}
+
+result<void> Renderer::UpscalePass(FrameIndex frame_id, const std::string& src,
+                                   const std::string& dst) {
+    auto src_image_res = backend_->GetRenderTarget(frame_id, src.c_str());
+    if (!src_image_res) {
+        spdlog::error("Couldn't get the source image.");
+    }
+
+    auto src_image = src_image_res.value();
+
+    auto src_desc_res = backend_->render_plan().color_images.find(src);
+    if (src_desc_res == backend_->render_plan().color_images.end()) {
+        spdlog::error("Couldn't get the source image from the render plan.");
+    }
+
+    auto dst_desc_res = backend_->render_plan().color_images.find(dst);
+    if (dst_desc_res == backend_->render_plan().color_images.end()) {
+        spdlog::error(
+            "Couldn't get the destination image from the render plan.");
+    }
+
+    auto extent = backend_->GetAbsoluteExtent(dst_desc_res->second.extent);
+    backend_->SetViewport({{extent.width, extent.height}});
+    backend_->SetScissor({{static_cast<uint32_t>(extent.width),
+                           static_cast<uint32_t>(extent.height)}});
+
+    backend_->BindDepthStencilState(DepthStencilState{});
+    backend_->BindRasterizationState(RasterizationState{});
+    backend_->BindMultisampleState(MultisampleState{});
+
+    auto no_input = backend_->GetVertexInputFormat({});
+    backend_->BindVertexInputFormat(*no_input.value());
+
+    auto pipeline_res = backend_->GetGraphicsPipeline(
+        {GOMA_ASSETS_DIR "shaders/fullscreen.vert", ShaderSourceType::Filename},
+        {GOMA_ASSETS_DIR "shaders/upscale.frag", ShaderSourceType::Filename});
+    if (!pipeline_res) {
+        spdlog::error("Couldn't get pipeline for upscaling!");
+    }
+
+    auto ubo_name = "upscale_" + std::to_string(upscale_index_++);
+    auto upscale_ubo_res = backend_->GetUniformBuffer(ubo_name.c_str());
+    if (!upscale_ubo_res) {
+        upscale_ubo_res =
+            backend_->CreateUniformBuffer(ubo_name.c_str(), 3 * 256, false);
+    }
+    auto upscale_ubo = upscale_ubo_res.value();
+
+    struct UpscaleUbo {
+        glm::vec2 half_pixel;
+    } ubo_data;
+
+    auto src_extent = backend_->GetAbsoluteExtent(src_desc_res->second.extent);
+    ubo_data.half_pixel = {1.0f / (2 * extent.width),
+                           1.0f / (2 * extent.height)};
+
+    backend_->UpdateBuffer(*upscale_ubo, frame_id * 256, sizeof(ubo_data),
+                           &ubo_data);
+    backend_->BindUniformBuffer(*upscale_ubo, frame_id * 256, sizeof(ubo_data),
+                                1);
+    backend_->BindGraphicsPipeline(*pipeline_res.value());
+    backend_->BindTexture(src_image->vez, 0);
+    backend_->Draw(3);
 
     return outcome::success();
 }

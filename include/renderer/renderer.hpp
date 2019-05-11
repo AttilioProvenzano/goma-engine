@@ -25,6 +25,8 @@ class Renderer {
     std::map<uint32_t, std::string> vs_preamble_map_{};
     std::map<uint32_t, std::string> fs_preamble_map_{};
     std::unique_ptr<glm::mat4> vp_hold{};
+    uint32_t downscale_index_{0};
+    uint32_t upscale_index_{0};
 
     struct RenderSequenceElement {
         AttachmentIndex<Mesh> mesh;
@@ -77,6 +79,10 @@ class Renderer {
                              const glm::vec3& camera_ws_pos,
                              const glm::mat4& camera_vp,
                              const glm::mat4& shadow_vp);
+    result<void> DownscalePass(FrameIndex frame_id, const std::string& src,
+                               const std::string& dst);
+    result<void> UpscalePass(FrameIndex frame_id, const std::string& src,
+                             const std::string& dst);
     result<void> PostprocessingPass(FrameIndex frame_id);
 
     union VertexShaderPreambleDesc {

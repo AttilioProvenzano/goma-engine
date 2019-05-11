@@ -48,12 +48,6 @@ Renderer::Renderer(Engine& engine)
         },
     };
 
-    std::vector<BlitDesc> blits;
-    blits.push_back({{"resolved_image", {}}, {"blur_half", {0.5f, 0.5f}}});
-    blits.push_back(
-        {{"blur_half", {0.5f, 0.5f}}, {"blur_quarter", {0.25f, 0.25f}}});
-    blits.push_back({{"blur_quarter", {0.25f, 0.25f}}, {"blur_full", {}}});
-
     render_plan.passes = {
         GeneralPassEntry{"update_light_buffer"},
         RenderPassEntry{
@@ -65,8 +59,15 @@ Renderer::Renderer(Engine& engine)
                                                 true,
                                                 {0.1f, 0.1f, 0.1f, 1.0f},
                                                 "resolved_image"}},
-                           DepthAttachmentDesc{"depth"}},
-            std::move(blits)},
+                           DepthAttachmentDesc{"depth"}}},
+        RenderPassEntry{"blur_down_half",
+                        RenderPassDesc{{ColorAttachmentDesc{"blur_half"}}}},
+        RenderPassEntry{"blur_down_quarter",
+                        RenderPassDesc{{ColorAttachmentDesc{"blur_quarter"}}}},
+        RenderPassEntry{"blur_up_half",
+                        RenderPassDesc{{ColorAttachmentDesc{"blur_half"}}}},
+        RenderPassEntry{"blur_up_full",
+                        RenderPassDesc{{ColorAttachmentDesc{"blur_full"}}}},
         RenderPassEntry{
             "postprocessing",
             RenderPassDesc{{ColorAttachmentDesc{"postprocessing"}}}},
@@ -214,6 +215,18 @@ result<void> Renderer::Render() {
                 FrameIndex frame_id, const RenderPassDesc*) {
                 return ForwardPass(frame_id, scene, visible_seq, ws_pos, vp,
                                    shadow_vp);
+            },
+            [this](FrameIndex frame_id, const RenderPassDesc*) {
+                return DownscalePass(frame_id, "resolved_image", "blur_half");
+            },
+            [this](FrameIndex frame_id, const RenderPassDesc*) {
+                return DownscalePass(frame_id, "blur_half", "blur_quarter");
+            },
+            [this](FrameIndex frame_id, const RenderPassDesc*) {
+                return UpscalePass(frame_id, "blur_quarter", "blur_half");
+            },
+            [this](FrameIndex frame_id, const RenderPassDesc*) {
+                return UpscalePass(frame_id, "blur_half", "blur_full");
             },
             [this, &scene](FrameIndex frame_id, const RenderPassDesc*) {
                 return PostprocessingPass(frame_id);

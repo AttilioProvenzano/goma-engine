@@ -65,6 +65,13 @@ add_library(goma-engine SHARED
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+
+# Disable all importers except OBJ, FBX and GLTF
+foreach(name AMF 3DS AC ASE ASSBIN ASSXML B3D BVH COLLADA DXF CSM HMP IRRMESH IRR LWO LWS MD2 MD3 MD5
+             MDC MDL NFF NDO OFF OGRE OPENGEX PLY MS3D COB BLEND IFC XGL Q3D Q3BSP RAW SIB SMD STL TERRAGEN 3D X X3D 3MF MMD STEP)
+  add_definitions(-DASSIMP_BUILD_NO_${name}_IMPORTER)
+endforeach()
+
 add_subdirectory(third_party/assimp)
 foreach(target assimp assimp_cmd IrrXML uninstall UpdateAssimpLibsDebugSymbolsAndDLLs zlib zlibstatic)
   if(TARGET ${target})

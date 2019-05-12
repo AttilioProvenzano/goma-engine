@@ -1111,6 +1111,11 @@ result<void> Renderer::UpscalePass(FrameIndex frame_id, const std::string& src,
 }
 
 result<void> Renderer::PostprocessingPass(FrameIndex frame_id) {
+    Scene* scene = engine_.scene();
+    if (!scene) {
+        return Error::NoSceneLoaded;
+    }
+
     auto resolved_image_res =
         backend_->GetRenderTarget(frame_id, "resolved_image");
     if (!resolved_image_res) {
@@ -1157,6 +1162,41 @@ result<void> Renderer::PostprocessingPass(FrameIndex frame_id) {
     backend_->BindTexture(resolved_image->vez, 0);
     backend_->BindTexture(blur_full->vez, 1);
     backend_->BindTexture(depth->vez, 2);
+
+    constexpr auto ubo_name = "postprocessing";
+    auto ubo_res = backend_->GetUniformBuffer(ubo_name);
+    if (!ubo_res) {
+        ubo_res = backend_->CreateUniformBuffer(ubo_name, 3 * 256, false);
+    }
+    auto ubo = ubo_res.value();
+
+    struct PostprocessingUbo {
+        float focus_distance;
+        float focus_range;
+        float dof_strength;
+        float padding;
+
+        float near_plane;
+        float far_plane;
+    };
+
+    OUTCOME_TRY(camera_ref,
+                scene->GetAttachment<Camera>(engine_.main_camera()));
+    auto& camera = camera_ref.get();
+
+    auto ubo_data = PostprocessingUbo{
+        50.0f,  // focus_distance
+        200.0f,  // focus_range
+        1.0f,  // dof_strength
+        {},    // padding
+
+        camera.near_plane,  // near_plane
+        camera.far_plane,   // far_plane
+    };
+
+    backend_->UpdateBuffer(*ubo, frame_id * 256, sizeof(ubo_data), &ubo_data);
+    backend_->BindUniformBuffer(*ubo, frame_id * 256, sizeof(ubo_data), 3);
+
     backend_->Draw(3);
 
     return outcome::success();

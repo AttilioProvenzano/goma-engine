@@ -8,12 +8,25 @@ layout(set = 0, binding = 2) uniform sampler2DMS depthTex;
 layout(location = 0) in vec2 inUVs;
 layout(location = 0) out vec4 outColor;
 
-const float kDepthRangeMin = 0.9;
-const float kDepthRangeMax = 1.0;
+layout(set = 0, binding = 3, std140) uniform UBO {
+    vec4 dofParams; // x: focusDistance / y: focusRange / z: strength
+    vec2 nearFarPlane;
+} ubo;
+
+float linearizeDepth(float depth, float nearPlane, float farPlane)
+{
+    return nearPlane * farPlane / (farPlane + depth * (nearPlane - farPlane));
+}
 
 void main() {
-    float depth = texelFetch(depthTex, ivec2(gl_FragCoord.xy), 0).x;
-    float mapped_depth = (depth - kDepthRangeMin) / (kDepthRangeMax - kDepthRangeMin);
-    mapped_depth = clamp(mapped_depth, 0.0, 1.0);
-    outColor = mix(texture(baseTex, inUVs), texture(blurTex, inUVs), mapped_depth);
+    float focusDistance = 4.0; // ubo.dofParams.x;
+    float focusRange = 10.0; // ubo.dofParams.y;
+    float dofStrength = ubo.dofParams.z;
+
+    // Depth of field
+    float depth = texelFetch(depthTex, ivec2(gl_FragCoord.xy), 0).r;
+    float linDepth = linearizeDepth(depth, ubo.nearFarPlane.x, ubo.nearFarPlane.y);
+
+    float coc = clamp(abs(linDepth - focusDistance) / focusRange, 0.0, 1.0) * dofStrength;
+    outColor = mix(texture(baseTex, inUVs), texture(blurTex, inUVs), coc);
 }

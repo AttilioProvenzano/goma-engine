@@ -13,14 +13,8 @@ init:
 
 install:
   - cmd: git submodule update --init --recursive
-  - cmd: >-
-        if not exist C:\VulkanSDK\1.1.106.0\ ( ^
-          if not exist VulkanSDK.exe ( ^
-            curl -L --retry 5 --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe?Human=true ^
-            dir VulkanSDK.exe ^
-          ) ^
-          .\VulkanSDK.exe /S ^
-        )
+  - cmd: if not exist VulkanSDK.exe ( curl -L --retry 5 --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe?Human=true )
+  - cmd: if not exist C:\VulkanSDK\1.1.106.0\ ( .\VulkanSDK.exe /S ^ )
 
 environment:
   VULKAN_SDK: C:\VulkanSDK\1.1.106.0

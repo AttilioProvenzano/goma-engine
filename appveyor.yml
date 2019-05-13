@@ -13,9 +13,14 @@ init:
 
 install:
   - cmd: git submodule update --init --recursive
-  - cmd: curl -L --retry 5 --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe?Human=true
-  - cmd: dir VulkanSDK.exe
-  - cmd: .\VulkanSDK.exe /S
+  - cmd: >-
+    if not exist C:\VulkanSDK\1.1.106.0 (
+      if not exist VulkanSDK.exe (
+        curl -L --retry 5 --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe?Human=true
+        dir VulkanSDK.exe
+      )
+      .\VulkanSDK.exe /S
+    )
 
 environment:
   VULKAN_SDK: C:\VulkanSDK\1.1.106.0
@@ -25,3 +30,7 @@ build_script:
   - cmd: cd build
   - cmd: cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=%configuration% ..
   - cmd: cmake --build . --target ALL_BUILD --config %configuration%
+
+cache:
+  - C:\VulkanSDK\1.1.106.0 -> appveyor.yml
+  - VulkanSDK.exe -> appveyor.yml

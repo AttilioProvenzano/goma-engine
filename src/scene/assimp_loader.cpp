@@ -40,7 +40,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
     std::unique_ptr<Scene> scene = std::make_unique<Scene>();
 
     std::map<std::string, NodeIndex> node_name_map;
-    std::map<unsigned int, AttachmentIndex<Material>> material_map;
+    std::map<size_t, AttachmentIndex<Material>> material_map;
 
     // Convert materials
     if (ai_scene->HasMaterials()) {

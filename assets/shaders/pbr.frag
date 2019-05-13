@@ -61,7 +61,7 @@ layout(set = 0, binding = 10) uniform sampler2D lightTex;
 layout(set = 0, binding = 11) uniform sampler2D reflectionTex;
 #endif
 
-layout(set = 0, binding = 14) uniform sampler2D shadowMap;
+layout(set = 0, binding = 14) uniform sampler2DShadow shadowTex;
 
 const float M_PI = 3.141592653589793;
 const float c_MinReflectance = 0.04;
@@ -500,10 +500,13 @@ void main()
         int type = floatBitsToInt(light.directionAndType.w);
         if (type == LightType_Directional)
         {
-            if (i != shadowId || inShadowPos.z <= texture(shadowMap, inShadowPos.xy).x)
+            float shadow = 1.0;
+            if (i == shadowId)
             {
-                color += applyDirectionalLight(light, materialInfo, normal, view);
+                shadow = texture(shadowTex, inShadowPos).r;
             }
+
+            color += shadow * applyDirectionalLight(light, materialInfo, normal, view);
         }
         else if (type == LightType_Point)
         {

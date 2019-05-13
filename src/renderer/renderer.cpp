@@ -40,11 +40,17 @@ Renderer::Renderer(Engine& engine)
         {"postprocessing", {}},
     };
 
+    SamplerDesc shadow_sampler;
+    shadow_sampler.compare_op = CompareOp::Less;
+
     render_plan.depth_images = {
         {"depth", {{}, 4, Format::DepthOnly}},
         {
             "shadow_depth",
-            {{2048.0f, 2048.0f, ExtentType::Absolute}, 1, Format::DepthOnly},
+            {{2048.0f, 2048.0f, ExtentType::Absolute},
+             1,
+             Format::DepthOnly,
+             shadow_sampler},
         },
     };
 

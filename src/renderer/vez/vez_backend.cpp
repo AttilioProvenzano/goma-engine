@@ -1556,7 +1556,7 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
-    OUTCOME_TRY(sampler, GetSampler({}));
+    OUTCOME_TRY(sampler, GetSampler(image_desc.sampler));
     vulkan_image.sampler = sampler;
 
     auto ret = std::make_shared<Image>(vulkan_image);
@@ -1589,7 +1589,7 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
                        VK_IMAGE_USAGE_SAMPLED_BIT;
 
     OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
-    OUTCOME_TRY(sampler, GetSampler({}));
+    OUTCOME_TRY(sampler, GetSampler(image_desc.sampler));
     vulkan_image.sampler = sampler;
 
     auto ret = std::make_shared<Image>(vulkan_image);
@@ -1682,6 +1682,10 @@ result<VkSampler> VezBackend::GetSampler(const SamplerDesc& sampler_desc) {
         sampler_info.mipmapMode = mipmap_mode;
         sampler_info.minFilter = filter;
         sampler_info.magFilter = filter;
+        sampler_info.compareEnable =
+            sampler_desc.compare_op != CompareOp::Never;
+        sampler_info.compareOp =
+            static_cast<VkCompareOp>(sampler_desc.compare_op);
 
         VkSampler sampler = VK_NULL_HANDLE;
         vezCreateSampler(context_.device, &sampler_info, &sampler);
@@ -1944,6 +1948,7 @@ VezContext::SamplerHash VezBackend::GetSamplerHash(
         FilterType filter_type : 4;
         FilterType mipmap_mode : 4;
         TextureWrappingMode addressing_mode : 4;
+        CompareOp compare_op : 3;
     };
 
     SamplerHashBitField bit_field{
@@ -1954,6 +1959,7 @@ VezContext::SamplerHash VezBackend::GetSamplerHash(
         static_cast<int>(sampler_desc.filter_type),
         static_cast<int>(sampler_desc.mipmap_mode),
         static_cast<int>(sampler_desc.addressing_mode),
+        static_cast<int>(sampler_desc.compare_op),
     };
 
     std::vector<uint64_t> hash(3);

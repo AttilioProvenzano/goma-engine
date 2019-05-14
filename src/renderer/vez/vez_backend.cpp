@@ -231,13 +231,9 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
     }
 
     VezImageCreateInfo image_info{};
-    image_info.flags =
-        texture_desc.cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     image_info.extent = {texture_desc.width, texture_desc.height, 1};
     image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.arrayLayers = texture_desc.cubemap
-                                 ? texture_desc.array_layers * 6
-                                 : texture_desc.array_layers;
+    image_info.arrayLayers = texture_desc.array_layers;
     image_info.mipLevels = mip_levels;
     image_info.format = format;
     image_info.samples =
@@ -251,7 +247,20 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
         image_info.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     }
 
-    OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info, initial_contents));
+    OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
+
+    if (initial_contents) {
+        OUTCOME_TRY(FillImage(vulkan_image.image,
+                              {texture_desc.width, texture_desc.height},
+                              {initial_contents}));
+    }
+
+    if (mip_levels > 1) {
+        OUTCOME_TRY(GenerateMipmaps(vulkan_image.image,
+                                    texture_desc.array_layers,
+                                    {texture_desc.width, texture_desc.height}));
+    }
+
     OUTCOME_TRY(sampler, GetSampler(texture_desc.sampler));
     vulkan_image.sampler = sampler;
 
@@ -260,30 +269,66 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
     return ret;
 }
 
-result<std::shared_ptr<Image>> VezBackend::CreateTexture(
+result<std::shared_ptr<Image>> VezBackend::CreateCubemap(
     const char* name, const TextureDesc& texture_desc,
-    const std::vector<void*>& initial_contents) {
-    OUTCOME_TRY(image, CreateTexture(name, texture_desc));
-
-    uint32_t layer = 0;
-    for (auto& layer_contents : initial_contents) {
-        VezImageSubresourceLayers layers{};
-        layers.baseArrayLayer = layer++;
-        layers.layerCount = 1;
-        layers.mipLevel = 0;
-
-        VezImageSubDataInfo sub_data_info{};
-        sub_data_info.imageExtent = {texture_desc.width, texture_desc.height,
-                                     1};
-        sub_data_info.imageOffset = {0, 0, 0};
-        sub_data_info.imageSubresource = layers;
-
-        // TODO support layered + mipmapped
-        vezImageSubData(context_.device, image->vez.image, &sub_data_info,
-                        layer_contents);
+    const CubemapContents& initial_contents) {
+    auto hash = GetTextureHash(name);
+    auto result = context_.texture_cache.find(hash);
+    if (result != context_.texture_cache.end()) {
+        vezDestroyImageView(context_.device, result->second->vez.image_view);
+        vezDestroyImage(context_.device, result->second->vez.image);
     }
 
-    return image;
+    VkFormat format = GetVkFormat(texture_desc.format);
+
+    uint32_t mip_levels = 1;
+    if (texture_desc.mipmapping) {
+        uint32_t min_dim = std::min(texture_desc.width, texture_desc.height);
+        mip_levels = static_cast<uint32_t>(floor(log2(min_dim) + 1));
+        mip_levels = std::max(1U, mip_levels);
+    }
+
+    VezImageCreateInfo image_info{};
+    image_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    image_info.extent = {texture_desc.width, texture_desc.height, 1};
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.arrayLayers = texture_desc.array_layers * 6;
+    image_info.mipLevels = mip_levels;
+    image_info.format = format;
+    image_info.samples =
+        static_cast<VkSampleCountFlagBits>(texture_desc.samples);
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage =
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+    if (mip_levels > 1) {
+        // We need TRANSFER_SRC to generate mipmaps
+        image_info.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    }
+
+    OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
+
+    if (initial_contents) {
+        OUTCOME_TRY(FillImage(vulkan_image.image,
+                              {texture_desc.width, texture_desc.height},
+                              {initial_contents.right, initial_contents.left,
+                               initial_contents.up, initial_contents.down,
+                               initial_contents.front, initial_contents.back}));
+    }
+
+    if (mip_levels > 1) {
+        OUTCOME_TRY(GenerateMipmaps(vulkan_image.image,
+                                    texture_desc.array_layers * 6,
+                                    {texture_desc.width, texture_desc.height}));
+    }
+
+    OUTCOME_TRY(sampler, GetSampler(texture_desc.sampler));
+    vulkan_image.sampler = sampler;
+
+    auto ret = std::make_shared<Image>(vulkan_image);
+    context_.texture_cache[hash] = ret;
+
+    return ret;
 }
 
 result<std::shared_ptr<Image>> VezBackend::GetTexture(const char* name) {
@@ -1695,8 +1740,7 @@ result<VkSampler> VezBackend::GetSampler(const SamplerDesc& sampler_desc) {
 }
 
 result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
-                                            VezImageCreateInfo image_info,
-                                            void* initial_contents) {
+                                            VezImageCreateInfo image_info) {
     assert(context_.device &&
            "Context must be initialized before creating an image");
     VkDevice device = context_.device;
@@ -1724,45 +1768,58 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
     VkImageView image_view;
     VK_CHECK(vezCreateImageView(device, &image_view_info, &image_view));
 
-    if (initial_contents) {
+    VulkanImage vulkan_image{image, image_view};
+    return vulkan_image;
+}
+
+result<void> VezBackend::FillImage(VkImage image, VkExtent2D extent,
+                                   std::vector<void*> initial_contents) {
+    uint32_t i = 0;
+    for (auto& data : initial_contents) {
         VezImageSubresourceLayers layers{};
-        layers.baseArrayLayer = 0;
-        layers.layerCount = image_info.arrayLayers;
+        layers.baseArrayLayer = i++;
+        layers.layerCount = 1;
         layers.mipLevel = 0;
 
         VezImageSubDataInfo sub_data_info{};
-        sub_data_info.imageExtent = image_info.extent;
+        sub_data_info.imageExtent = {extent.width, extent.height, 1};
         sub_data_info.imageOffset = {0, 0, 0};
         sub_data_info.imageSubresource = layers;
 
-        vezImageSubData(device, image, &sub_data_info, initial_contents);
-
-        if (image_info.mipLevels > 1) {
-            GetSetupCommandBuffer();
-
-            int32_t last_w = static_cast<int32_t>(image_info.extent.width);
-            int32_t last_h = static_cast<int32_t>(image_info.extent.height);
-
-            for (uint32_t i = 1; i < image_info.mipLevels; i++) {
-                int32_t w = std::max(1, last_w / 2);
-                int32_t h = std::max(1, last_h / 2);
-
-                VezImageBlit blit{};
-                blit.srcSubresource = {i - 1, 0, 1};
-                blit.srcOffsets[1] = {last_w, last_h, 1};
-                blit.dstSubresource = {i, 0, 1};
-                blit.dstOffsets[1] = {w, h, 1};
-
-                vezCmdBlitImage(image, image, 1, &blit, VK_FILTER_LINEAR);
-
-                last_w = w;
-                last_h = h;
-            }
-        }
+        vezImageSubData(context_.device, image, &sub_data_info, data);
     }
 
-    VulkanImage vulkan_image{image, image_view};
-    return vulkan_image;
+    return outcome::success();
+}
+
+result<void> VezBackend::GenerateMipmaps(VkImage image, uint32_t layer_count,
+                                         VkExtent2D extent) {
+    GetSetupCommandBuffer();
+
+    uint32_t min_dim = std::min(extent.width, extent.height);
+    auto mip_levels = static_cast<uint32_t>(floor(log2(min_dim) + 1));
+    mip_levels = std::max(1U, mip_levels);
+
+    int32_t last_w = static_cast<int32_t>(extent.width);
+    int32_t last_h = static_cast<int32_t>(extent.height);
+
+    for (uint32_t i = 1; i < mip_levels; i++) {
+        int32_t w = std::max(1, last_w / 2);
+        int32_t h = std::max(1, last_h / 2);
+
+        VezImageBlit blit{};
+        blit.srcSubresource = {i - 1, 0, layer_count};
+        blit.srcOffsets[1] = {last_w, last_h, 1};
+        blit.dstSubresource = {i, 0, layer_count};
+        blit.dstOffsets[1] = {w, h, 1};
+
+        vezCmdBlitImage(image, image, 1, &blit, VK_FILTER_LINEAR);
+
+        last_w = w;
+        last_h = h;
+    }
+
+    return outcome::success();
 }
 
 result<void> VezBackend::GetSetupCommandBuffer() {

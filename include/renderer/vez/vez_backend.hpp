@@ -27,9 +27,9 @@ class VezBackend : public Backend {
     virtual result<std::shared_ptr<Image>> CreateTexture(
         const char* name, const TextureDesc& texture_desc,
         void* initial_contents = nullptr) override;
-    virtual result<std::shared_ptr<Image>> CreateTexture(
+    virtual result<std::shared_ptr<Image>> CreateCubemap(
         const char* name, const TextureDesc& texture_desc,
-        const std::vector<void*>& initial_contents) override;
+        const CubemapContents& initial_contents) override;
     virtual result<std::shared_ptr<Image>> GetTexture(
         const char* name) override;
     virtual result<std::shared_ptr<Image>> GetRenderTarget(
@@ -149,8 +149,11 @@ class VezBackend : public Backend {
     bool rp_in_progress_{false};
 
     result<VulkanImage> CreateImage(VezContext::ImageHash hash,
-                                    VezImageCreateInfo image_info,
-                                    void* initial_contents = nullptr);
+                                    VezImageCreateInfo image_info);
+    result<void> FillImage(VkImage image, VkExtent2D extent,
+                           std::vector<void*> initial_contents);
+    result<void> GenerateMipmaps(VkImage image, uint32_t layer_count,
+                                 VkExtent2D extent);
     result<void> GetSetupCommandBuffer();
     result<void> GetActiveCommandBuffer(uint32_t thread = 0);
     VkFormat GetVkFormat(Format format);

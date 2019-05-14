@@ -133,11 +133,23 @@ struct TextureDesc {
     Format format{Format::UNormRGBA8};
 
     bool mipmapping{true};
-    bool cubemap{false};
     uint32_t array_layers{1};
     uint32_t samples{1};
 
     SamplerDesc sampler{};
+};
+
+struct CubemapContents {
+    void* right{nullptr};
+    void* left{nullptr};
+    void* up{nullptr};
+    void* down{nullptr};
+    void* front{nullptr};
+    void* back{nullptr};
+
+    operator bool() const {
+        return right && left && up && down && front && back;
+    }
 };
 
 enum class ExtentType { Absolute, RelativeToSwapchain };

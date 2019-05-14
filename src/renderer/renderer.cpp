@@ -275,10 +275,11 @@ result<void> Renderer::CreateSkybox() {
 
     TextureDesc tex_desc{static_cast<uint32_t>(width),
                          static_cast<uint32_t>(height)};
-    tex_desc.mipmapping = false;
-    tex_desc.cubemap = true;
+    tex_desc.mipmapping = true;
 
-    backend_->CreateTexture("goma_skybox", tex_desc, stbi_images);
+    backend_->CreateCubemap("goma_skybox", tex_desc,
+                            {stbi_images[0], stbi_images[1], stbi_images[2],
+                             stbi_images[3], stbi_images[4], stbi_images[5]});
 
     for (auto& stbi_image : stbi_images) {
         stbi_image_free(stbi_image);

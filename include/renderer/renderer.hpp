@@ -28,6 +28,7 @@ class Renderer {
     std::unique_ptr<glm::mat4> vp_hold{};
     uint32_t downscale_index_{0};
     uint32_t upscale_index_{0};
+    uint32_t skybox_mip_count{0};
 
     struct RenderSequenceElement {
         AttachmentIndex<Mesh> mesh;

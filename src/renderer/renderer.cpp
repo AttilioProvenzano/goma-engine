@@ -309,13 +309,22 @@ result<void> Renderer::CreateSkybox() {
                          static_cast<uint32_t>(height)};
     tex_desc.mipmapping = true;
 
-    backend_->CreateCubemap("goma_skybox", tex_desc,
-                            {stbi_images[0], stbi_images[1], stbi_images[2],
-                             stbi_images[3], stbi_images[4], stbi_images[5]});
+    auto res = backend_->CreateCubemap(
+        "goma_skybox", tex_desc,
+        {stbi_images[0], stbi_images[1], stbi_images[2], stbi_images[3],
+         stbi_images[4], stbi_images[5]});
 
     for (auto& stbi_image : stbi_images) {
         stbi_image_free(stbi_image);
     }
+
+    if (!res) {
+        return res.as_failure();
+    }
+
+    uint32_t min_dim = std::min(width, height);
+    auto mip_levels = static_cast<uint32_t>(floor(log2(min_dim) + 1));
+    skybox_mip_count = std::max(1U, mip_levels);
 
     return outcome::success();
 }

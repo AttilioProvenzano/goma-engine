@@ -58,7 +58,8 @@ layout(set = 0, binding = 10) uniform sampler2D lightTex;
 #endif
 
 #ifdef HAS_REFLECTION_MAP
-layout(set = 0, binding = 11) uniform sampler2D reflectionTex;
+layout(set = 0, binding = 11) uniform samplerCube reflectionTex;
+layout(set = 0, binding = 16) uniform sampler2D brdfLUT;
 #endif
 
 layout(set = 0, binding = 14) uniform sampler2DShadow shadowTex;
@@ -91,6 +92,7 @@ layout(set = 0, binding = 13, std140) uniform FragUBO {
 	vec4 egmr; // x: exposure / y: gamma / z: metallic / w: roughness
 	vec4 baseColor;
 	vec4 cameraAndCutoff; // xyz: camera / w: alpha cutoff
+	vec2 mipIBL; // x: reflection mipCount / y: IBL strength
 } ubo;
 
 struct Light
@@ -408,6 +410,25 @@ vec3 applySpotLight(Light light, MaterialInfo materialInfo, vec3 normal, vec3 vi
         * light.colorAndIntensity.rgb * shade;
 }
 
+#ifdef HAS_REFLECTION_MAP
+vec3 getIBLContribution(MaterialInfo materialInfo, vec3 n, vec3 v)
+{
+    float NdotV = clamp(dot(n, v), 0.0, 1.0);
+    float mipCount = ubo.mipIBL.x;
+    float lod = clamp(materialInfo.perceptualRoughness * mipCount, 0.0, mipCount);
+    vec3 reflection = normalize(reflect(-v, n));
+
+    vec2 brdfSamplePoint = clamp(vec2(NdotV, materialInfo.perceptualRoughness), vec2(0.0, 0.0), vec2(1.0, 1.0));
+    // retrieve a scale and bias to F0. See [1], Figure 3
+    vec2 brdf = texture(brdfLUT, brdfSamplePoint).rg;
+    vec4 specularSample = texture(reflectionTex, reflection, lod);
+
+    vec3 specularLight = SRGBtoLINEAR(specularSample).rgb;
+    vec3 specular = specularLight * (materialInfo.specularColor * brdf.x + brdf.y);
+    return specular;
+}
+#endif
+
 void main()
 {
     // Metallic and Roughness material properties are packed together
@@ -530,6 +551,10 @@ void main()
 #ifdef HAS_EMISSIVE_MAP
     emissive = SRGBtoLINEAR(texture(emissiveTex, inUV0)).rgb;
     color += emissive;
+#endif
+
+#ifdef HAS_REFLECTION_MAP
+    color += ubo.mipIBL.y * getIBLContribution(materialInfo, normal, view);
 #endif
 
 #ifndef DEBUG_OUTPUT // no debug

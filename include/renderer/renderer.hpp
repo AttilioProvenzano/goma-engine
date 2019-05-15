@@ -17,6 +17,7 @@ class Renderer {
 
     result<void> CreateSkybox();
     result<void> CreateSphere();
+    result<void> CreateBRDFLut();
 
   private:
     Engine& engine_;

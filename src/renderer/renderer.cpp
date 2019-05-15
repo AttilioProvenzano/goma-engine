@@ -80,6 +80,8 @@ Renderer::Renderer(Engine& engine)
     };
 
     backend_->SetRenderPlan(std::move(render_plan));
+
+    CreateBRDFLut();
 }
 
 result<void> Renderer::Render() {
@@ -239,6 +241,36 @@ result<void> Renderer::Render() {
             },
         },
         "postprocessing");
+
+    return outcome::success();
+}
+
+result<void> Renderer::CreateBRDFLut() {
+    std::string path{GOMA_ASSETS_DIR "textures/brdf_lut.png"};
+
+    int width = 0;
+    int height = 0;
+    int n;
+    auto stbi_image = stbi_load(path.c_str(), &width, &height, &n, 4);
+
+    if (!stbi_image) {
+        spdlog::warn("Decompressing \"{}\" failed with error: {}", path,
+                     stbi_failure_reason());
+        stbi_image_free(stbi_image);
+        return Error::DecompressionFailed;
+    }
+
+    TextureDesc tex_desc{static_cast<uint32_t>(width),
+                         static_cast<uint32_t>(height)};
+    tex_desc.mipmapping = true;
+
+    auto sampler = SamplerDesc{};
+    sampler.addressing_mode = TextureWrappingMode::MirroredRepeat;
+    tex_desc.sampler = sampler;
+
+    backend_->CreateTexture("brdf_lut", tex_desc, stbi_image);
+
+    stbi_image_free(stbi_image);
 
     return outcome::success();
 }

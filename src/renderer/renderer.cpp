@@ -1414,7 +1414,7 @@ const char* Renderer::GetFragmentShaderPreamble(const Mesh& mesh,
         check_type(TextureType::Opacity),
         check_type(TextureType::Displacement),
         check_type(TextureType::LightMap),
-        check_type(TextureType::Reflection),
+        backend_->GetTexture("goma_skybox").has_value(),
         material.alpha_cutoff < 1.0f,
     });
 }
@@ -1461,6 +1461,13 @@ result<void> Renderer::BindMaterialTextures(const Material& material) {
         TextureType::LightMap,          TextureType::Reflection};
 
     for (const auto& texture_type : texture_types) {
+        if (texture_type == TextureType::Reflection) {
+            auto skybox_tex_res = backend_->GetTexture("goma_skybox");
+            if (skybox_tex_res) {
+                backend_->BindTexture(skybox_tex_res.value()->vez, binding_id);
+            }
+        }
+
         auto binding = material.texture_bindings.find(texture_type);
 
         if (binding != material.texture_bindings.end() &&

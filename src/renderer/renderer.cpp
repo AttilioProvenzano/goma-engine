@@ -895,8 +895,14 @@ result<void> Renderer::ForwardPass(FrameIndex frame_id, Scene& scene,
                 spdlog::error("Couldn't get the shadow map.");
                 continue;
             }
-
             backend_->BindTexture(*shadow_depth_res.value(), 14);
+
+            auto brdf_res = backend_->GetTexture("brdf_lut");
+            if (!shadow_depth_res) {
+                spdlog::error("Couldn't get the BRDF LUT.");
+                continue;
+            }
+            backend_->BindTexture(*brdf_res.value(), 16);
 
             auto frag_ubo_res = backend_->GetUniformBuffer(BufferType::PerNode,
                                                            node_id, "frag_ubo");
@@ -915,6 +921,8 @@ result<void> Renderer::ForwardPass(FrameIndex frame_id, Scene& scene,
                 glm::vec4 base_color;
                 glm::vec3 camera;
                 float alpha_cutoff;
+                float reflection_mip_count;
+                float ibl_strength;
             };
             FragUBO frag_ubo_data{4.5f,
                                   2.2f,
@@ -922,7 +930,9 @@ result<void> Renderer::ForwardPass(FrameIndex frame_id, Scene& scene,
                                   material.roughness_factor,
                                   {material.diffuse_color, 1.0f},
                                   camera_ws_pos,
-                                  material.alpha_cutoff};
+                                  material.alpha_cutoff,
+                                  static_cast<float>(skybox_mip_count),
+                                  0.4f};
 
             backend_->UpdateBuffer(*frag_ubo, frame_id * 256,
                                    sizeof(frag_ubo_data), &frag_ubo_data);

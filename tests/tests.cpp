@@ -95,7 +95,7 @@ TEST(SceneTest, CanCreateAttachments) {
     ASSERT_TRUE(texture_result);
 
     auto texture = texture_result.value();
-    auto attached_nodes = s.GetAttachedNodes<Texture>(texture).value().get();
+    auto& attached_nodes = s.GetAttachedNodes<Texture>(texture).value().get();
     ASSERT_EQ(attached_nodes, std::set<NodeIndex>({node}));
 
     s.Attach<Texture>(texture, other_node);
@@ -163,7 +163,7 @@ TEST(InfrastructureTest, CanCreateCache) {
 TEST(AssimpLoaderTest, CanLoadAModel) {
     AssimpLoader loader;
     auto result =
-        loader.ReadSceneFromFile("../../../assets/models/Duck/glTF/Duck.gltf");
+        loader.ReadSceneFromFile(GOMA_ASSETS_DIR "models/Duck/glTF/Duck.gltf");
     ASSERT_TRUE(result) << result.error().message();
 
     // Extract the unique_ptr from the result wrapper
@@ -194,6 +194,12 @@ class VezBackendTest : public ::testing::Test {
 
     void SetUp() override {
         auto init_context_result = vez.InitContext();
+
+        if (!init_context_result &&
+            init_context_result.error() == Error::VulkanInitializationFailed) {
+            GTEST_SKIP();
+        }
+
         ASSERT_TRUE(init_context_result)
             << init_context_result.error().message();
     }
@@ -304,6 +310,12 @@ void main() {
                                    *create_uv_buffer_result.value()});
             vez.BindIndexBuffer(*create_index_buffer_result.value());
             vez.BindTextures({*create_texture_result.value()});
+
+            auto w = platform.GetWidth();
+            auto h = platform.GetHeight();
+            vez.SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+            vez.SetScissor({{w, h}});
+
             vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
             return outcome::success();
         }},
@@ -321,7 +333,7 @@ TEST_F(VezBackendTest, RenderModel) {
 
     AssimpLoader loader;
     auto result =
-        loader.ReadSceneFromFile("../../../assets/models/Duck/glTF/Duck.gltf");
+        loader.ReadSceneFromFile(GOMA_ASSETS_DIR "models/Duck/glTF/Duck.gltf");
     ASSERT_TRUE(result) << result.error().message();
 
     // Extract the unique_ptr from the result wrapper
@@ -466,7 +478,7 @@ void main() {
     auto camera = scene->GetAttachment<Camera>({0}).value().get();
 
     // Let's draw a cone with the fov angle from the camera to the bounding box
-    auto fovy = camera.h_fov * 600 / 800;
+    auto fovy = camera.h_fov * platform.GetHeight() / platform.GetWidth();
     float dist = (transformed_bbox.max.x - transformed_bbox.min.x) /
                  (2 * tan(glm::radians(camera.h_fov)));
     dist = std::max(dist, (transformed_bbox.max.y - transformed_bbox.min.y) /
@@ -533,6 +545,12 @@ void main() {
                 raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
                 vezCmdSetRasterizationState(&raster_state);
 
+                auto w = platform.GetWidth();
+                auto h = platform.GetHeight();
+                vez.SetViewport(
+                    {{static_cast<float>(w), static_cast<float>(h)}});
+                vez.SetScissor({{w, h}});
+
                 vez.DrawIndexed(static_cast<uint32_t>(mesh.indices.size()));
                 return outcome::success();
             }},
@@ -540,22 +558,34 @@ void main() {
     }
 }
 
-TEST(RendererTest, RenderDuck) {
-    Engine e;
-    e.LoadScene(GOMA_ASSETS_DIR "models/Duck/glTF/Duck.gltf");
-    auto res = e.renderer().Render();
+class RendererTest : public ::testing::Test {
+  protected:
+    std::unique_ptr<Engine> e;
+
+    void SetUp() override {
+        try {
+            e = std::make_unique<Engine>();
+        } catch (std::runtime_error& ex) {
+            spdlog::error(ex.what());
+            GTEST_SKIP();
+        }
+    }
+};
+
+TEST_F(RendererTest, RenderDuck) {
+    e->LoadScene(GOMA_ASSETS_DIR "models/Duck/glTF/Duck.gltf");
+    auto res = e->renderer().Render();
 
     ASSERT_TRUE(res) << res.error().message();
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-TEST(RendererTest, RenderLantern) {
-    Engine e;
-    e.LoadScene(GOMA_ASSETS_DIR "models/Lantern/glTF/Lantern.gltf");
+TEST_F(RendererTest, RenderLantern) {
+    e->LoadScene(GOMA_ASSETS_DIR "models/Lantern/glTF/Lantern.gltf");
 
     for (size_t i = 0; i < 300; i++) {
-        auto res = e.renderer().Render();
+        auto res = e->renderer().Render();
         ASSERT_TRUE(res) << res.error().message();
         std::this_thread::sleep_for(std::chrono::milliseconds(8));
     }
@@ -563,51 +593,87 @@ TEST(RendererTest, RenderLantern) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-TEST(RendererTest, RenderSponza) {
-    Engine e;
-    e.LoadScene(GOMA_ASSETS_DIR "models/Sponza/glTF/Sponza.gltf");
+TEST_F(RendererTest, RenderSponza) {
+    e->LoadScene(GOMA_ASSETS_DIR "models/Sponza/glTF/Sponza.gltf");
 
     for (size_t i = 0; i < 300; i++) {
-        auto res = e.renderer().Render();
+        auto res = e->renderer().Render();
         ASSERT_TRUE(res) << res.error().message();
     }
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-TEST(EngineTest, RenderLantern) {
-    Engine e;
-    e.LoadScene(GOMA_ASSETS_DIR "models/Lantern/glTF/Lantern.gltf");
+class EngineTest : public ::testing::Test {
+  protected:
+    std::unique_ptr<Engine> e;
 
-    auto res = e.MainLoop([&]() {
+    void SetUp() override {
+        try {
+            e = std::make_unique<Engine>();
+        } catch (std::runtime_error& ex) {
+            spdlog::error(ex.what());
+            GTEST_SKIP();
+        }
+    }
+};
+
+TEST_F(EngineTest, RenderLantern) {
+    e->LoadScene(GOMA_ASSETS_DIR "models/Lantern/glTF/Lantern.gltf");
+
+    auto res = e->MainLoop([&]() {
         // Stop after 300 frames
-        return e.frame_count() > 300;
+        return e->frame_count() > 300;
     });
     ASSERT_TRUE(res) << res.error().message();
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-TEST(EngineTest, RenderHelmet) {
-    Engine e;
-    e.LoadScene(GOMA_ASSETS_DIR "models/DamagedHelmet/glTF/DamagedHelmet.gltf");
+TEST_F(EngineTest, RenderHelmet) {
+    e->LoadScene(GOMA_ASSETS_DIR
+                 "models/DamagedHelmet/glTF/DamagedHelmet.gltf");
 
-    auto res = e.MainLoop([&]() {
+    auto res = e->MainLoop([&]() {
         // Stop after 300 frames
-        return e.frame_count() > 300;
+        return e->frame_count() > 300;
     });
     ASSERT_TRUE(res) << res.error().message();
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-TEST(EngineTest, RenderSponza) {
-    Engine e;
-    e.LoadScene(GOMA_ASSETS_DIR "models/Sponza/glTF/Sponza.gltf");
+TEST_F(EngineTest, RenderSponza) {
+    e->LoadScene(GOMA_ASSETS_DIR "models/Sponza/glTF/Sponza.gltf");
 
-    auto res = e.MainLoop([&]() {
+    auto res = e->MainLoop([&]() {
         // Stop after 300 frames
-        return e.frame_count() > 300;
+        return e->frame_count() > 300;
+    });
+    ASSERT_TRUE(res) << res.error().message();
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
+TEST_F(EngineTest, RenderMetalRoughSpheres) {
+    e->LoadScene(GOMA_ASSETS_DIR
+                 "models/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");
+
+    auto res = e->MainLoop([&]() {
+        // Stop after 300 frames
+        return e->frame_count() > 300;
+    });
+    ASSERT_TRUE(res) << res.error().message();
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
+TEST_F(EngineTest, RenderVirtualCity) {
+    e->LoadScene(GOMA_ASSETS_DIR "models/VirtualCity/glTF/VirtualCity.gltf");
+
+    auto res = e->MainLoop([&]() {
+        // Stop after 300 frames
+        return e->frame_count() > 300;
     });
     ASSERT_TRUE(res) << res.error().message();
 

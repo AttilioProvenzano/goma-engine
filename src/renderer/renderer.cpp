@@ -20,13 +20,13 @@ Renderer::Renderer(Engine& engine)
     if (auto result = backend_->InitContext()) {
         spdlog::info("Context initialized.");
     } else {
-        spdlog::error(result.error().message());
+        throw std::runtime_error(result.error().message());
     }
 
     if (auto result = backend_->InitSurface(engine_.platform())) {
         spdlog::info("Surface initialized.");
     } else {
-        spdlog::error(result.error().message());
+        throw std::runtime_error(result.error().message());
     }
 
     RenderPlan render_plan{};

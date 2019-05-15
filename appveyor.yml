@@ -25,6 +25,10 @@ build_script:
   - cmd: cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=%configuration% ..
   - cmd: cmake --build . --target ALL_BUILD --config %configuration%
 
+test_script:
+  - cmd: cd build/bin/Release
+  - cmd: ./goma-tests.exe
+
 cache:
   - C:\VulkanSDK\1.1.106.0 -> appveyor.yml
   - VulkanSDK.exe -> appveyor.yml

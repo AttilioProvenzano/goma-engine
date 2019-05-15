@@ -1245,7 +1245,7 @@ result<void> Renderer::PostprocessingPass(FrameIndex frame_id) {
     auto ubo_data = PostprocessingUbo{
         50.0f,   // focus_distance
         200.0f,  // focus_range
-        1.0f,    // dof_strength
+        0.5f,    // dof_strength
         {},      // padding
 
         camera.near_plane,  // near_plane

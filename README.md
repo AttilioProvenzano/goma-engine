@@ -8,7 +8,7 @@ This is a learning project, meant for experimenting with graphics techniques. It
 
 The current plan is to add more features along the way, but I won't be developing/supporting it continuously. If you like the project and would like to contribute, issues/PRs are very welcome! :)
 
-![Helmet screenshot](https://user-images.githubusercontent.com/14922868/57888679-b6106c80-782a-11e9-9a5a-a2c4b1327014.png)
+![Helmet screenshot](https://user-images.githubusercontent.com/14922868/57889040-a9d8df00-782b-11e9-8428-7735afe3627d.png)
 
 # Features
 

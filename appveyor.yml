@@ -26,8 +26,8 @@ build_script:
   - cmd: cmake --build . --target ALL_BUILD --config %configuration%
 
 test_script:
-  - cmd: cd build/bin/Release
-  - cmd: ./goma-tests.exe
+  - cmd: dir
+  - cmd: .\bin\%configuration%\goma-tests.exe
 
 cache:
   - C:\VulkanSDK\1.1.106.0 -> appveyor.yml

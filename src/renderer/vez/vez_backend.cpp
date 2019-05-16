@@ -678,8 +678,6 @@ result<void> VezBackend::RenderFrame(std::vector<PassFn> pass_fns,
             pass.match([](const GeneralPassEntry& gp) { return gp.blits; },
                        [](const RenderPassEntry& rp) { return rp.blits; });
 
-        auto w = context_.capabilities.currentExtent.width;
-        auto h = context_.capabilities.currentExtent.height;
         for (const auto& b : blits) {
             OUTCOME_TRY(src_image, GetRenderTarget(frame_id, b.src.rt.c_str()));
             OUTCOME_TRY(dst_image, GetRenderTarget(frame_id, b.dst.rt.c_str()));

@@ -32,3 +32,7 @@ test_script:
 cache:
   - C:\VulkanSDK\1.1.106.0 -> appveyor.yml
   - VulkanSDK.exe -> appveyor.yml
+
+artifacts:
+  - path: build\bin\%configuration%\goma-tests.exe
+    name: Tests

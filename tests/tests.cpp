@@ -195,13 +195,11 @@ class VezBackendTest : public ::testing::Test {
     void SetUp() override {
         auto init_context_result = vez.InitContext();
 
-        if (!init_context_result &&
-            init_context_result.error() == Error::VulkanInitializationFailed) {
+        if (!init_context_result) {
+            spdlog::error("V-EZ backend initialization failed: ",
+                          init_context_result.error().message());
             GTEST_SKIP();
         }
-
-        ASSERT_TRUE(init_context_result)
-            << init_context_result.error().message();
     }
 };
 

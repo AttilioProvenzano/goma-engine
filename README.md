@@ -6,7 +6,7 @@ Goma is a simple 3D C++ game engine with Vulkan support.
 
 This is a learning project, meant for experimenting with graphics techniques. It currently lacks most basic features of a full-fledged engine, so it should not be used for anything resembling production! :stuck_out_tongue:
 
-The current plan is to add more features along the way, but I won't be developing/supporting continuously. If you like the project and would like to contribute, issues/PRs are very welcome! :)
+The current plan is to add more features along the way, but I won't be developing/supporting it continuously. If you like the project and would like to contribute, issues/PRs are very welcome! :)
 
 ![Helmet screenshot](https://user-images.githubusercontent.com/14922868/56866395-e5288080-69d8-11e9-884a-3a3ce0f8e88a.jpg)
 
@@ -16,13 +16,14 @@ Goma currently supports Windows with a [V-EZ](https://github.com/GPUOpen-Librari
 
 These are some of the features that Goma supports:
 
- * PBR
+ * PBR with IBL for specular
  * Runtime shader compilation with variants
+ * Shader reloading at runtime
  * Mipmapping
  * MSAA
  * Mesh culling and sorting
- * Shadow maps (directional lights only)
- * Very basic DoF
+ * Shadow maps with PCF
+ * DoF
 
 # Build
 
@@ -51,8 +52,8 @@ Goma is licensed under the MIT license. Feel free to use it however you like! Co
 
 This project uses third party dependencies, each of which may have independent licensing:
 
-* [assimp](https://github.com/assimp/assimp): A library to import and export various 3d-model-formats.
-* [glfw](https://github.com/glfw/glfw): A multi-platform library for OpenGL, OpenGL ES, Vulkan, window and input.
+ * [assimp](https://github.com/assimp/assimp): A library to import and export various 3d-model-formats.
+ * [glfw](https://github.com/glfw/glfw): A multi-platform library for OpenGL, OpenGL ES, Vulkan, window and input.
  * [glm](https://github.com/g-truc/glm): A header only C++ mathematics library for graphics software.
  * [googletest](https://github.com/google/googletest): A testing framework.
  * [outcome](https://github.com/ned14/outcome): Provides lightweight `outcome<T>` and `result<T>`.
@@ -69,6 +70,7 @@ PBR shaders are taken from [glTF-Sample-Viewer](https://github.com/KhronosGroup/
 
 Other credits:
 
- * Yokohama cubemap texture from [Humus](http://www.humus.name/index.php?page=Textures) (CC-BY 3.0)
- * Cloudy cubemap texture by Spiney from [OpenGameArt](https://opengameart.org/content/cloudy-skyboxes) (CC-BY 3.0)
- * Sphere creation function from [Cute deferred shading](https://github.com/Erkaman/cute-deferred-shading)
+ * Yokohama cubemap texture from [Humus](http://www.humus.name/index.php?page=Textures) (CC-BY 3.0).
+ * Cloudy cubemap texture by Spiney from [OpenGameArt](https://opengameart.org/content/cloudy-skyboxes) (CC-BY 3.0).
+ * Sphere creation function from [Cute deferred shading](https://github.com/Erkaman/cute-deferred-shading).
+ * BRDF LUT texture from [glTF-Sample-Viewer](https://github.com/KhronosGroup/glTF-Sample-Viewer).

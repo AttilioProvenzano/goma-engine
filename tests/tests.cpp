@@ -16,10 +16,14 @@
 #include "infrastructure/cache.hpp"
 
 #include <chrono>
+#include <iostream>
 #include <thread>
 #include <set>
 
 using namespace goma;
+using std::cerr;
+using std::cout;
+using std::endl;
 
 #ifndef GOMA_ASSETS_DIR
 #define GOMA_ASSETS_DIR "assets/"
@@ -195,10 +199,9 @@ class VezBackendTest : public ::testing::Test {
     void SetUp() override {
         auto init_context_result = vez.InitContext();
 
-        EXPECT_TRUE(init_context_result)
-            << init_context_result.error().message();
-
         if (!init_context_result) {
+            cerr << "Skipping test: " << init_context_result.error().message()
+                 << endl;
             GTEST_SKIP();
         }
     }
@@ -565,7 +568,7 @@ class RendererTest : public ::testing::Test {
         try {
             e = std::make_unique<Engine>();
         } catch (std::runtime_error& ex) {
-            spdlog::error(ex.what());
+            cerr << ex.what() << endl;
             GTEST_SKIP();
         }
     }
@@ -611,7 +614,7 @@ class EngineTest : public ::testing::Test {
         try {
             e = std::make_unique<Engine>();
         } catch (std::runtime_error& ex) {
-            spdlog::error(ex.what());
+            cerr << ex.what() << endl;
             GTEST_SKIP();
         }
     }

@@ -144,16 +144,17 @@ result<void> Scene::ComputeTransformMatrix(NodeIndex id) {
     }
 
     while (!node_stack.empty()) {
-        auto id = node_stack.top();
+        auto cur_id = node_stack.top();
         node_stack.pop();
 
-        auto transform = GetTransform(id).value();
+        auto transform = GetTransform(cur_id).value();
         auto local_model = glm::translate(transform.position) *
                            glm::mat4_cast(transform.rotation) *
                            glm::scale(transform.scale);
 
         current_model = current_model * local_model;
-        nodes_[id.id].cached_model = std::make_unique<glm::mat4>(current_model);
+        nodes_[cur_id.id].cached_model =
+            std::make_unique<glm::mat4>(current_model);
     }
 
     return outcome::success();

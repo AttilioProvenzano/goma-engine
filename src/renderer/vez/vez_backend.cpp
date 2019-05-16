@@ -1424,24 +1424,23 @@ result<VkShaderModule> VezBackend::GetVertexShaderModule(
     if (result != context_.vertex_shader_cache.end()) {
         return result->second;
     } else {
-        std::vector<char> source;
+        std::string buffer;
         if (vert.source_type == ShaderSourceType::Filename) {
-            std::ifstream f;
+            std::ifstream t(vert.source,
+                            std::ios_base::in | std::ios_base::binary);
+            t.seekg(0, std::ios::end);
+            size_t size = t.tellg();
 
-            f.open(vert.source);
-            f.seekg(0, std::ios::end);
-            source.resize(f.tellg(), 0);
-            f.seekg(0, std::ios::beg);
-
-            f.read(source.data(), source.size());
-            source.push_back(0);  // null-terminated string
+            buffer.resize(size);
+            t.seekg(0);
+            t.read(&buffer[0], size);
         }
 
         VezShaderModuleCreateInfo shader_info{};
         shader_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
 
         if (vert.source_type == ShaderSourceType::Filename) {
-            shader_info.pGLSLSource = source.data();
+            shader_info.pGLSLSource = buffer.c_str();
         } else {
             shader_info.pGLSLSource = vert.source.c_str();
         }
@@ -1478,24 +1477,23 @@ result<VkShaderModule> VezBackend::GetFragmentShaderModule(
     if (result != context_.fragment_shader_cache.end()) {
         return result->second;
     } else {
-        std::vector<char> source;
+        std::string buffer;
         if (frag.source_type == ShaderSourceType::Filename) {
-            std::ifstream f;
+            std::ifstream t(frag.source,
+                            std::ios_base::in | std::ios_base::binary);
+            t.seekg(0, std::ios::end);
+            size_t size = t.tellg();
 
-            f.open(frag.source);
-            f.seekg(0, std::ios::end);
-            source.resize(f.tellg(), 0);
-            f.seekg(0, std::ios::beg);
-
-            f.read(source.data(), source.size());
-            source.push_back(0);  // null-terminated string
+            buffer.resize(size);
+            t.seekg(0);
+            t.read(&buffer[0], size);
         }
 
         VezShaderModuleCreateInfo shader_info{};
         shader_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 
         if (frag.source_type == ShaderSourceType::Filename) {
-            shader_info.pGLSLSource = source.data();
+            shader_info.pGLSLSource = buffer.c_str();
         } else {
             shader_info.pGLSLSource = frag.source.c_str();
         }

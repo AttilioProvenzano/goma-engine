@@ -2,7 +2,6 @@ cmake_minimum_required (VERSION 3.12)
 
 project (GomaEngine C CXX)
 set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W3")
 
 if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
@@ -65,6 +64,13 @@ add_library(goma-engine SHARED
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+
+# Disable all importers except OBJ, FBX and GLTF
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+foreach(name OBJ FBX GLTF)
+  set(ASSIMP_BUILD_${name}_IMPORTER ON CACHE BOOL "" FORCE)
+endforeach()
+
 add_subdirectory(third_party/assimp)
 foreach(target assimp assimp_cmd IrrXML uninstall UpdateAssimpLibsDebugSymbolsAndDLLs zlib zlibstatic)
   if(TARGET ${target})
@@ -135,6 +141,12 @@ target_include_directories(goma-engine PUBLIC
 	third_party/Vulkan-Headers/include)
 
 target_link_libraries(goma-engine PUBLIC assimp glfw VEZ volk)
+
+if(MSVC)
+	target_compile_options(goma-engine PRIVATE /W3 /WX)
+else()
+	target_compile_options(goma-engine -Wall -Wextra -pedantic)
+endif()
 
 target_compile_definitions(goma-engine PUBLIC
 	GOMA_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets/")

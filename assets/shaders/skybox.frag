@@ -7,5 +7,5 @@ layout(location = 0) in vec3 inUVW;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    outColor = texture(diffuseTex, inUVW);
+    outColor = textureLod(diffuseTex, inUVW, 3.5);
 }

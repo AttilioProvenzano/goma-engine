@@ -146,6 +146,31 @@ result<std::shared_ptr<Pipeline>> VezBackend::GetGraphicsPipeline(
     }
 }
 
+result<void> VezBackend::ClearShaderCache() {
+    auto& per_frame = context_.per_frame[context_.current_frame];
+
+    for (auto& shader : context_.vertex_shader_cache) {
+        vezDestroyShaderModule(context_.device, shader.second);
+    }
+    context_.vertex_shader_cache.clear();
+
+    for (auto& shader : context_.fragment_shader_cache) {
+        vezDestroyShaderModule(context_.device, shader.second);
+    }
+    context_.fragment_shader_cache.clear();
+
+    // Pipelines may still be in use, so we add them to a list of orphaned
+    // ones and delete them after the next fence for this frame index.
+    // This guarantees that they will not be in use anymore.
+    for (auto& pipeline : context_.pipeline_cache) {
+        per_frame.orphaned_pipelines.push_back(pipeline.second->vez);
+        pipeline.second->valid = false;
+    }
+    context_.pipeline_cache.clear();
+
+    return outcome::success();
+}
+
 result<std::shared_ptr<VertexInputFormat>> VezBackend::GetVertexInputFormat(
     const VertexInputFormatDesc& desc) {
     assert(context_.device && "Context must be initialized");
@@ -206,13 +231,9 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
     }
 
     VezImageCreateInfo image_info{};
-    image_info.flags =
-        texture_desc.cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     image_info.extent = {texture_desc.width, texture_desc.height, 1};
     image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.arrayLayers = texture_desc.cubemap
-                                 ? texture_desc.array_layers * 6
-                                 : texture_desc.array_layers;
+    image_info.arrayLayers = texture_desc.array_layers;
     image_info.mipLevels = mip_levels;
     image_info.format = format;
     image_info.samples =
@@ -226,7 +247,20 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
         image_info.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     }
 
-    OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info, initial_contents));
+    OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
+
+    if (initial_contents) {
+        OUTCOME_TRY(FillImage(vulkan_image.image,
+                              {texture_desc.width, texture_desc.height},
+                              {initial_contents}));
+    }
+
+    if (mip_levels > 1) {
+        OUTCOME_TRY(GenerateMipmaps(vulkan_image.image,
+                                    texture_desc.array_layers,
+                                    {texture_desc.width, texture_desc.height}));
+    }
+
     OUTCOME_TRY(sampler, GetSampler(texture_desc.sampler));
     vulkan_image.sampler = sampler;
 
@@ -235,30 +269,66 @@ result<std::shared_ptr<Image>> VezBackend::CreateTexture(
     return ret;
 }
 
-result<std::shared_ptr<Image>> VezBackend::CreateTexture(
+result<std::shared_ptr<Image>> VezBackend::CreateCubemap(
     const char* name, const TextureDesc& texture_desc,
-    const std::vector<void*>& initial_contents) {
-    OUTCOME_TRY(image, CreateTexture(name, texture_desc));
-
-    uint32_t layer = 0;
-    for (auto& layer_contents : initial_contents) {
-        VezImageSubresourceLayers layers{};
-        layers.baseArrayLayer = layer++;
-        layers.layerCount = 1;
-        layers.mipLevel = 0;
-
-        VezImageSubDataInfo sub_data_info{};
-        sub_data_info.imageExtent = {texture_desc.width, texture_desc.height,
-                                     1};
-        sub_data_info.imageOffset = {0, 0, 0};
-        sub_data_info.imageSubresource = layers;
-
-        // TODO support layered + mipmapped
-        vezImageSubData(context_.device, image->vez.image, &sub_data_info,
-                        layer_contents);
+    const CubemapContents& initial_contents) {
+    auto hash = GetTextureHash(name);
+    auto result = context_.texture_cache.find(hash);
+    if (result != context_.texture_cache.end()) {
+        vezDestroyImageView(context_.device, result->second->vez.image_view);
+        vezDestroyImage(context_.device, result->second->vez.image);
     }
 
-    return image;
+    VkFormat format = GetVkFormat(texture_desc.format);
+
+    uint32_t mip_levels = 1;
+    if (texture_desc.mipmapping) {
+        uint32_t min_dim = std::min(texture_desc.width, texture_desc.height);
+        mip_levels = static_cast<uint32_t>(floor(log2(min_dim) + 1));
+        mip_levels = std::max(1U, mip_levels);
+    }
+
+    VezImageCreateInfo image_info{};
+    image_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    image_info.extent = {texture_desc.width, texture_desc.height, 1};
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.arrayLayers = texture_desc.array_layers * 6;
+    image_info.mipLevels = mip_levels;
+    image_info.format = format;
+    image_info.samples =
+        static_cast<VkSampleCountFlagBits>(texture_desc.samples);
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage =
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+    if (mip_levels > 1) {
+        // We need TRANSFER_SRC to generate mipmaps
+        image_info.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    }
+
+    OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
+
+    if (initial_contents) {
+        OUTCOME_TRY(FillImage(vulkan_image.image,
+                              {texture_desc.width, texture_desc.height},
+                              {initial_contents.right, initial_contents.left,
+                               initial_contents.up, initial_contents.down,
+                               initial_contents.front, initial_contents.back}));
+    }
+
+    if (mip_levels > 1) {
+        OUTCOME_TRY(GenerateMipmaps(vulkan_image.image,
+                                    texture_desc.array_layers * 6,
+                                    {texture_desc.width, texture_desc.height}));
+    }
+
+    OUTCOME_TRY(sampler, GetSampler(texture_desc.sampler));
+    vulkan_image.sampler = sampler;
+
+    auto ret = std::make_shared<Image>(vulkan_image);
+    context_.texture_cache[hash] = ret;
+
+    return ret;
 }
 
 result<std::shared_ptr<Image>> VezBackend::GetTexture(const char* name) {
@@ -597,10 +667,10 @@ result<void> VezBackend::RenderFrame(std::vector<PassFn> pass_fns,
                                 c.rt_name);
                             return Error::NotFound;
                         }
-
-                        return outcome::success();
                     }
                 }
+
+                return outcome::success();
             });
 
         // Blits
@@ -608,8 +678,6 @@ result<void> VezBackend::RenderFrame(std::vector<PassFn> pass_fns,
             pass.match([](const GeneralPassEntry& gp) { return gp.blits; },
                        [](const RenderPassEntry& rp) { return rp.blits; });
 
-        auto w = context_.capabilities.currentExtent.width;
-        auto h = context_.capabilities.currentExtent.height;
         for (const auto& b : blits) {
             OUTCOME_TRY(src_image, GetRenderTarget(frame_id, b.src.rt.c_str()));
             OUTCOME_TRY(dst_image, GetRenderTarget(frame_id, b.dst.rt.c_str()));
@@ -640,6 +708,30 @@ result<void> VezBackend::RenderFrame(std::vector<PassFn> pass_fns,
 
     uint32_t buf_size = config_.buffering == Buffering::Triple ? 3 : 2;
     context_.current_frame = (context_.current_frame + 1) % buf_size;
+
+    // Ensure resources for the next frame are not in use
+    auto& per_frame = context_.per_frame[context_.current_frame];
+    if (per_frame.setup_fence != VK_NULL_HANDLE) {
+        VK_CHECK(vezWaitForFences(context_.device, 1, &per_frame.setup_fence,
+                                  VK_TRUE, ~0ULL));
+        vezDestroyFence(context_.device, per_frame.setup_fence);
+        per_frame.setup_fence = VK_NULL_HANDLE;
+    }
+    per_frame.setup_semaphore = VK_NULL_HANDLE;
+
+    if (per_frame.submission_fence != VK_NULL_HANDLE) {
+        VK_CHECK(vezWaitForFences(context_.device, 1,
+                                  &per_frame.submission_fence, VK_TRUE, ~0ULL));
+        vezDestroyFence(context_.device, per_frame.submission_fence);
+        per_frame.submission_fence = VK_NULL_HANDLE;
+    }
+
+    // Destroy any orphaned pipelines
+    std::for_each(
+        std::begin(per_frame.orphaned_pipelines),
+        std::end(per_frame.orphaned_pipelines),
+        [this](VezPipeline p) { vezDestroyPipeline(context_.device, p); });
+    per_frame.orphaned_pipelines.clear();
 
     return outcome::success();
 }
@@ -919,20 +1011,6 @@ result<size_t> VezBackend::StartFrame(uint32_t threads) {
     }
 
     auto& per_frame = context_.per_frame[context_.current_frame];
-    if (per_frame.setup_fence != VK_NULL_HANDLE) {
-        VK_CHECK(vezWaitForFences(context_.device, 1, &per_frame.setup_fence,
-                                  VK_TRUE, ~0ULL));
-        vezDestroyFence(context_.device, per_frame.setup_fence);
-        per_frame.setup_fence = VK_NULL_HANDLE;
-    }
-    per_frame.setup_semaphore = VK_NULL_HANDLE;
-
-    if (per_frame.submission_fence != VK_NULL_HANDLE) {
-        VK_CHECK(vezWaitForFences(context_.device, 1,
-                                  &per_frame.submission_fence, VK_TRUE, ~0ULL));
-        vezDestroyFence(context_.device, per_frame.submission_fence);
-        per_frame.submission_fence = VK_NULL_HANDLE;
-    }
 
     auto command_buffer_count = per_frame.command_buffers.size();
     if (threads > command_buffer_count) {
@@ -1344,24 +1422,23 @@ result<VkShaderModule> VezBackend::GetVertexShaderModule(
     if (result != context_.vertex_shader_cache.end()) {
         return result->second;
     } else {
-        std::vector<char> source;
+        std::string buffer;
         if (vert.source_type == ShaderSourceType::Filename) {
-            std::ifstream f;
+            std::ifstream t(vert.source,
+                            std::ios_base::in | std::ios_base::binary);
+            t.seekg(0, std::ios::end);
+            size_t size = t.tellg();
 
-            f.open(vert.source);
-            f.seekg(0, std::ios::end);
-            source.resize(f.tellg(), 0);
-            f.seekg(0, std::ios::beg);
-
-            f.read(source.data(), source.size());
-            source.push_back(0);  // null-terminated string
+            buffer.resize(size);
+            t.seekg(0);
+            t.read(&buffer[0], size);
         }
 
         VezShaderModuleCreateInfo shader_info{};
         shader_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
 
         if (vert.source_type == ShaderSourceType::Filename) {
-            shader_info.pGLSLSource = source.data();
+            shader_info.pGLSLSource = buffer.c_str();
         } else {
             shader_info.pGLSLSource = vert.source.c_str();
         }
@@ -1398,24 +1475,23 @@ result<VkShaderModule> VezBackend::GetFragmentShaderModule(
     if (result != context_.fragment_shader_cache.end()) {
         return result->second;
     } else {
-        std::vector<char> source;
+        std::string buffer;
         if (frag.source_type == ShaderSourceType::Filename) {
-            std::ifstream f;
+            std::ifstream t(frag.source,
+                            std::ios_base::in | std::ios_base::binary);
+            t.seekg(0, std::ios::end);
+            size_t size = t.tellg();
 
-            f.open(frag.source);
-            f.seekg(0, std::ios::end);
-            source.resize(f.tellg(), 0);
-            f.seekg(0, std::ios::beg);
-
-            f.read(source.data(), source.size());
-            source.push_back(0);  // null-terminated string
+            buffer.resize(size);
+            t.seekg(0);
+            t.read(&buffer[0], size);
         }
 
         VezShaderModuleCreateInfo shader_info{};
         shader_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 
         if (frag.source_type == ShaderSourceType::Filename) {
-            shader_info.pGLSLSource = source.data();
+            shader_info.pGLSLSource = buffer.c_str();
         } else {
             shader_info.pGLSLSource = frag.source.c_str();
         }
@@ -1521,7 +1597,7 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
-    OUTCOME_TRY(sampler, GetSampler({}));
+    OUTCOME_TRY(sampler, GetSampler(image_desc.sampler));
     vulkan_image.sampler = sampler;
 
     auto ret = std::make_shared<Image>(vulkan_image);
@@ -1554,7 +1630,7 @@ result<std::shared_ptr<Image>> VezBackend::CreateRenderTarget(
                        VK_IMAGE_USAGE_SAMPLED_BIT;
 
     OUTCOME_TRY(vulkan_image, CreateImage(hash, image_info));
-    OUTCOME_TRY(sampler, GetSampler({}));
+    OUTCOME_TRY(sampler, GetSampler(image_desc.sampler));
     vulkan_image.sampler = sampler;
 
     auto ret = std::make_shared<Image>(vulkan_image);
@@ -1647,6 +1723,10 @@ result<VkSampler> VezBackend::GetSampler(const SamplerDesc& sampler_desc) {
         sampler_info.mipmapMode = mipmap_mode;
         sampler_info.minFilter = filter;
         sampler_info.magFilter = filter;
+        sampler_info.compareEnable =
+            sampler_desc.compare_op != CompareOp::Never;
+        sampler_info.compareOp =
+            static_cast<VkCompareOp>(sampler_desc.compare_op);
 
         VkSampler sampler = VK_NULL_HANDLE;
         vezCreateSampler(context_.device, &sampler_info, &sampler);
@@ -1656,8 +1736,7 @@ result<VkSampler> VezBackend::GetSampler(const SamplerDesc& sampler_desc) {
 }
 
 result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
-                                            VezImageCreateInfo image_info,
-                                            void* initial_contents) {
+                                            VezImageCreateInfo image_info) {
     assert(context_.device &&
            "Context must be initialized before creating an image");
     VkDevice device = context_.device;
@@ -1685,45 +1764,58 @@ result<VulkanImage> VezBackend::CreateImage(VezContext::ImageHash hash,
     VkImageView image_view;
     VK_CHECK(vezCreateImageView(device, &image_view_info, &image_view));
 
-    if (initial_contents) {
+    VulkanImage vulkan_image{image, image_view};
+    return vulkan_image;
+}
+
+result<void> VezBackend::FillImage(VkImage image, VkExtent2D extent,
+                                   std::vector<void*> initial_contents) {
+    uint32_t i = 0;
+    for (auto& data : initial_contents) {
         VezImageSubresourceLayers layers{};
-        layers.baseArrayLayer = 0;
-        layers.layerCount = image_info.arrayLayers;
+        layers.baseArrayLayer = i++;
+        layers.layerCount = 1;
         layers.mipLevel = 0;
 
         VezImageSubDataInfo sub_data_info{};
-        sub_data_info.imageExtent = image_info.extent;
+        sub_data_info.imageExtent = {extent.width, extent.height, 1};
         sub_data_info.imageOffset = {0, 0, 0};
         sub_data_info.imageSubresource = layers;
 
-        vezImageSubData(device, image, &sub_data_info, initial_contents);
-
-        if (image_info.mipLevels > 1) {
-            GetSetupCommandBuffer();
-
-            int32_t last_w = static_cast<int32_t>(image_info.extent.width);
-            int32_t last_h = static_cast<int32_t>(image_info.extent.height);
-
-            for (uint32_t i = 1; i < image_info.mipLevels; i++) {
-                int32_t w = std::max(1, last_w / 2);
-                int32_t h = std::max(1, last_h / 2);
-
-                VezImageBlit blit{};
-                blit.srcSubresource = {i - 1, 0, 1};
-                blit.srcOffsets[1] = {last_w, last_h, 1};
-                blit.dstSubresource = {i, 0, 1};
-                blit.dstOffsets[1] = {w, h, 1};
-
-                vezCmdBlitImage(image, image, 1, &blit, VK_FILTER_LINEAR);
-
-                last_w = w;
-                last_h = h;
-            }
-        }
+        vezImageSubData(context_.device, image, &sub_data_info, data);
     }
 
-    VulkanImage vulkan_image{image, image_view};
-    return vulkan_image;
+    return outcome::success();
+}
+
+result<void> VezBackend::GenerateMipmaps(VkImage image, uint32_t layer_count,
+                                         VkExtent2D extent) {
+    GetSetupCommandBuffer();
+
+    uint32_t min_dim = std::min(extent.width, extent.height);
+    auto mip_levels = static_cast<uint32_t>(floor(log2(min_dim) + 1));
+    mip_levels = std::max(1U, mip_levels);
+
+    int32_t last_w = static_cast<int32_t>(extent.width);
+    int32_t last_h = static_cast<int32_t>(extent.height);
+
+    for (uint32_t i = 1; i < mip_levels; i++) {
+        int32_t w = std::max(1, last_w / 2);
+        int32_t h = std::max(1, last_h / 2);
+
+        VezImageBlit blit{};
+        blit.srcSubresource = {i - 1, 0, layer_count};
+        blit.srcOffsets[1] = {last_w, last_h, 1};
+        blit.dstSubresource = {i, 0, layer_count};
+        blit.dstOffsets[1] = {w, h, 1};
+
+        vezCmdBlitImage(image, image, 1, &blit, VK_FILTER_LINEAR);
+
+        last_w = w;
+        last_h = h;
+    }
+
+    return outcome::success();
 }
 
 result<void> VezBackend::GetSetupCommandBuffer() {
@@ -1814,6 +1906,7 @@ Extent VezBackend::GetAbsoluteExtent(Extent extent) {
         case ExtentType::Absolute:
             return extent;
         case ExtentType::RelativeToSwapchain:
+        default:
             auto w = context_.capabilities.currentExtent.width;
             auto h = context_.capabilities.currentExtent.height;
             return Extent{extent.width * w, extent.height * h,
@@ -1908,6 +2001,7 @@ VezContext::SamplerHash VezBackend::GetSamplerHash(
         FilterType filter_type : 4;
         FilterType mipmap_mode : 4;
         TextureWrappingMode addressing_mode : 4;
+        CompareOp compare_op : 3;
     };
 
     SamplerHashBitField bit_field{
@@ -1918,6 +2012,7 @@ VezContext::SamplerHash VezBackend::GetSamplerHash(
         static_cast<int>(sampler_desc.filter_type),
         static_cast<int>(sampler_desc.mipmap_mode),
         static_cast<int>(sampler_desc.addressing_mode),
+        static_cast<int>(sampler_desc.compare_op),
     };
 
     std::vector<uint64_t> hash(3);

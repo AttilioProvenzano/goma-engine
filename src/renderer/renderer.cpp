@@ -20,13 +20,13 @@ Renderer::Renderer(Engine& engine)
     if (auto result = backend_->InitContext()) {
         spdlog::info("Context initialized.");
     } else {
-        spdlog::error(result.error().message());
+        throw std::runtime_error(result.error().message());
     }
 
     if (auto result = backend_->InitSurface(engine_.platform())) {
         spdlog::info("Surface initialized.");
     } else {
-        spdlog::error(result.error().message());
+        throw std::runtime_error(result.error().message());
     }
 
     RenderPlan render_plan{};
@@ -40,19 +40,19 @@ Renderer::Renderer(Engine& engine)
         {"postprocessing", {}},
     };
 
+    SamplerDesc shadow_sampler;
+    shadow_sampler.compare_op = CompareOp::Less;
+
     render_plan.depth_images = {
         {"depth", {{}, 4, Format::DepthOnly}},
         {
             "shadow_depth",
-            {{2048.0f, 2048.0f, ExtentType::Absolute}, 1, Format::DepthOnly},
+            {{2048.0f, 2048.0f, ExtentType::Absolute},
+             1,
+             Format::DepthOnly,
+             shadow_sampler},
         },
     };
-
-    std::vector<BlitDesc> blits;
-    blits.push_back({{"resolved_image", {}}, {"blur_half", {0.5f, 0.5f}}});
-    blits.push_back(
-        {{"blur_half", {0.5f, 0.5f}}, {"blur_quarter", {0.25f, 0.25f}}});
-    blits.push_back({{"blur_quarter", {0.25f, 0.25f}}, {"blur_full", {}}});
 
     render_plan.passes = {
         GeneralPassEntry{"update_light_buffer"},
@@ -65,14 +65,23 @@ Renderer::Renderer(Engine& engine)
                                                 true,
                                                 {0.1f, 0.1f, 0.1f, 1.0f},
                                                 "resolved_image"}},
-                           DepthAttachmentDesc{"depth"}},
-            std::move(blits)},
+                           DepthAttachmentDesc{"depth"}}},
+        RenderPassEntry{"blur_down_half",
+                        RenderPassDesc{{ColorAttachmentDesc{"blur_half"}}}},
+        RenderPassEntry{"blur_down_quarter",
+                        RenderPassDesc{{ColorAttachmentDesc{"blur_quarter"}}}},
+        RenderPassEntry{"blur_up_half",
+                        RenderPassDesc{{ColorAttachmentDesc{"blur_half"}}}},
+        RenderPassEntry{"blur_up_full",
+                        RenderPassDesc{{ColorAttachmentDesc{"blur_full"}}}},
         RenderPassEntry{
             "postprocessing",
             RenderPassDesc{{ColorAttachmentDesc{"postprocessing"}}}},
     };
 
     backend_->SetRenderPlan(std::move(render_plan));
+
+    CreateBRDFLut();
 }
 
 result<void> Renderer::Render() {
@@ -80,6 +89,9 @@ result<void> Renderer::Render() {
         return Error::NoSceneLoaded;
     }
     Scene& scene = *engine_.scene();
+
+    downscale_index_ = 0;
+    upscale_index_ = 0;
 
     // Ensure that all meshes have their own buffers
     CreateMeshBuffers(scene);
@@ -157,10 +169,20 @@ result<void> Renderer::Render() {
 
     // Hold/release the current culling state
     const auto keypresses = engine_.input_system().GetFrameInput().keypresses;
+    const auto last_keypresses =
+        engine_.input_system().GetLastFrameInput().keypresses;
+
     if (keypresses.find(KeyInput::H) != keypresses.end()) {
         vp_hold = std::make_unique<glm::mat4>(vp);
     } else if (keypresses.find(KeyInput::R) != keypresses.end()) {
         vp_hold = {};
+    }
+
+    // Clear the shader cache (reload shaders)
+    if (keypresses.find(KeyInput::C) != keypresses.end() &&
+        last_keypresses.find(KeyInput::C) == last_keypresses.end()) {
+        spdlog::info("Reloading shaders!");
+        backend_->ClearShaderCache();
     }
 
     // Get main render sequence
@@ -202,11 +224,53 @@ result<void> Renderer::Render() {
                 return ForwardPass(frame_id, scene, visible_seq, ws_pos, vp,
                                    shadow_vp);
             },
+            [this](FrameIndex frame_id, const RenderPassDesc*) {
+                return DownscalePass(frame_id, "resolved_image", "blur_half");
+            },
+            [this](FrameIndex frame_id, const RenderPassDesc*) {
+                return DownscalePass(frame_id, "blur_half", "blur_quarter");
+            },
+            [this](FrameIndex frame_id, const RenderPassDesc*) {
+                return UpscalePass(frame_id, "blur_quarter", "blur_half");
+            },
+            [this](FrameIndex frame_id, const RenderPassDesc*) {
+                return UpscalePass(frame_id, "blur_half", "blur_full");
+            },
             [this, &scene](FrameIndex frame_id, const RenderPassDesc*) {
                 return PostprocessingPass(frame_id);
             },
         },
         "postprocessing");
+
+    return outcome::success();
+}
+
+result<void> Renderer::CreateBRDFLut() {
+    std::string path{GOMA_ASSETS_DIR "textures/brdf_lut.png"};
+
+    int width = 0;
+    int height = 0;
+    int n;
+    auto stbi_image = stbi_load(path.c_str(), &width, &height, &n, 4);
+
+    if (!stbi_image) {
+        spdlog::warn("Decompressing \"{}\" failed with error: {}", path,
+                     stbi_failure_reason());
+        stbi_image_free(stbi_image);
+        return Error::DecompressionFailed;
+    }
+
+    TextureDesc tex_desc{static_cast<uint32_t>(width),
+                         static_cast<uint32_t>(height)};
+    tex_desc.mipmapping = true;
+
+    auto sampler = SamplerDesc{};
+    sampler.addressing_mode = TextureWrappingMode::MirroredRepeat;
+    tex_desc.sampler = sampler;
+
+    backend_->CreateTexture("brdf_lut", tex_desc, stbi_image);
+
+    stbi_image_free(stbi_image);
 
     return outcome::success();
 }
@@ -243,14 +307,24 @@ result<void> Renderer::CreateSkybox() {
 
     TextureDesc tex_desc{static_cast<uint32_t>(width),
                          static_cast<uint32_t>(height)};
-    tex_desc.mipmapping = false;
-    tex_desc.cubemap = true;
+    tex_desc.mipmapping = true;
 
-    backend_->CreateTexture("goma_skybox", tex_desc, stbi_images);
+    auto res = backend_->CreateCubemap(
+        "goma_skybox", tex_desc,
+        {stbi_images[0], stbi_images[1], stbi_images[2], stbi_images[3],
+         stbi_images[4], stbi_images[5]});
 
     for (auto& stbi_image : stbi_images) {
         stbi_image_free(stbi_image);
     }
+
+    if (!res) {
+        return res.as_failure();
+    }
+
+    uint32_t min_dim = std::min(width, height);
+    auto mip_levels = static_cast<uint32_t>(floor(log2(min_dim) + 1));
+    skybox_mip_count = std::max(1U, mip_levels);
 
     return outcome::success();
 }
@@ -821,8 +895,14 @@ result<void> Renderer::ForwardPass(FrameIndex frame_id, Scene& scene,
                 spdlog::error("Couldn't get the shadow map.");
                 continue;
             }
-
             backend_->BindTexture(*shadow_depth_res.value(), 14);
+
+            auto brdf_res = backend_->GetTexture("brdf_lut");
+            if (!shadow_depth_res) {
+                spdlog::error("Couldn't get the BRDF LUT.");
+                continue;
+            }
+            backend_->BindTexture(*brdf_res.value(), 16);
 
             auto frag_ubo_res = backend_->GetUniformBuffer(BufferType::PerNode,
                                                            node_id, "frag_ubo");
@@ -841,10 +921,18 @@ result<void> Renderer::ForwardPass(FrameIndex frame_id, Scene& scene,
                 glm::vec4 base_color;
                 glm::vec3 camera;
                 float alpha_cutoff;
+                float reflection_mip_count;
+                float ibl_strength;
             };
-            FragUBO frag_ubo_data{
-                4.5f,          2.2f, 0.2f, 0.5f, {material.diffuse_color, 1.0f},
-                camera_ws_pos, 0.5f};
+            FragUBO frag_ubo_data{4.5f,
+                                  2.2f,
+                                  material.metallic_factor,
+                                  material.roughness_factor,
+                                  {material.diffuse_color, 1.0f},
+                                  camera_ws_pos,
+                                  material.alpha_cutoff,
+                                  static_cast<float>(skybox_mip_count),
+                                  0.4f};
 
             backend_->UpdateBuffer(*frag_ubo, frame_id * 256,
                                    sizeof(frag_ubo_data), &frag_ubo_data);
@@ -946,7 +1034,146 @@ result<void> Renderer::ForwardPass(FrameIndex frame_id, Scene& scene,
     return outcome::success();
 }
 
+result<void> Renderer::DownscalePass(FrameIndex frame_id,
+                                     const std::string& src,
+                                     const std::string& dst) {
+    auto src_image_res = backend_->GetRenderTarget(frame_id, src.c_str());
+    if (!src_image_res) {
+        spdlog::error("Couldn't get the source image.");
+    }
+
+    auto src_image = src_image_res.value();
+
+    auto src_desc_res = backend_->render_plan().color_images.find(src);
+    if (src_desc_res == backend_->render_plan().color_images.end()) {
+        spdlog::error("Couldn't get the source image from the render plan.");
+    }
+
+    auto dst_desc_res = backend_->render_plan().color_images.find(dst);
+    if (dst_desc_res == backend_->render_plan().color_images.end()) {
+        spdlog::error(
+            "Couldn't get the destination image from the render plan.");
+    }
+
+    auto extent = backend_->GetAbsoluteExtent(dst_desc_res->second.extent);
+    backend_->SetViewport({{extent.width, extent.height}});
+    backend_->SetScissor({{static_cast<uint32_t>(extent.width),
+                           static_cast<uint32_t>(extent.height)}});
+
+    backend_->BindDepthStencilState(DepthStencilState{});
+    backend_->BindRasterizationState(RasterizationState{});
+    backend_->BindMultisampleState(MultisampleState{});
+
+    auto no_input = backend_->GetVertexInputFormat({});
+    backend_->BindVertexInputFormat(*no_input.value());
+
+    auto pipeline_res = backend_->GetGraphicsPipeline(
+        {GOMA_ASSETS_DIR "shaders/fullscreen.vert", ShaderSourceType::Filename},
+        {GOMA_ASSETS_DIR "shaders/downscale.frag", ShaderSourceType::Filename});
+    if (!pipeline_res) {
+        spdlog::error("Couldn't get pipeline for downscaling!");
+    }
+
+    auto ubo_name = "downscale_" + std::to_string(downscale_index_++);
+    auto downscale_ubo_res = backend_->GetUniformBuffer(ubo_name.c_str());
+    if (!downscale_ubo_res) {
+        downscale_ubo_res =
+            backend_->CreateUniformBuffer(ubo_name.c_str(), 3 * 256, false);
+    }
+    auto downscale_ubo = downscale_ubo_res.value();
+
+    struct DownscaleUbo {
+        glm::vec2 half_pixel;
+    } ubo_data;
+
+    auto src_extent = backend_->GetAbsoluteExtent(src_desc_res->second.extent);
+    ubo_data.half_pixel = {1.0f / (2 * extent.width),
+                           1.0f / (2 * extent.height)};
+
+    backend_->UpdateBuffer(*downscale_ubo, frame_id * 256, sizeof(ubo_data),
+                           &ubo_data);
+    backend_->BindUniformBuffer(*downscale_ubo, frame_id * 256,
+                                sizeof(ubo_data), 1);
+
+    backend_->BindGraphicsPipeline(*pipeline_res.value());
+    backend_->BindTexture(src_image->vez, 0);
+    backend_->Draw(3);
+
+    return outcome::success();
+}
+
+result<void> Renderer::UpscalePass(FrameIndex frame_id, const std::string& src,
+                                   const std::string& dst) {
+    auto src_image_res = backend_->GetRenderTarget(frame_id, src.c_str());
+    if (!src_image_res) {
+        spdlog::error("Couldn't get the source image.");
+    }
+
+    auto src_image = src_image_res.value();
+
+    auto src_desc_res = backend_->render_plan().color_images.find(src);
+    if (src_desc_res == backend_->render_plan().color_images.end()) {
+        spdlog::error("Couldn't get the source image from the render plan.");
+    }
+
+    auto dst_desc_res = backend_->render_plan().color_images.find(dst);
+    if (dst_desc_res == backend_->render_plan().color_images.end()) {
+        spdlog::error(
+            "Couldn't get the destination image from the render plan.");
+    }
+
+    auto extent = backend_->GetAbsoluteExtent(dst_desc_res->second.extent);
+    backend_->SetViewport({{extent.width, extent.height}});
+    backend_->SetScissor({{static_cast<uint32_t>(extent.width),
+                           static_cast<uint32_t>(extent.height)}});
+
+    backend_->BindDepthStencilState(DepthStencilState{});
+    backend_->BindRasterizationState(RasterizationState{});
+    backend_->BindMultisampleState(MultisampleState{});
+
+    auto no_input = backend_->GetVertexInputFormat({});
+    backend_->BindVertexInputFormat(*no_input.value());
+
+    auto pipeline_res = backend_->GetGraphicsPipeline(
+        {GOMA_ASSETS_DIR "shaders/fullscreen.vert", ShaderSourceType::Filename},
+        {GOMA_ASSETS_DIR "shaders/upscale.frag", ShaderSourceType::Filename});
+    if (!pipeline_res) {
+        spdlog::error("Couldn't get pipeline for upscaling!");
+    }
+
+    auto ubo_name = "upscale_" + std::to_string(upscale_index_++);
+    auto upscale_ubo_res = backend_->GetUniformBuffer(ubo_name.c_str());
+    if (!upscale_ubo_res) {
+        upscale_ubo_res =
+            backend_->CreateUniformBuffer(ubo_name.c_str(), 3 * 256, false);
+    }
+    auto upscale_ubo = upscale_ubo_res.value();
+
+    struct UpscaleUbo {
+        glm::vec2 half_pixel;
+    } ubo_data;
+
+    auto src_extent = backend_->GetAbsoluteExtent(src_desc_res->second.extent);
+    ubo_data.half_pixel = {1.0f / (2 * extent.width),
+                           1.0f / (2 * extent.height)};
+
+    backend_->UpdateBuffer(*upscale_ubo, frame_id * 256, sizeof(ubo_data),
+                           &ubo_data);
+    backend_->BindUniformBuffer(*upscale_ubo, frame_id * 256, sizeof(ubo_data),
+                                1);
+    backend_->BindGraphicsPipeline(*pipeline_res.value());
+    backend_->BindTexture(src_image->vez, 0);
+    backend_->Draw(3);
+
+    return outcome::success();
+}
+
 result<void> Renderer::PostprocessingPass(FrameIndex frame_id) {
+    Scene* scene = engine_.scene();
+    if (!scene) {
+        return Error::NoSceneLoaded;
+    }
+
     auto resolved_image_res =
         backend_->GetRenderTarget(frame_id, "resolved_image");
     if (!resolved_image_res) {
@@ -993,6 +1220,41 @@ result<void> Renderer::PostprocessingPass(FrameIndex frame_id) {
     backend_->BindTexture(resolved_image->vez, 0);
     backend_->BindTexture(blur_full->vez, 1);
     backend_->BindTexture(depth->vez, 2);
+
+    constexpr auto ubo_name = "postprocessing";
+    auto ubo_res = backend_->GetUniformBuffer(ubo_name);
+    if (!ubo_res) {
+        ubo_res = backend_->CreateUniformBuffer(ubo_name, 3 * 256, false);
+    }
+    auto ubo = ubo_res.value();
+
+    struct PostprocessingUbo {
+        float focus_distance;
+        float focus_range;
+        float dof_strength;
+        float padding;
+
+        float near_plane;
+        float far_plane;
+    };
+
+    OUTCOME_TRY(camera_ref,
+                scene->GetAttachment<Camera>(engine_.main_camera()));
+    auto& camera = camera_ref.get();
+
+    auto ubo_data = PostprocessingUbo{
+        50.0f,   // focus_distance
+        200.0f,  // focus_range
+        0.5f,    // dof_strength
+        {},      // padding
+
+        camera.near_plane,  // near_plane
+        camera.far_plane,   // far_plane
+    };
+
+    backend_->UpdateBuffer(*ubo, frame_id * 256, sizeof(ubo_data), &ubo_data);
+    backend_->BindUniformBuffer(*ubo, frame_id * 256, sizeof(ubo_data), 3);
+
     backend_->Draw(3);
 
     return outcome::success();
@@ -1116,9 +1378,9 @@ const char* Renderer::GetFragmentShaderPreamble(
         if (desc.has_reflection_map) {
             preamble << "#define HAS_REFLECTION_MAP\n";
         }
-
-        // TODO figure out when alpha discard is not needed
-        preamble << "#define ALPHAMODE_MASK\n";
+        if (desc.alpha_mask) {
+            preamble << "#define ALPHAMODE_MASK\n";
+        }
 
         fs_preamble_map_[desc.int_repr] = preamble.str();
         return fs_preamble_map_[desc.int_repr].c_str();
@@ -1132,27 +1394,29 @@ const char* Renderer::GetFragmentShaderPreamble(const Mesh& mesh,
                material.texture_bindings.end();
     };
 
-    return GetFragmentShaderPreamble(
-        FragmentShaderPreambleDesc{!mesh.vertices.empty(),
-                                   !mesh.normals.empty(),
-                                   !mesh.tangents.empty(),
-                                   !mesh.bitangents.empty(),
-                                   !mesh.colors.empty(),
-                                   mesh.uv_sets.size() > 0,
-                                   mesh.uv_sets.size() > 1,
-                                   mesh.uvw_sets.size() > 0,
-                                   check_type(TextureType::Diffuse),
-                                   check_type(TextureType::Specular),
-                                   check_type(TextureType::Ambient),
-                                   check_type(TextureType::Emissive),
-                                   check_type(TextureType::MetallicRoughness),
-                                   check_type(TextureType::HeightMap),
-                                   check_type(TextureType::NormalMap),
-                                   check_type(TextureType::Shininess),
-                                   check_type(TextureType::Opacity),
-                                   check_type(TextureType::Displacement),
-                                   check_type(TextureType::LightMap),
-                                   check_type(TextureType::Reflection)});
+    return GetFragmentShaderPreamble(FragmentShaderPreambleDesc{
+        !mesh.vertices.empty(),
+        !mesh.normals.empty(),
+        !mesh.tangents.empty(),
+        !mesh.bitangents.empty(),
+        !mesh.colors.empty(),
+        mesh.uv_sets.size() > 0,
+        mesh.uv_sets.size() > 1,
+        mesh.uvw_sets.size() > 0,
+        check_type(TextureType::Diffuse),
+        check_type(TextureType::Specular),
+        check_type(TextureType::Ambient),
+        check_type(TextureType::Emissive),
+        check_type(TextureType::MetallicRoughness),
+        check_type(TextureType::HeightMap),
+        check_type(TextureType::NormalMap),
+        check_type(TextureType::Shininess),
+        check_type(TextureType::Opacity),
+        check_type(TextureType::Displacement),
+        check_type(TextureType::LightMap),
+        backend_->GetTexture("goma_skybox").has_value(),
+        material.alpha_cutoff < 1.0f,
+    });
 }
 
 result<void> Renderer::BindMeshBuffers(const Mesh& mesh) {
@@ -1197,6 +1461,13 @@ result<void> Renderer::BindMaterialTextures(const Material& material) {
         TextureType::LightMap,          TextureType::Reflection};
 
     for (const auto& texture_type : texture_types) {
+        if (texture_type == TextureType::Reflection) {
+            auto skybox_tex_res = backend_->GetTexture("goma_skybox");
+            if (skybox_tex_res) {
+                backend_->BindTexture(skybox_tex_res.value()->vez, binding_id);
+            }
+        }
+
         auto binding = material.texture_bindings.find(texture_type);
 
         if (binding != material.texture_bindings.end() &&

@@ -13,9 +13,8 @@ init:
 
 install:
   - cmd: git submodule update --init --recursive
-  - cmd: curl -L --retry 5 --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe?Human=true
-  - cmd: dir VulkanSDK.exe
-  - cmd: .\VulkanSDK.exe /S
+  - cmd: if not exist VulkanSDK.exe ( curl -L --retry 5 --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe?Human=true )
+  - cmd: if not exist C:\VulkanSDK\1.1.106.0\ ( .\VulkanSDK.exe /S ^ )
 
 environment:
   VULKAN_SDK: C:\VulkanSDK\1.1.106.0
@@ -26,5 +25,13 @@ build_script:
   - cmd: cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=%configuration% ..
   - cmd: cmake --build . --target ALL_BUILD --config %configuration%
 
+test_script:
+  - cmd: dir
+  - cmd: .\bin\%configuration%\goma-tests.exe
+
 cache:
-  - build
+  - VulkanSDK.exe -> appveyor.yml
+
+artifacts:
+  - path: build\bin\%configuration%\goma-tests.exe
+    name: Tests

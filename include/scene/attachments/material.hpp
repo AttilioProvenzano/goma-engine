@@ -33,8 +33,11 @@ struct Material {
 
     bool two_sided{false};
     float opacity{1.0f};
+    float alpha_cutoff{1.0f};
     float shininess_exponent{0.0f};
     float specular_strength{1.0f};
+    float metallic_factor{0.2f};
+    float roughness_factor{0.5f};
 };
 
 }  // namespace goma

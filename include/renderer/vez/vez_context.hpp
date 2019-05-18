@@ -67,6 +67,8 @@ struct VezContext {
         VkSemaphore presentation_semaphore{VK_NULL_HANDLE};
         VkFence submission_fence{VK_NULL_HANDLE};
         VkFence setup_fence{VK_NULL_HANDLE};
+
+        std::vector<VezPipeline> orphaned_pipelines{};
     };
     std::vector<PerFrame> per_frame{};
     size_t current_frame{0};

@@ -103,6 +103,17 @@ enum class TextureOp {
 
 enum class TextureWrappingMode { Repeat, MirroredRepeat, ClampToEdge, Decal };
 
+enum class CompareOp {
+    Never = 0,
+    Less = 1,
+    Equal = 2,
+    LessOrEqual = 3,
+    Greater = 4,
+    NotEqual = 5,
+    GreaterOrEqual = 6,
+    Always = 7
+};
+
 struct SamplerDesc {
     FilterType filter_type{FilterType::Linear};
     FilterType mipmap_mode{FilterType::Linear};
@@ -113,6 +124,7 @@ struct SamplerDesc {
 
     TextureWrappingMode addressing_mode{TextureWrappingMode::Repeat};
     float anisotropy{16.0f};
+    CompareOp compare_op{CompareOp::Never};
 };
 
 struct TextureDesc {
@@ -121,11 +133,23 @@ struct TextureDesc {
     Format format{Format::UNormRGBA8};
 
     bool mipmapping{true};
-    bool cubemap{false};
     uint32_t array_layers{1};
     uint32_t samples{1};
 
     SamplerDesc sampler{};
+};
+
+struct CubemapContents {
+    void* right{nullptr};
+    void* left{nullptr};
+    void* up{nullptr};
+    void* down{nullptr};
+    void* front{nullptr};
+    void* back{nullptr};
+
+    operator bool() const {
+        return right && left && up && down && front && back;
+    }
 };
 
 enum class ExtentType { Absolute, RelativeToSwapchain };
@@ -242,17 +266,6 @@ struct VertexInputAttributeDesc {
 struct VertexInputFormatDesc {
     std::vector<VertexInputBindingDesc> bindings;
     std::vector<VertexInputAttributeDesc> attributes;
-};
-
-enum class CompareOp {
-    Never = 0,
-    Less = 1,
-    Equal = 2,
-    LessOrEqual = 3,
-    Greater = 4,
-    NotEqual = 5,
-    GreaterOrEqual = 6,
-    Always = 7
 };
 
 enum class StencilFace { Front = 1, Back = 2, FrontAndBack = 3 };

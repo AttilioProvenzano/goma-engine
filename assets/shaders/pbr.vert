@@ -78,11 +78,11 @@ void main()
     outUV1 = vec2(0.0, 0.0);
 
 #ifdef HAS_UV0
-    outUV0 = inUV0 * vec2(1.0, -1.0);
+    outUV0 = vec2(inUV0.x, 1.0 - inUV0.y);
 #endif
 
 #ifdef HAS_UV1
-    outUV1 = inUV1 * vec2(1.0, -1.0);
+    outUV1 = vec2(inUV1.x, 1.0 - inUV1.y);
 #endif
 
 #ifdef HAS_COLORS

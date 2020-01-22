@@ -196,7 +196,7 @@ struct ColorAttachmentDesc {
     std::string rt_name;
     bool clear{true};
     bool store{true};
-    std::array<float, 4> clear_color{0.1f, 0.1f, 0.1f, 1.0f};
+    std::array<float, 4> clear_color{0.0f, 0.0f, 0.0f, 1.0f};
     std::string resolve_to_rt{""};  // resolve to rt at the end of the pass
 };
 

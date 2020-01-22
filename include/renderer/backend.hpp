@@ -12,6 +12,7 @@ namespace goma {
 class Engine;
 
 enum class Buffering { Double, Triple };
+enum class FramebufferColorSpace { Linear, Srgb };
 
 using FrameIndex = size_t;
 using PassFn = std::function<result<void>(FrameIndex, const RenderPassDesc*)>;
@@ -20,6 +21,7 @@ class Backend {
   public:
     struct Config {
         Buffering buffering{Buffering::Triple};
+        FramebufferColorSpace fb_color_space{FramebufferColorSpace::Linear};
     };
 
     Backend(const Config& config = {}, const RenderPlan& render_plan = {})
@@ -35,6 +37,11 @@ class Backend {
     }
 
     virtual result<void> SetBuffering(Buffering) {
+        return Error::ConfigNotSupported;
+    }
+
+    virtual result<void> SetFramebufferColorSpace(
+        FramebufferColorSpace fb_color_space) {
         return Error::ConfigNotSupported;
     }
 

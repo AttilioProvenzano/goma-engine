@@ -15,6 +15,8 @@ class VezBackend : public Backend {
     virtual ~VezBackend() override;
     virtual result<void> SetRenderPlan(RenderPlan render_plan) override;
     virtual result<void> SetBuffering(Buffering buffering) override;
+    virtual result<void> SetFramebufferColorSpace(
+        FramebufferColorSpace fb_color_space) override;
 
     virtual result<void> InitContext() override;
     virtual result<void> InitSurface(Platform& platform) override;

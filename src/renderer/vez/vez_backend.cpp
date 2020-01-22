@@ -71,6 +71,12 @@ result<void> VezBackend::SetBuffering(Buffering buffering) {
     return outcome::success();
 }
 
+result<void> VezBackend::SetFramebufferColorSpace(
+    FramebufferColorSpace fb_color_space) {
+    config_.fb_color_space = fb_color_space;
+    return outcome::success();
+}
+
 result<void> VezBackend::InitContext() {
     VK_CHECK(volkInitialize());
 
@@ -1397,15 +1403,22 @@ result<VezSwapchain> VezBackend::CreateSwapchain(VkSurfaceKHR surface) {
            "Context must be initialized before creating a swapchain");
     VkDevice device = context_.device;
 
+    VkFormat format = config_.fb_color_space == FramebufferColorSpace::Linear
+                          ? VK_FORMAT_B8G8R8A8_UNORM
+                          : VK_FORMAT_B8G8R8A8_SRGB;
+
     VezSwapchainCreateInfo swapchain_info{};
     swapchain_info.surface = surface;
     swapchain_info.tripleBuffer = VK_TRUE;
-    swapchain_info.format = {VK_FORMAT_R8G8B8A8_UNORM,
-                             VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+    swapchain_info.format = {format, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 
     VezSwapchain swapchain = VK_NULL_HANDLE;
     VK_CHECK(vezCreateSwapchain(device, &swapchain_info, &swapchain));
+
     vezGetSwapchainSurfaceFormat(swapchain, &context_.swapchain_format);
+    spdlog::info("Swapchain format: {}, {}", context_.swapchain_format.format,
+                 context_.swapchain_format.colorSpace);
+
     return swapchain;
 }
 
@@ -1880,6 +1893,8 @@ VkFormat VezBackend::GetVkFormat(Format format) {
             return VK_FORMAT_R8G8B8A8_UNORM;
         case Format::UNormBGRA8:
             return VK_FORMAT_B8G8R8A8_UNORM;
+        case Format::SrgbRGBA8:
+            return VK_FORMAT_R8G8B8A8_SRGB;
         case Format::SFloatRGBA32:
             return VK_FORMAT_R32G32B32A32_SFLOAT;
         case Format::SFloatRGB32:

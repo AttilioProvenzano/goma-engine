@@ -67,6 +67,7 @@ enum class Format {
     SwapchainFormat,
     UNormRGBA8,
     UNormBGRA8,
+    SrgbRGBA8,
     SFloatRGBA32,
     SFloatRGB32,
     SFloatRG32,

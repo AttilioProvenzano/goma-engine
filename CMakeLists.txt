@@ -102,34 +102,6 @@ target_include_directories(volk PUBLIC
 	third_party/Vulkan-Headers/include
 	third_party/volk)
 
-# The top-level CMakeLists.txt for V-EZ sets all output
-# directories to an inconvenient path.
-# We directly include the subdirectories to avoid this.
-set(VEZ_COMPILE_SAMPLES OFF CACHE BOOL "" FORCE)
-set(VEZ_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/V-EZ)
-find_package(Vulkan REQUIRED)
-add_subdirectory(third_party/V-EZ/External/SPIRV-Cross)
-set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
-add_subdirectory(third_party/V-EZ/External/glslang)
-add_subdirectory(third_party/V-EZ/Source)
-set_property(TARGET VEZ PROPERTY FOLDER ThirdParty/VEZ)
-
-foreach(target glslang glslang-default-resource-limits OGLCompiler OSDependent SPIRV SPVRemapper
-	glslangValidator spirv-remap
-)
-  if(TARGET ${target})
-    set_property(TARGET ${target} PROPERTY FOLDER ThirdParty/VEZ/External/glslang)
-  endif()
-endforeach()
-
-foreach(target spirv-cross spirv-cross-core spirv-cross-glsl spirv-cross-cpp spirv-cross-hlsl
-	spirv-cross-msl spirv-cross-reflect spirv-cross-util
-)
-  if(TARGET ${target})
-    set_property(TARGET ${target} PROPERTY FOLDER ThirdParty/VEZ/External/SPIRV-Cross)
-  endif()
-endforeach()
-
 target_include_directories(goma-engine PUBLIC
 	include
 	third_party/glm
@@ -137,10 +109,9 @@ target_include_directories(goma-engine PUBLIC
 	third_party/spdlog/include
 	third_party/stb
 	third_party/variant/include
-	third_party/V-EZ/Source
 	third_party/Vulkan-Headers/include)
 
-target_link_libraries(goma-engine PUBLIC assimp glfw VEZ volk)
+target_link_libraries(goma-engine PUBLIC assimp glfw volk)
 
 if(MSVC)
 	target_compile_options(goma-engine PRIVATE /W3 /WX)

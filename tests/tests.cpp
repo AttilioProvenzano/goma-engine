@@ -682,6 +682,1008 @@ TEST_F(EngineTest, RenderVirtualCity) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
+TEST(SrgbTest, LinearSweepWithLinearFramebuffer) {
+    Win32Platform platform;
+    platform.InitWindow();
+
+    VezBackend vez;
+    vez.SetFramebufferColorSpace(FramebufferColorSpace::Linear);
+    vez.InitContext();
+
+    auto init_surface_result = vez.InitSurface(platform);
+    ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
+
+    std::vector<glm::vec3> positions = {{-0.9f, -0.5f, 0.0f},
+                                        {0.9f, -0.5f, 0.0f},
+                                        {-0.9f, 0.5f, 0.0f},
+                                        {0.9f, 0.5f, 0.0f}};
+
+    auto create_pos_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_pos", positions.size() * sizeof(positions[0]), true,
+        positions.data());
+    ASSERT_TRUE(create_pos_buffer_result)
+        << create_pos_buffer_result.error().message();
+
+    std::vector<glm::vec2> uvs = {
+        {0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
+
+    auto create_uv_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
+    ASSERT_TRUE(create_uv_buffer_result)
+        << create_uv_buffer_result.error().message();
+
+    std::vector<uint32_t> indices = {0, 1, 3, 0, 3, 2};
+
+    auto create_index_buffer_result = vez.CreateIndexBuffer(
+        {0}, "triangle_indices", indices.size() * sizeof(indices[0]), true,
+        indices.data());
+    ASSERT_TRUE(create_index_buffer_result)
+        << create_index_buffer_result.error().message();
+
+    auto vertex_input_format_result = vez.GetVertexInputFormat(
+        {{{0, sizeof(glm::vec3)}, {1, sizeof(glm::vec2)}},
+         {{0, 0, Format::SFloatRGB32, 0}, {1, 1, Format::SFloatRG32, 0}}});
+    ASSERT_TRUE(vertex_input_format_result)
+        << vertex_input_format_result.error().message();
+
+    TextureDesc texture_desc = {512, 512};
+    std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {0, 0, 0, 255});
+    for (uint32_t y = 0; y < 512; y++) {
+        for (uint32_t x = 0; x < 512; x++) {
+            pixels[512 * y + x][0] = static_cast<uint8_t>(x / 2);
+            pixels[512 * y + x][1] = static_cast<uint8_t>(x / 2);
+            pixels[512 * y + x][2] = static_cast<uint8_t>(x / 2);
+        }
+    }
+
+    auto create_texture_result =
+        vez.CreateTexture("texture", texture_desc, pixels.data());
+    ASSERT_TRUE(create_texture_result)
+        << create_texture_result.error().message();
+
+    static const char* vertex_shader_glsl = R"(
+#version 450
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inUVs;
+
+layout(location = 0) out vec2 outUVs;
+
+void main() {
+    gl_Position = vec4(inPosition, 1.0);
+    outUVs = inUVs;
+}
+)";
+
+    static const char* fragment_shader_glsl = R"(
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(set = 0, binding = 0) uniform sampler2D mainTexture;
+
+layout(location = 0) in vec2 inUVs;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = texture(mainTexture, inUVs);
+}
+)";
+
+    auto create_pipeline_result =
+        vez.GetGraphicsPipeline({vertex_shader_glsl}, {fragment_shader_glsl});
+    ASSERT_TRUE(create_pipeline_result)
+        << create_pipeline_result.error().message();
+
+    vez.SetRenderPlan({
+        {{"color", {}}},
+        {{"depth", {}}},
+        {
+            RenderPassEntry{"forward",
+                            RenderPassDesc{{ColorAttachmentDesc{"color"}},
+                                           DepthAttachmentDesc{"depth"}}},
+        },
+    });
+
+    vez.RenderFrame(
+        {[&](FrameIndex, const RenderPassDesc*) {
+            vez.BindGraphicsPipeline(*create_pipeline_result.value());
+            vez.BindVertexInputFormat(*vertex_input_format_result.value());
+            vez.BindVertexBuffers({*create_pos_buffer_result.value(),
+                                   *create_uv_buffer_result.value()});
+            vez.BindIndexBuffer(*create_index_buffer_result.value());
+            vez.BindTextures({*create_texture_result.value()});
+
+            auto w = platform.GetWidth();
+            auto h = platform.GetHeight();
+            vez.SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+            vez.SetScissor({{w, h}});
+
+            vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
+            return outcome::success();
+        }},
+        "color");
+
+    system("PAUSE");
+}
+
+TEST(SrgbTest, LinearSweepWithSrgbFramebuffer) {
+    Win32Platform platform;
+    platform.InitWindow();
+
+    VezBackend vez;
+    vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
+    vez.InitContext();
+
+    auto init_surface_result = vez.InitSurface(platform);
+    ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
+
+    std::vector<glm::vec3> positions = {{-0.9f, -0.5f, 0.0f},
+                                        {0.9f, -0.5f, 0.0f},
+                                        {-0.9f, 0.5f, 0.0f},
+                                        {0.9f, 0.5f, 0.0f}};
+
+    auto create_pos_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_pos", positions.size() * sizeof(positions[0]), true,
+        positions.data());
+    ASSERT_TRUE(create_pos_buffer_result)
+        << create_pos_buffer_result.error().message();
+
+    std::vector<glm::vec2> uvs = {
+        {0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
+
+    auto create_uv_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
+    ASSERT_TRUE(create_uv_buffer_result)
+        << create_uv_buffer_result.error().message();
+
+    std::vector<uint32_t> indices = {0, 1, 3, 0, 3, 2};
+
+    auto create_index_buffer_result = vez.CreateIndexBuffer(
+        {0}, "triangle_indices", indices.size() * sizeof(indices[0]), true,
+        indices.data());
+    ASSERT_TRUE(create_index_buffer_result)
+        << create_index_buffer_result.error().message();
+
+    auto vertex_input_format_result = vez.GetVertexInputFormat(
+        {{{0, sizeof(glm::vec3)}, {1, sizeof(glm::vec2)}},
+         {{0, 0, Format::SFloatRGB32, 0}, {1, 1, Format::SFloatRG32, 0}}});
+    ASSERT_TRUE(vertex_input_format_result)
+        << vertex_input_format_result.error().message();
+
+    TextureDesc texture_desc = {512, 512};
+    std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {0, 0, 0, 255});
+    for (uint32_t y = 0; y < 512; y++) {
+        for (uint32_t x = 0; x < 512; x++) {
+            pixels[512 * y + x][0] = static_cast<uint8_t>(x / 2);
+            pixels[512 * y + x][1] = static_cast<uint8_t>(x / 2);
+            pixels[512 * y + x][2] = static_cast<uint8_t>(x / 2);
+        }
+    }
+
+    auto create_texture_result =
+        vez.CreateTexture("texture", texture_desc, pixels.data());
+    ASSERT_TRUE(create_texture_result)
+        << create_texture_result.error().message();
+
+    static const char* vertex_shader_glsl = R"(
+#version 450
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inUVs;
+
+layout(location = 0) out vec2 outUVs;
+
+void main() {
+    gl_Position = vec4(inPosition, 1.0);
+    outUVs = inUVs;
+}
+)";
+
+    static const char* fragment_shader_glsl = R"(
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(set = 0, binding = 0) uniform sampler2D mainTexture;
+
+layout(location = 0) in vec2 inUVs;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = texture(mainTexture, inUVs);
+}
+)";
+
+    auto create_pipeline_result =
+        vez.GetGraphicsPipeline({vertex_shader_glsl}, {fragment_shader_glsl});
+    ASSERT_TRUE(create_pipeline_result)
+        << create_pipeline_result.error().message();
+
+    vez.SetRenderPlan({
+        {{"color", {}}},
+        {{"depth", {}}},
+        {
+            RenderPassEntry{"forward",
+                            RenderPassDesc{{ColorAttachmentDesc{"color"}},
+                                           DepthAttachmentDesc{"depth"}}},
+        },
+    });
+
+    vez.RenderFrame(
+        {[&](FrameIndex, const RenderPassDesc*) {
+            vez.BindGraphicsPipeline(*create_pipeline_result.value());
+            vez.BindVertexInputFormat(*vertex_input_format_result.value());
+            vez.BindVertexBuffers({*create_pos_buffer_result.value(),
+                                   *create_uv_buffer_result.value()});
+            vez.BindIndexBuffer(*create_index_buffer_result.value());
+            vez.BindTextures({*create_texture_result.value()});
+
+            auto w = platform.GetWidth();
+            auto h = platform.GetHeight();
+            vez.SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+            vez.SetScissor({{w, h}});
+
+            vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
+            return outcome::success();
+        }},
+        "color");
+
+    system("PAUSE");
+}
+
+TEST(SrgbTest, SrgbSweepWithLinearTexture) {
+    Win32Platform platform;
+    platform.InitWindow();
+
+    VezBackend vez;
+    vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
+    vez.InitContext();
+
+    auto init_surface_result = vez.InitSurface(platform);
+    ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
+
+    std::vector<glm::vec3> positions = {{-0.9f, -0.5f, 0.0f},
+                                        {0.9f, -0.5f, 0.0f},
+                                        {-0.9f, 0.5f, 0.0f},
+                                        {0.9f, 0.5f, 0.0f}};
+
+    auto create_pos_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_pos", positions.size() * sizeof(positions[0]), true,
+        positions.data());
+    ASSERT_TRUE(create_pos_buffer_result)
+        << create_pos_buffer_result.error().message();
+
+    std::vector<glm::vec2> uvs = {
+        {0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
+
+    auto create_uv_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
+    ASSERT_TRUE(create_uv_buffer_result)
+        << create_uv_buffer_result.error().message();
+
+    std::vector<uint32_t> indices = {0, 1, 3, 0, 3, 2};
+
+    auto create_index_buffer_result = vez.CreateIndexBuffer(
+        {0}, "triangle_indices", indices.size() * sizeof(indices[0]), true,
+        indices.data());
+    ASSERT_TRUE(create_index_buffer_result)
+        << create_index_buffer_result.error().message();
+
+    auto vertex_input_format_result = vez.GetVertexInputFormat(
+        {{{0, sizeof(glm::vec3)}, {1, sizeof(glm::vec2)}},
+         {{0, 0, Format::SFloatRGB32, 0}, {1, 1, Format::SFloatRG32, 0}}});
+    ASSERT_TRUE(vertex_input_format_result)
+        << vertex_input_format_result.error().message();
+
+    TextureDesc texture_desc = {512, 512};
+    std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {0, 0, 0, 255});
+    for (uint32_t y = 0; y < 512; y++) {
+        for (uint32_t x = 0; x < 512; x++) {
+            constexpr float GAMMA = 2.2f;
+            auto srgb_data =
+                static_cast<uint8_t>(pow(x / 512.0f, 1 / GAMMA) * 256.0f);
+            pixels[512 * y + x][0] = srgb_data;
+            pixels[512 * y + x][1] = srgb_data;
+            pixels[512 * y + x][2] = srgb_data;
+        }
+    }
+
+    auto create_texture_result =
+        vez.CreateTexture("texture", texture_desc, pixels.data());
+    ASSERT_TRUE(create_texture_result)
+        << create_texture_result.error().message();
+
+    static const char* vertex_shader_glsl = R"(
+#version 450
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inUVs;
+
+layout(location = 0) out vec2 outUVs;
+
+void main() {
+    gl_Position = vec4(inPosition, 1.0);
+    outUVs = inUVs;
+}
+)";
+
+    static const char* fragment_shader_glsl = R"(
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(set = 0, binding = 0) uniform sampler2D mainTexture;
+
+layout(location = 0) in vec2 inUVs;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = texture(mainTexture, inUVs);
+}
+)";
+
+    auto create_pipeline_result =
+        vez.GetGraphicsPipeline({vertex_shader_glsl}, {fragment_shader_glsl});
+    ASSERT_TRUE(create_pipeline_result)
+        << create_pipeline_result.error().message();
+
+    vez.SetRenderPlan({
+        {{"color", {}}},
+        {{"depth", {}}},
+        {
+            RenderPassEntry{"forward",
+                            RenderPassDesc{{ColorAttachmentDesc{"color"}},
+                                           DepthAttachmentDesc{"depth"}}},
+        },
+    });
+
+    vez.RenderFrame(
+        {[&](FrameIndex, const RenderPassDesc*) {
+            vez.BindGraphicsPipeline(*create_pipeline_result.value());
+            vez.BindVertexInputFormat(*vertex_input_format_result.value());
+            vez.BindVertexBuffers({*create_pos_buffer_result.value(),
+                                   *create_uv_buffer_result.value()});
+            vez.BindIndexBuffer(*create_index_buffer_result.value());
+            vez.BindTextures({*create_texture_result.value()});
+
+            auto w = platform.GetWidth();
+            auto h = platform.GetHeight();
+            vez.SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+            vez.SetScissor({{w, h}});
+
+            vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
+            return outcome::success();
+        }},
+        "color");
+
+    system("PAUSE");
+}
+
+TEST(SrgbTest, SrgbSweepWithSrgbTexture) {
+    Win32Platform platform;
+    platform.InitWindow();
+
+    VezBackend vez;
+    vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
+    vez.InitContext();
+
+    auto init_surface_result = vez.InitSurface(platform);
+    ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
+
+    std::vector<glm::vec3> positions = {{-0.9f, -0.5f, 0.0f},
+                                        {0.9f, -0.5f, 0.0f},
+                                        {-0.9f, 0.5f, 0.0f},
+                                        {0.9f, 0.5f, 0.0f}};
+
+    auto create_pos_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_pos", positions.size() * sizeof(positions[0]), true,
+        positions.data());
+    ASSERT_TRUE(create_pos_buffer_result)
+        << create_pos_buffer_result.error().message();
+
+    std::vector<glm::vec2> uvs = {
+        {0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
+
+    auto create_uv_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
+    ASSERT_TRUE(create_uv_buffer_result)
+        << create_uv_buffer_result.error().message();
+
+    std::vector<uint32_t> indices = {0, 1, 3, 0, 3, 2};
+
+    auto create_index_buffer_result = vez.CreateIndexBuffer(
+        {0}, "triangle_indices", indices.size() * sizeof(indices[0]), true,
+        indices.data());
+    ASSERT_TRUE(create_index_buffer_result)
+        << create_index_buffer_result.error().message();
+
+    auto vertex_input_format_result = vez.GetVertexInputFormat(
+        {{{0, sizeof(glm::vec3)}, {1, sizeof(glm::vec2)}},
+         {{0, 0, Format::SFloatRGB32, 0}, {1, 1, Format::SFloatRG32, 0}}});
+    ASSERT_TRUE(vertex_input_format_result)
+        << vertex_input_format_result.error().message();
+
+    TextureDesc texture_desc = {512, 512, Format::SrgbRGBA8};
+    std::vector<std::array<uint8_t, 4>> pixels(512 * 512, {0, 0, 0, 255});
+    for (uint32_t y = 0; y < 512; y++) {
+        for (uint32_t x = 0; x < 512; x++) {
+            constexpr float GAMMA = 2.2f;
+            auto srgb_data =
+                static_cast<uint8_t>(pow(x / 512.0f, 1 / GAMMA) * 256.0f);
+            pixels[512 * y + x][0] = srgb_data;
+            pixels[512 * y + x][1] = srgb_data;
+            pixels[512 * y + x][2] = srgb_data;
+        }
+    }
+
+    auto create_texture_result =
+        vez.CreateTexture("texture", texture_desc, pixels.data());
+    ASSERT_TRUE(create_texture_result)
+        << create_texture_result.error().message();
+
+    static const char* vertex_shader_glsl = R"(
+#version 450
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inUVs;
+
+layout(location = 0) out vec2 outUVs;
+
+void main() {
+    gl_Position = vec4(inPosition, 1.0);
+    outUVs = inUVs;
+}
+)";
+
+    static const char* fragment_shader_glsl = R"(
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(set = 0, binding = 0) uniform sampler2D mainTexture;
+
+layout(location = 0) in vec2 inUVs;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = texture(mainTexture, inUVs);
+}
+)";
+
+    auto create_pipeline_result =
+        vez.GetGraphicsPipeline({vertex_shader_glsl}, {fragment_shader_glsl});
+    ASSERT_TRUE(create_pipeline_result)
+        << create_pipeline_result.error().message();
+
+    vez.SetRenderPlan({
+        {{"color", {}}},
+        {{"depth", {}}},
+        {
+            RenderPassEntry{"forward",
+                            RenderPassDesc{{ColorAttachmentDesc{"color"}},
+                                           DepthAttachmentDesc{"depth"}}},
+        },
+    });
+
+    vez.RenderFrame(
+        {[&](FrameIndex, const RenderPassDesc*) {
+            vez.BindGraphicsPipeline(*create_pipeline_result.value());
+            vez.BindVertexInputFormat(*vertex_input_format_result.value());
+            vez.BindVertexBuffers({*create_pos_buffer_result.value(),
+                                   *create_uv_buffer_result.value()});
+            vez.BindIndexBuffer(*create_index_buffer_result.value());
+            vez.BindTextures({*create_texture_result.value()});
+
+            auto w = platform.GetWidth();
+            auto h = platform.GetHeight();
+            vez.SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+            vez.SetScissor({{w, h}});
+
+            vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
+            return outcome::success();
+        }},
+        "color");
+
+    system("PAUSE");
+}
+
+TEST(SrgbTest, ModelWithSrgbTextureReadAsLinear) {
+    Win32Platform platform;
+    platform.InitWindow(800, 800);
+
+    VezBackend vez;
+    vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
+    vez.InitContext();
+
+    auto init_surface_result = vez.InitSurface(platform);
+    ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
+
+    std::vector<glm::vec3> positions = {{-0.5f, -0.5f, 0.0f},
+                                        {0.5f, -0.5f, 0.0f},
+                                        {-0.5f, 0.5f, 0.0f},
+                                        {0.5f, 0.5f, 0.0f}};
+
+    auto create_pos_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_pos", positions.size() * sizeof(positions[0]), true,
+        positions.data());
+    ASSERT_TRUE(create_pos_buffer_result)
+        << create_pos_buffer_result.error().message();
+
+    std::vector<glm::vec2> uvs = {
+        {0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
+
+    auto create_uv_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
+    ASSERT_TRUE(create_uv_buffer_result)
+        << create_uv_buffer_result.error().message();
+
+    std::vector<uint32_t> indices = {0, 1, 3, 0, 3, 2};
+
+    auto create_index_buffer_result = vez.CreateIndexBuffer(
+        {0}, "triangle_indices", indices.size() * sizeof(indices[0]), true,
+        indices.data());
+    ASSERT_TRUE(create_index_buffer_result)
+        << create_index_buffer_result.error().message();
+
+    auto vertex_input_format_result = vez.GetVertexInputFormat(
+        {{{0, sizeof(glm::vec3)}, {1, sizeof(glm::vec2)}},
+         {{0, 0, Format::SFloatRGB32, 0}, {1, 1, Format::SFloatRG32, 0}}});
+    ASSERT_TRUE(vertex_input_format_result)
+        << vertex_input_format_result.error().message();
+
+    AssimpLoader loader;
+    auto result = loader.ReadSceneFromFile(GOMA_ASSETS_DIR
+                                           "models/Lantern/glTF/Lantern.gltf");
+    ASSERT_TRUE(result) << result.error().message();
+
+    // Extract the unique_ptr from the result wrapper
+    auto scene = std::move(result.value());
+
+    auto tex = scene->GetAttachment<Texture>({0}).value().get();
+    TextureDesc texture_desc = {tex.width, tex.height};
+
+    auto create_texture_result =
+        vez.CreateTexture("texture", texture_desc, tex.data.data());
+    ASSERT_TRUE(create_texture_result)
+        << create_texture_result.error().message();
+
+    static const char* vertex_shader_glsl = R"(
+#version 450
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inUVs;
+
+layout(location = 0) out vec2 outUVs;
+
+void main() {
+    gl_Position = vec4(inPosition, 1.0);
+    outUVs = inUVs;
+}
+)";
+
+    static const char* fragment_shader_glsl = R"(
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(set = 0, binding = 0) uniform sampler2D mainTexture;
+
+layout(location = 0) in vec2 inUVs;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = texture(mainTexture, inUVs);
+}
+)";
+
+    auto create_pipeline_result =
+        vez.GetGraphicsPipeline({vertex_shader_glsl}, {fragment_shader_glsl});
+    ASSERT_TRUE(create_pipeline_result)
+        << create_pipeline_result.error().message();
+
+    vez.SetRenderPlan({
+        {{"color", {}}},
+        {{"depth", {}}},
+        {
+            RenderPassEntry{"forward",
+                            RenderPassDesc{{ColorAttachmentDesc{"color"}},
+                                           DepthAttachmentDesc{"depth"}}},
+        },
+    });
+
+    vez.RenderFrame(
+        {[&](FrameIndex, const RenderPassDesc*) {
+            vez.BindGraphicsPipeline(*create_pipeline_result.value());
+            vez.BindVertexInputFormat(*vertex_input_format_result.value());
+            vez.BindVertexBuffers({*create_pos_buffer_result.value(),
+                                   *create_uv_buffer_result.value()});
+            vez.BindIndexBuffer(*create_index_buffer_result.value());
+            vez.BindTextures({*create_texture_result.value()});
+
+            auto w = platform.GetWidth();
+            auto h = platform.GetHeight();
+            vez.SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+            vez.SetScissor({{w, h}});
+
+            vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
+            return outcome::success();
+        }},
+        "color");
+
+    system("PAUSE");
+}
+
+TEST(SrgbTest, ModelWithSrgbTextureReadAsSrgb) {
+    Win32Platform platform;
+    platform.InitWindow(800, 800);
+
+    VezBackend vez;
+    vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
+    vez.InitContext();
+
+    auto init_surface_result = vez.InitSurface(platform);
+    ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
+
+    std::vector<glm::vec3> positions = {{-0.5f, -0.5f, 0.0f},
+                                        {0.5f, -0.5f, 0.0f},
+                                        {-0.5f, 0.5f, 0.0f},
+                                        {0.5f, 0.5f, 0.0f}};
+
+    auto create_pos_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_pos", positions.size() * sizeof(positions[0]), true,
+        positions.data());
+    ASSERT_TRUE(create_pos_buffer_result)
+        << create_pos_buffer_result.error().message();
+
+    std::vector<glm::vec2> uvs = {
+        {0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
+
+    auto create_uv_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
+    ASSERT_TRUE(create_uv_buffer_result)
+        << create_uv_buffer_result.error().message();
+
+    std::vector<uint32_t> indices = {0, 1, 3, 0, 3, 2};
+
+    auto create_index_buffer_result = vez.CreateIndexBuffer(
+        {0}, "triangle_indices", indices.size() * sizeof(indices[0]), true,
+        indices.data());
+    ASSERT_TRUE(create_index_buffer_result)
+        << create_index_buffer_result.error().message();
+
+    auto vertex_input_format_result = vez.GetVertexInputFormat(
+        {{{0, sizeof(glm::vec3)}, {1, sizeof(glm::vec2)}},
+         {{0, 0, Format::SFloatRGB32, 0}, {1, 1, Format::SFloatRG32, 0}}});
+    ASSERT_TRUE(vertex_input_format_result)
+        << vertex_input_format_result.error().message();
+
+    AssimpLoader loader;
+    auto result = loader.ReadSceneFromFile(GOMA_ASSETS_DIR
+                                           "models/Lantern/glTF/Lantern.gltf");
+    ASSERT_TRUE(result) << result.error().message();
+
+    // Extract the unique_ptr from the result wrapper
+    auto scene = std::move(result.value());
+
+    auto tex = scene->GetAttachment<Texture>({0}).value().get();
+    TextureDesc texture_desc = {tex.width, tex.height, Format::SrgbRGBA8};
+
+    auto create_texture_result =
+        vez.CreateTexture("texture", texture_desc, tex.data.data());
+    ASSERT_TRUE(create_texture_result)
+        << create_texture_result.error().message();
+
+    static const char* vertex_shader_glsl = R"(
+#version 450
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inUVs;
+
+layout(location = 0) out vec2 outUVs;
+
+void main() {
+    gl_Position = vec4(inPosition, 1.0);
+    outUVs = inUVs;
+}
+)";
+
+    static const char* fragment_shader_glsl = R"(
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(set = 0, binding = 0) uniform sampler2D mainTexture;
+
+layout(location = 0) in vec2 inUVs;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = texture(mainTexture, inUVs);
+}
+)";
+
+    auto create_pipeline_result =
+        vez.GetGraphicsPipeline({vertex_shader_glsl}, {fragment_shader_glsl});
+    ASSERT_TRUE(create_pipeline_result)
+        << create_pipeline_result.error().message();
+
+    vez.SetRenderPlan({
+        {{"color", {}}},
+        {{"depth", {}}},
+        {
+            RenderPassEntry{"forward",
+                            RenderPassDesc{{ColorAttachmentDesc{"color"}},
+                                           DepthAttachmentDesc{"depth"}}},
+        },
+    });
+
+    vez.RenderFrame(
+        {[&](FrameIndex, const RenderPassDesc*) {
+            vez.BindGraphicsPipeline(*create_pipeline_result.value());
+            vez.BindVertexInputFormat(*vertex_input_format_result.value());
+            vez.BindVertexBuffers({*create_pos_buffer_result.value(),
+                                   *create_uv_buffer_result.value()});
+            vez.BindIndexBuffer(*create_index_buffer_result.value());
+            vez.BindTextures({*create_texture_result.value()});
+
+            auto w = platform.GetWidth();
+            auto h = platform.GetHeight();
+            vez.SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+            vez.SetScissor({{w, h}});
+
+            vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
+            return outcome::success();
+        }},
+        "color");
+
+    system("PAUSE");
+}
+
+TEST(SrgbTest, ModelWithLinearTextureReadAsLinear) {
+    Win32Platform platform;
+    platform.InitWindow(800, 800);
+
+    VezBackend vez;
+    vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
+    vez.InitContext();
+
+    auto init_surface_result = vez.InitSurface(platform);
+    ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
+
+    std::vector<glm::vec3> positions = {{-0.5f, -0.5f, 0.0f},
+                                        {0.5f, -0.5f, 0.0f},
+                                        {-0.5f, 0.5f, 0.0f},
+                                        {0.5f, 0.5f, 0.0f}};
+
+    auto create_pos_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_pos", positions.size() * sizeof(positions[0]), true,
+        positions.data());
+    ASSERT_TRUE(create_pos_buffer_result)
+        << create_pos_buffer_result.error().message();
+
+    std::vector<glm::vec2> uvs = {
+        {0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
+
+    auto create_uv_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
+    ASSERT_TRUE(create_uv_buffer_result)
+        << create_uv_buffer_result.error().message();
+
+    std::vector<uint32_t> indices = {0, 1, 3, 0, 3, 2};
+
+    auto create_index_buffer_result = vez.CreateIndexBuffer(
+        {0}, "triangle_indices", indices.size() * sizeof(indices[0]), true,
+        indices.data());
+    ASSERT_TRUE(create_index_buffer_result)
+        << create_index_buffer_result.error().message();
+
+    auto vertex_input_format_result = vez.GetVertexInputFormat(
+        {{{0, sizeof(glm::vec3)}, {1, sizeof(glm::vec2)}},
+         {{0, 0, Format::SFloatRGB32, 0}, {1, 1, Format::SFloatRG32, 0}}});
+    ASSERT_TRUE(vertex_input_format_result)
+        << vertex_input_format_result.error().message();
+
+    AssimpLoader loader;
+    auto result = loader.ReadSceneFromFile(
+        GOMA_ASSETS_DIR "models/Lantern/glTF/Lantern_linear.gltf");
+    ASSERT_TRUE(result) << result.error().message();
+
+    // Extract the unique_ptr from the result wrapper
+    auto scene = std::move(result.value());
+
+    auto tex = scene->GetAttachment<Texture>({0}).value().get();
+    TextureDesc texture_desc = {tex.width, tex.height};
+
+    auto create_texture_result =
+        vez.CreateTexture("texture", texture_desc, tex.data.data());
+    ASSERT_TRUE(create_texture_result)
+        << create_texture_result.error().message();
+
+    static const char* vertex_shader_glsl = R"(
+#version 450
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inUVs;
+
+layout(location = 0) out vec2 outUVs;
+
+void main() {
+    gl_Position = vec4(inPosition, 1.0);
+    outUVs = inUVs;
+}
+)";
+
+    static const char* fragment_shader_glsl = R"(
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(set = 0, binding = 0) uniform sampler2D mainTexture;
+
+layout(location = 0) in vec2 inUVs;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = texture(mainTexture, inUVs);
+}
+)";
+
+    auto create_pipeline_result =
+        vez.GetGraphicsPipeline({vertex_shader_glsl}, {fragment_shader_glsl});
+    ASSERT_TRUE(create_pipeline_result)
+        << create_pipeline_result.error().message();
+
+    vez.SetRenderPlan({
+        {{"color", {}}},
+        {{"depth", {}}},
+        {
+            RenderPassEntry{"forward",
+                            RenderPassDesc{{ColorAttachmentDesc{"color"}},
+                                           DepthAttachmentDesc{"depth"}}},
+        },
+    });
+
+    vez.RenderFrame(
+        {[&](FrameIndex, const RenderPassDesc*) {
+            vez.BindGraphicsPipeline(*create_pipeline_result.value());
+            vez.BindVertexInputFormat(*vertex_input_format_result.value());
+            vez.BindVertexBuffers({*create_pos_buffer_result.value(),
+                                   *create_uv_buffer_result.value()});
+            vez.BindIndexBuffer(*create_index_buffer_result.value());
+            vez.BindTextures({*create_texture_result.value()});
+
+            auto w = platform.GetWidth();
+            auto h = platform.GetHeight();
+            vez.SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+            vez.SetScissor({{w, h}});
+
+            vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
+            return outcome::success();
+        }},
+        "color");
+
+    system("PAUSE");
+}
+
+TEST(SrgbTest, ModelWithLinearTextureReadAsSrgb) {
+    Win32Platform platform;
+    platform.InitWindow(800, 800);
+
+    VezBackend vez;
+    vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
+    vez.InitContext();
+
+    auto init_surface_result = vez.InitSurface(platform);
+    ASSERT_TRUE(init_surface_result) << init_surface_result.error().message();
+
+    std::vector<glm::vec3> positions = {{-0.5f, -0.5f, 0.0f},
+                                        {0.5f, -0.5f, 0.0f},
+                                        {-0.5f, 0.5f, 0.0f},
+                                        {0.5f, 0.5f, 0.0f}};
+
+    auto create_pos_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_pos", positions.size() * sizeof(positions[0]), true,
+        positions.data());
+    ASSERT_TRUE(create_pos_buffer_result)
+        << create_pos_buffer_result.error().message();
+
+    std::vector<glm::vec2> uvs = {
+        {0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
+
+    auto create_uv_buffer_result = vez.CreateVertexBuffer(
+        {0}, "triangle_uvs", uvs.size() * sizeof(uvs[0]), true, uvs.data());
+    ASSERT_TRUE(create_uv_buffer_result)
+        << create_uv_buffer_result.error().message();
+
+    std::vector<uint32_t> indices = {0, 1, 3, 0, 3, 2};
+
+    auto create_index_buffer_result = vez.CreateIndexBuffer(
+        {0}, "triangle_indices", indices.size() * sizeof(indices[0]), true,
+        indices.data());
+    ASSERT_TRUE(create_index_buffer_result)
+        << create_index_buffer_result.error().message();
+
+    auto vertex_input_format_result = vez.GetVertexInputFormat(
+        {{{0, sizeof(glm::vec3)}, {1, sizeof(glm::vec2)}},
+         {{0, 0, Format::SFloatRGB32, 0}, {1, 1, Format::SFloatRG32, 0}}});
+    ASSERT_TRUE(vertex_input_format_result)
+        << vertex_input_format_result.error().message();
+
+    AssimpLoader loader;
+    auto result = loader.ReadSceneFromFile(
+        GOMA_ASSETS_DIR "models/Lantern/glTF/Lantern_linear.gltf");
+    ASSERT_TRUE(result) << result.error().message();
+
+    // Extract the unique_ptr from the result wrapper
+    auto scene = std::move(result.value());
+
+    auto tex = scene->GetAttachment<Texture>({0}).value().get();
+    TextureDesc texture_desc = {tex.width, tex.height, Format::SrgbRGBA8};
+
+    auto create_texture_result =
+        vez.CreateTexture("texture", texture_desc, tex.data.data());
+    ASSERT_TRUE(create_texture_result)
+        << create_texture_result.error().message();
+
+    static const char* vertex_shader_glsl = R"(
+#version 450
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inUVs;
+
+layout(location = 0) out vec2 outUVs;
+
+void main() {
+    gl_Position = vec4(inPosition, 1.0);
+    outUVs = inUVs;
+}
+)";
+
+    static const char* fragment_shader_glsl = R"(
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout(set = 0, binding = 0) uniform sampler2D mainTexture;
+
+layout(location = 0) in vec2 inUVs;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = texture(mainTexture, inUVs);
+}
+)";
+
+    auto create_pipeline_result =
+        vez.GetGraphicsPipeline({vertex_shader_glsl}, {fragment_shader_glsl});
+    ASSERT_TRUE(create_pipeline_result)
+        << create_pipeline_result.error().message();
+
+    vez.SetRenderPlan({
+        {{"color", {}}},
+        {{"depth", {}}},
+        {
+            RenderPassEntry{"forward",
+                            RenderPassDesc{{ColorAttachmentDesc{"color"}},
+                                           DepthAttachmentDesc{"depth"}}},
+        },
+    });
+
+    vez.RenderFrame(
+        {[&](FrameIndex, const RenderPassDesc*) {
+            vez.BindGraphicsPipeline(*create_pipeline_result.value());
+            vez.BindVertexInputFormat(*vertex_input_format_result.value());
+            vez.BindVertexBuffers({*create_pos_buffer_result.value(),
+                                   *create_uv_buffer_result.value()});
+            vez.BindIndexBuffer(*create_index_buffer_result.value());
+            vez.BindTextures({*create_texture_result.value()});
+
+            auto w = platform.GetWidth();
+            auto h = platform.GetHeight();
+            vez.SetViewport({{static_cast<float>(w), static_cast<float>(h)}});
+            vez.SetScissor({{w, h}});
+
+            vez.DrawIndexed(static_cast<uint32_t>(indices.size()));
+            return outcome::success();
+        }},
+        "color");
+
+    system("PAUSE");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {

@@ -19,7 +19,7 @@ class Win32Platform : public Platform {
 
     virtual InputState GetInputState() const override;
 
-    virtual result<void> InitWindow() override;
+    virtual result<void> InitWindow(int width = 1280, int height = 800) override;
     virtual result<VkSurfaceKHR> CreateVulkanSurface(
         VkInstance instance) const override;
 

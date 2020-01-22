@@ -17,7 +17,7 @@ Win32Platform::~Win32Platform() {
 
 result<void> Win32Platform::MainLoop(MainLoopFn inner_loop) {
     if (!window_) {
-        InitWindow();
+        InitWindow(1280, 800);
     }
 
     while (!glfwWindowShouldClose(window_)) {
@@ -34,7 +34,7 @@ result<void> Win32Platform::MainLoop(MainLoopFn inner_loop) {
     return outcome::success();
 }
 
-result<void> Win32Platform::InitWindow() {
+result<void> Win32Platform::InitWindow(int width, int height) {
     if (!glfwInit()) {
         return Error::GlfwError;
     }
@@ -42,7 +42,7 @@ result<void> Win32Platform::InitWindow() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    window_ = glfwCreateWindow(1280, 800, "Goma Engine", nullptr, nullptr);
+    window_ = glfwCreateWindow(width, height, "Goma Engine", nullptr, nullptr);
     glfwSetInputMode(window_, GLFW_STICKY_KEYS, 1);
     if (!window_) {
         glfwTerminate();

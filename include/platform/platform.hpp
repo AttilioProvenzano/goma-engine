@@ -20,7 +20,7 @@ class Platform {
 
     virtual InputState GetInputState() const = 0;
 
-    virtual result<void> InitWindow() = 0;
+    virtual result<void> InitWindow(int width, int height) = 0;
     virtual result<VkSurfaceKHR> CreateVulkanSurface(
         VkInstance instance) const = 0;
 

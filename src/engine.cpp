@@ -10,7 +10,7 @@ Engine::Engine()
     : platform_(std::make_unique<Win32Platform>()),
       input_system_(std::make_unique<InputSystem>(*platform_.get())),
       scripting_system_{std::make_unique<ScriptingSystem>(*this)} {
-    platform_->InitWindow();
+    platform_->InitWindow(1280, 800);
     renderer_ = std::make_unique<Renderer>(*this);
 }
 

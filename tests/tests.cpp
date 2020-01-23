@@ -682,11 +682,12 @@ TEST_F(EngineTest, RenderVirtualCity) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-TEST(SrgbTest, LinearSweepWithLinearFramebuffer) {
+class SrgbTest : public VezBackendTest {};
+
+TEST_F(SrgbTest, LinearSweepWithLinearFramebuffer) {
     Win32Platform platform;
     platform.InitWindow();
 
-    VezBackend vez;
     vez.SetFramebufferColorSpace(FramebufferColorSpace::Linear);
     vez.InitContext();
 
@@ -806,11 +807,10 @@ void main() {
     system("PAUSE");
 }
 
-TEST(SrgbTest, LinearSweepWithSrgbFramebuffer) {
+TEST_F(SrgbTest, LinearSweepWithSrgbFramebuffer) {
     Win32Platform platform;
     platform.InitWindow();
 
-    VezBackend vez;
     vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
     vez.InitContext();
 
@@ -930,11 +930,10 @@ void main() {
     system("PAUSE");
 }
 
-TEST(SrgbTest, SrgbSweepWithLinearTexture) {
+TEST_F(SrgbTest, SrgbSweepWithLinearTexture) {
     Win32Platform platform;
     platform.InitWindow();
 
-    VezBackend vez;
     vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
     vez.InitContext();
 
@@ -1057,11 +1056,10 @@ void main() {
     system("PAUSE");
 }
 
-TEST(SrgbTest, SrgbSweepWithSrgbTexture) {
+TEST_F(SrgbTest, SrgbSweepWithSrgbTexture) {
     Win32Platform platform;
     platform.InitWindow();
 
-    VezBackend vez;
     vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
     vez.InitContext();
 
@@ -1184,11 +1182,10 @@ void main() {
     system("PAUSE");
 }
 
-TEST(SrgbTest, ModelWithSrgbTextureReadAsLinear) {
+TEST_F(SrgbTest, ModelWithSrgbTextureReadAsLinear) {
     Win32Platform platform;
     platform.InitWindow(800, 800);
 
-    VezBackend vez;
     vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
     vez.InitContext();
 
@@ -1309,11 +1306,10 @@ void main() {
     system("PAUSE");
 }
 
-TEST(SrgbTest, ModelWithSrgbTextureReadAsSrgb) {
+TEST_F(SrgbTest, ModelWithSrgbTextureReadAsSrgb) {
     Win32Platform platform;
     platform.InitWindow(800, 800);
 
-    VezBackend vez;
     vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
     vez.InitContext();
 
@@ -1434,11 +1430,10 @@ void main() {
     system("PAUSE");
 }
 
-TEST(SrgbTest, ModelWithLinearTextureReadAsLinear) {
+TEST_F(SrgbTest, ModelWithLinearTextureReadAsLinear) {
     Win32Platform platform;
     platform.InitWindow(800, 800);
 
-    VezBackend vez;
     vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
     vez.InitContext();
 
@@ -1559,11 +1554,10 @@ void main() {
     system("PAUSE");
 }
 
-TEST(SrgbTest, ModelWithLinearTextureReadAsSrgb) {
+TEST_F(SrgbTest, ModelWithLinearTextureReadAsSrgb) {
     Win32Platform platform;
     platform.InitWindow(800, 800);
 
-    VezBackend vez;
     vez.SetFramebufferColorSpace(FramebufferColorSpace::Srgb);
     vez.InitContext();
 

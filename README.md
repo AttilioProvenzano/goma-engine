@@ -59,8 +59,6 @@ This project uses third party dependencies, each of which may have independent l
  * [outcome](https://github.com/ned14/outcome): Provides lightweight `outcome<T>` and `result<T>`.
  * [spdlog](https://github.com/gabime/spdlog): Fast C++ logging library.
  * [stb](https://github.com/nothings/stb): Single-file public domain (or MIT licensed) libraries for C/C++.
- * [variant](https://github.com/mapbox/variant): An header-only alternative to `boost::variant` for C++11 and C++14.
- * [V-EZ](https://github.com/GPUOpen-LibrariesAndSDKs/V-EZ): A wrapper intended to alleviate the inherent complexity of the Vulkan API.
  * [volk](https://github.com/zeux/volk): Meta loader for Vulkan API.
  * [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers): Vulkan header files and API registry.
 

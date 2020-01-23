@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common/include.hpp"
-#include "common/vez.hpp"
+#include "common/vulkan.hpp"
 
 namespace goma {
 

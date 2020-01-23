@@ -1,7 +1,12 @@
 #include "gtest/gtest.h"
 
-#include "engine.hpp"
+#include <chrono>
+#include <iostream>
+#include <thread>
+#include <set>
 
+#include "common/cache.hpp"
+#include "engine/engine.hpp"
 #include "scene/scene.hpp"
 #include "scene/attachments/texture.hpp"
 #include "scene/attachments/material.hpp"
@@ -9,16 +14,8 @@
 #include "scene/attachments/light.hpp"
 #include "scene/attachments/mesh.hpp"
 #include "scene/loaders/assimp_loader.hpp"
-
 #include "renderer/vez/vez_backend.hpp"
 #include "platform/win32_platform.hpp"
-
-#include "infrastructure/cache.hpp"
-
-#include <chrono>
-#include <iostream>
-#include <thread>
-#include <set>
 
 using namespace goma;
 using std::cerr;

@@ -23,4 +23,4 @@ add_subdirectory(third_party)
 add_executable(goma-tests
 	tests/tests.cpp
 )
-target_link_libraries(goma-tests PUBLIC engine gtest)
+target_link_libraries(goma-tests PUBLIC renderer gtest)

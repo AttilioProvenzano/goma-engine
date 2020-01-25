@@ -50,6 +50,11 @@ target_include_directories(outcome INTERFACE outcome/single-header)
 add_library(spdlog INTERFACE)
 target_include_directories(spdlog INTERFACE spdlog/include)
 
+# - Stb
+
+add_library(stb INTERFACE)
+target_include_directories(stb INTERFACE stb/include)
+
 # - Volk
 
 add_library(vulkan

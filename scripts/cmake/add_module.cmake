@@ -10,7 +10,7 @@ function(add_module) # optional argument: list of dependencies
     )
 
     if (SOURCES)
-        add_library(${module_name} SHARED
+        add_library(${module_name} STATIC
             ${HEADERS}
             ${SOURCES}
         )

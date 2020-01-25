@@ -39,7 +39,7 @@ struct Mesh {
 
     AttachmentIndex<Material> material{};
 
-    std::shared_ptr<VertexInputFormat> vertex_input_format;
+    // std::shared_ptr<VertexInputFormat> vertex_input_format;
     std::unique_ptr<Box> bounding_box{};
     MeshBuffers buffers{};
 };

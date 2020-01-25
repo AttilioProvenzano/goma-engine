@@ -1,4 +1,4 @@
-#include "engine.hpp"
+#include "engine/engine.hpp"
 
 #include "platform/win32_platform.hpp"
 #include "scene/loaders/assimp_loader.hpp"

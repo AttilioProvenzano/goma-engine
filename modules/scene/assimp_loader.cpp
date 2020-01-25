@@ -12,7 +12,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_FAILURE_USERMSG
-#include <stb_image.h>
+#include <stb/stb_image.h>
 
 #include "common/error_codes.hpp"
 
@@ -107,7 +107,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 ai_material->Get(AI_MATKEY_SHININESS, shininess_exponent);
                 ai_material->Get(AI_MATKEY_SHININESS_STRENGTH,
                                  specular_strength);
-                ai_material->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR,
+                ai_material->Get(
+                    AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR,
                     metallic_factor);
                 ai_material->Get(
                     AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR,

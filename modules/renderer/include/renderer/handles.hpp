@@ -12,31 +12,31 @@ struct VulkanImage {
 };
 
 struct Image {
-    VulkanImage vez{};
+    VulkanImage Vk{};
     bool valid{false};
 
-    Image(VulkanImage vez_) : vez(vez_), valid(true) {}
+    Image(VulkanImage Vk_) : Vk(Vk_), valid(true) {}
 };
 
 struct Framebuffer {
-    VezFramebuffer vez{};
+    VkFramebuffer Vk{};
     bool valid{false};
 
-    Framebuffer(VezFramebuffer vez_) : vez(vez_), valid(true) {}
+    Framebuffer(VkFramebuffer Vk_) : Vk(Vk_), valid(true) {}
 };
 
 struct Pipeline {
-    VezPipeline vez{VK_NULL_HANDLE};
+    VkPipeline Vk{VK_NULL_HANDLE};
     bool valid{false};
 
-    Pipeline(VezPipeline vez_) : vez(vez_), valid(true) {}
+    Pipeline(VkPipeline Vk_) : Vk(Vk_), valid(true) {}
 };
 
 struct Buffer {
-    VkBuffer vez{VK_NULL_HANDLE};
+    VkBuffer Vk{VK_NULL_HANDLE};
     bool valid{false};
 
-    Buffer(VkBuffer vez_) : vez(vez_), valid(true) {}
+    Buffer(VkBuffer Vk_) : Vk(Vk_), valid(true) {}
 };
 
 struct Viewport {
@@ -53,13 +53,6 @@ struct Scissor {
     uint32_t height;
     int32_t x{0};
     int32_t y{0};
-};
-
-struct VertexInputFormat {
-    const VezVertexInputFormat vez{VK_NULL_HANDLE};
-    bool valid{false};
-
-    VertexInputFormat(VezVertexInputFormat vez_) : vez(vez_), valid(true) {}
 };
 
 enum class Format {
@@ -242,13 +235,11 @@ struct GeneralPassEntry {
     std::vector<BlitDesc> blits{};
 };
 
-using PassEntry = variant<RenderPassEntry, GeneralPassEntry>;
-
 struct RenderPlan {
     std::map<RenderTargetName, ColorRenderTargetDesc> color_images{};
     std::map<RenderTargetName, DepthRenderTargetDesc> depth_images{};
 
-    std::vector<PassEntry> passes{};
+    std::vector<RenderPassEntry> passes{};
 };
 
 struct VertexInputBindingDesc {
@@ -362,7 +353,6 @@ struct ColorBlendAttachment {
 };
 
 struct ColorBlendState {
-    VezColorBlendState state;
     bool color_blend{false};
     LogicOp logic_op{LogicOp::And};
     std::vector<ColorBlendAttachment> attachments{};

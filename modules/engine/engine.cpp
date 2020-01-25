@@ -1,5 +1,6 @@
 #include "engine/engine.hpp"
 
+#include "common/error_codes.hpp"
 #include "platform/win32_platform.hpp"
 #include "scene/loaders/assimp_loader.hpp"
 #include "scripting/scripts/fly_camera.hpp"
@@ -11,7 +12,7 @@ Engine::Engine()
       input_system_(std::make_unique<InputSystem>(*platform_.get())),
       scripting_system_{std::make_unique<ScriptingSystem>(*this)} {
     platform_->InitWindow(1280, 800);
-    renderer_ = std::make_unique<Renderer>(*this);
+    // renderer_ = std::make_unique<Renderer>(*this);
 }
 
 result<void> Engine::MainLoop(MainLoopFn inner_loop) {
@@ -36,7 +37,7 @@ result<void> Engine::MainLoop(MainLoopFn inner_loop) {
 
             input_system_->AcquireFrameInput();
             scripting_system_->Update(delta_time_.count());
-            renderer_->Render();
+            // renderer_->Render();
 
             bool res = false;
             if (inner_loop) {
@@ -67,7 +68,7 @@ result<void> Engine::LoadScene(const char* file_path) {
     FlyCamera fly_camera(main_camera_, 5.0f);
     scripting_system_->RegisterScript(std::move(fly_camera));
 
-    OUTCOME_TRY(renderer_->CreateSkybox());
+    // OUTCOME_TRY(renderer_->CreateSkybox());
 
     return outcome::success();
 }

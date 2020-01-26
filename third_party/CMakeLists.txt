@@ -29,6 +29,20 @@ set_property(TARGET glfw PROPERTY FOLDER ThirdParty)
 add_library(glm INTERFACE)
 target_include_directories(glm INTERFACE glm)
 
+# - Glslang
+
+set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
+set(ENABLE_SPVREMAPPER OFF CACHE BOOL "" FORCE)
+set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+set(ENABLE_CTEST OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(glslang)
+foreach(target glslang OGLCompiler OSDependent SPIRV)
+  if(TARGET ${target})
+    set_property(TARGET ${target} PROPERTY FOLDER ThirdParty/glslang)
+  endif()
+endforeach()
+
 # - GoogleTest
 
 set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
@@ -55,12 +69,14 @@ target_include_directories(spdlog INTERFACE spdlog/include)
 add_library(stb INTERFACE)
 target_include_directories(stb INTERFACE stb/include)
 
-# - Volk
+# - Vulkan
 
 add_library(vulkan
+	vma/vk_mem_alloc.cpp
 	volk/volk.h
 	volk/volk.c)
 set_property(TARGET vulkan PROPERTY FOLDER ThirdParty)
 target_include_directories(vulkan PUBLIC
 	Vulkan-Headers/include
+	vma/include
 	volk)

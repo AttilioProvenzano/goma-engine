@@ -3,33 +3,6 @@
 #include "common/error_codes.hpp"
 #include "platform/platform.hpp"
 
-#define VK_CHECK(fn)                                                         \
-    {                                                                        \
-        VkResult _r = fn;                                                    \
-        if (_r != VK_SUCCESS) {                                              \
-            spdlog::error(                                                   \
-                "{}, line {}: In function {}, a Vulkan error occurred when " \
-                "running {}.",                                               \
-                __FILE__, __LINE__, __func__, #fn);                          \
-        };                                                                   \
-        switch (_r) {                                                        \
-            case VK_SUCCESS:                                                 \
-                break;                                                       \
-            case VK_ERROR_INITIALIZATION_FAILED:                             \
-                return Error::VulkanInitializationFailed;                    \
-            case VK_ERROR_OUT_OF_HOST_MEMORY:                                \
-                return Error::OutOfCPUMemory;                                \
-            case VK_ERROR_OUT_OF_DEVICE_MEMORY:                              \
-                return Error::OutOfGPUMemory;                                \
-            case VK_ERROR_LAYER_NOT_PRESENT:                                 \
-                return Error::VulkanLayerNotPresent;                         \
-            case VK_ERROR_EXTENSION_NOT_PRESENT:                             \
-                return Error::VulkanExtensionNotPresent;                     \
-            default:                                                         \
-                return Error::GenericVulkanError;                            \
-        }                                                                    \
-    }
-
 namespace goma {
 
 namespace {
@@ -150,7 +123,7 @@ result<VkPhysicalDevice> CreatePhysicalDevice(VkInstance instance) {
     return physical_devices[0];
 }
 
-result<uint32_t> GetQueueFamilyIndex(VkPhysicalDevice physical_device) {
+result<uint32_t> GetQueueFamilyIndex_(VkPhysicalDevice physical_device) {
     // TODO: create multiple queues, separate queues for transfer and
     // compute
     uint32_t queue_family_count;
@@ -318,9 +291,27 @@ result<VkSwapchainKHR> CreateSwapchain(
     return swapchain;
 }
 
+result<VmaAllocator> CreateAllocator(VkInstance instance,
+                                     VkPhysicalDevice physical_device) {
+    VmaAllocatorCreateInfo allocator_info = {};
+    allocator_info.instance = instance;
+    allocator_info.physicalDevice = physical_device;
+    allocator_info.frameInUseCount = 3;
+
+    VmaAllocator allocator = VK_NULL_HANDLE;
+    VK_CHECK(vmaCreateAllocator(&allocator_info, &allocator));
+
+    return allocator;
+}
+
 }  // namespace
 
-Device::Device(const Device::Config& config) : config_(config) { Init(); }
+Device::Device(const Device::Config& config) : config_(config) {
+    auto res = Init();
+    if (res.has_error()) {
+        throw std::runtime_error(res.error().message());
+    }
+}
 
 result<void> Device::InitWindow(Platform& platform) {
     OUTCOME_TRY(surface, CreateSurface(platform, api_handles_.instance));
@@ -340,6 +331,16 @@ result<void> Device::InitWindow(Platform& platform) {
     return outcome::success();
 }
 
+VkDevice Device::GetHandle() {
+    assert(api_handles_.device != VK_NULL_HANDLE && "Device not initialized.");
+    return api_handles_.device;
+}
+
+uint32_t Device::GetQueueFamilyIndex() {
+    assert(queue_family_index_ != -1 && "Queue family index not initialized.");
+    return queue_family_index_;
+}
+
 result<void> Device::Init() {
     VK_CHECK(volkInitialize());
 
@@ -352,13 +353,40 @@ result<void> Device::Init() {
     OUTCOME_TRY(physical_device, CreatePhysicalDevice(instance));
     api_handles_.physical_device = physical_device;
 
-    OUTCOME_TRY(queue_family_index, GetQueueFamilyIndex(physical_device));
+    OUTCOME_TRY(queue_family_index, GetQueueFamilyIndex_(physical_device));
     queue_family_index_ = queue_family_index;
 
     OUTCOME_TRY(device, CreateDevice(physical_device, queue_family_index));
     api_handles_.device = device;
 
+    OUTCOME_TRY(allocator, CreateAllocator(instance, physical_device));
+    api_handles_.allocator = allocator;
+
     return outcome::success();
+}
+
+result<Buffer*> Device::CreateBuffer(const BufferDesc& buffer_desc) {
+    VkBufferCreateInfo buffer_info = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    buffer_info.size = buffer_desc.size;
+    buffer_info.usage = buffer_desc.usage;
+
+    VmaAllocationCreateInfo allocation_create_info = {};
+    allocation_create_info.usage = buffer_desc.storage;
+
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    VmaAllocationInfo allocation_info = {};
+
+    VK_CHECK(vmaCreateBuffer(api_handles_.allocator, &buffer_info,
+                             &allocation_create_info, &buffer, &allocation,
+                             &allocation_info));
+
+    auto buffer_ptr = std::make_unique<Buffer>(buffer_desc);
+    buffer_ptr->SetHandle(buffer);
+    buffer_ptr->SetAllocation({allocation, allocation_info});
+    buffers_.push_back(std::move(buffer_ptr));
+
+    return buffer_ptr.get();
 }
 
 }  // namespace goma

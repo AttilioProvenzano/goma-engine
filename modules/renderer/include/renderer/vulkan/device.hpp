@@ -2,6 +2,7 @@
 
 #include "common/include.hpp"
 #include "common/vulkan.hpp"
+#include "renderer/buffer.hpp"
 
 namespace goma {
 
@@ -16,12 +17,15 @@ class Device {
         } fb_color_space = FbColorSpace::Srgb;
     };
 
-    Device(const Config& config = {});
-    result<void> InitWindow(Platform&);
+    Device(const Config& config = {});  // TODO: Teardown
+    result<void> InitWindow(Platform& platform);
+
+    VkDevice GetHandle();
+    uint32_t GetQueueFamilyIndex();
+    result<Buffer*> CreateBuffer(const BufferDesc& buffer_desc);
 
     /*
 void ProcessWindowChanges(Platform&);
-Buffer* CreateBuffer(BufferDescription);
 Texture* CreateTexture(TextureDescription);
 Shader* CreateShader(ShaderDescription);
 Pipeline* CreatePipeline(PipelineDescription);
@@ -47,7 +51,11 @@ void Present();
 
         VkSurfaceKHR surface;
         VkSwapchainKHR swapchain;
+
+        VmaAllocator allocator;
     } api_handles_;
+
+    std::vector<std::unique_ptr<Buffer>> buffers_;
 };
 
 }  // namespace goma

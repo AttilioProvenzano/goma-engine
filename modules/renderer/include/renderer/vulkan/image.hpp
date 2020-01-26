@@ -6,15 +6,16 @@
 namespace goma {
 
 class Image {
-    Image(ImageDescription);
+  public:
+    Image();
 
-    std::array<uint32_t, 3> GetSize();
+    VkExtent3D GetSize();
+    VkFormat GetFormat();
+    VkSampleCountFlagBits GetSampleCount();
 
     void SetAPIResource(VkImage);
     VkImage GetAPIResource();
-
-    ImageDescription mDesc;
-    VkImage mAPIResource;
+    VkImageView GetViewHandle(); // TODO: probably bundle image and image view
 };
 
 }  // namespace goma

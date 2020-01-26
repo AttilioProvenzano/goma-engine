@@ -5,18 +5,45 @@
 
 namespace goma {
 
-class Buffer {
-    Buffer(BufferDescription);
+struct BufferDesc {
+    VkDeviceSize size;
+    uint32_t num_elements;
+    uint32_t stride;
 
+    VkBufferUsageFlags usage;
+    VmaMemoryUsage storage;
+};
+
+class Buffer {
+  public:
+    Buffer(const BufferDesc&);
+
+    VkDeviceSize GetSize();
     uint32_t GetStride();
-    uint32_t GetSize();
     uint32_t GetNumElements();
 
-    void SetAPIResource(VkBuffer);
-    VkBuffer GetAPIResource();
+    VkBufferUsageFlags GetUsage();
+    VmaMemoryUsage GetStorage();
 
-    BufferDescription mDesc;
-    VkBuffer mAPIResource;
+    void SetHandle(VkBuffer);
+    VkBuffer GetHandle();
+
+    struct Allocation {
+        VmaAllocation allocation;
+        VmaAllocationInfo allocation_info;
+    };
+
+    void SetAllocation(Allocation);
+    Allocation GetAllocation();
+
+  private:
+    BufferDesc desc_;
+
+    struct {
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        VmaAllocationInfo allocation_info = {};
+    } api_handles_;
 };
 
 }  // namespace goma

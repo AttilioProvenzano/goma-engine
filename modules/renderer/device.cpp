@@ -1,11 +1,18 @@
 #include "renderer/vulkan/device.hpp"
 
+#include <glslang/Public/ShaderLang.h>
+#include <SPIRV/GlslangToSpv.h>
+
 #include "common/error_codes.hpp"
 #include "platform/platform.hpp"
+#include "renderer/vulkan/context.hpp"
+#include "renderer/vulkan/utils.hpp"
 
 namespace goma {
 
 namespace {
+
+const char* kPipelineCacheFilename = "pipeline_cache.data";
 
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(
     VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT, uint64_t, size_t,
@@ -291,12 +298,63 @@ result<VkSwapchainKHR> CreateSwapchain(
     return swapchain;
 }
 
-result<VmaAllocator> CreateAllocator(VkInstance instance,
-                                     VkPhysicalDevice physical_device) {
+result<VkPipelineCache> CreatePipelineCache(VkDevice device,
+                                            const char* filename = nullptr) {
+    std::vector<char> data;
+
+    if (filename) {
+        std::ifstream f(filename, std::ios_base::in | std::ios_base::binary);
+
+        if (f.good()) {
+            f.seekg(0, std::ios::end);
+            auto size = static_cast<size_t>(f.tellg());
+
+            data.resize(size);
+            f.seekg(0);
+            f.read(data.data(), size);
+        }
+    }
+
+    VkPipelineCacheCreateInfo pipeline_cache_info = {
+        VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
+
+    if (!data.empty()) {
+        pipeline_cache_info.initialDataSize = data.size();
+        pipeline_cache_info.pInitialData = data.data();
+    }
+
+    VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
+    VK_CHECK(vkCreatePipelineCache(device, &pipeline_cache_info, nullptr,
+                                   &pipeline_cache));
+
+    return pipeline_cache;
+}
+
+result<VmaAllocator> CreateAllocator(VkPhysicalDevice physical_device,
+                                     VkDevice device) {
+    VmaVulkanFunctions vk_functions = {vkGetPhysicalDeviceProperties,
+                                       vkGetPhysicalDeviceMemoryProperties,
+                                       vkAllocateMemory,
+                                       vkFreeMemory,
+                                       vkMapMemory,
+                                       vkUnmapMemory,
+                                       vkFlushMappedMemoryRanges,
+                                       vkInvalidateMappedMemoryRanges,
+                                       vkBindBufferMemory,
+                                       vkBindImageMemory,
+                                       vkGetBufferMemoryRequirements,
+                                       vkGetImageMemoryRequirements,
+                                       vkCreateBuffer,
+                                       vkDestroyBuffer,
+                                       vkCreateImage,
+                                       vkDestroyImage,
+                                       vkCmdCopyBuffer};
+
     VmaAllocatorCreateInfo allocator_info = {};
-    allocator_info.instance = instance;
     allocator_info.physicalDevice = physical_device;
+    allocator_info.device = device;
     allocator_info.frameInUseCount = 3;
+    allocator_info.pVulkanFunctions = &vk_functions;
 
     VmaAllocator allocator = VK_NULL_HANDLE;
     VK_CHECK(vmaCreateAllocator(&allocator_info, &allocator));
@@ -310,6 +368,90 @@ Device::Device(const Device::Config& config) : config_(config) {
     auto res = Init();
     if (res.has_error()) {
         throw std::runtime_error(res.error().message());
+    }
+}
+
+Device::~Device() {
+    vkDeviceWaitIdle(api_handles_.device);
+
+    /*
+for (auto image : api_handles_.fb_image_cache) {
+    vezDestroyImageView(api_handles_.device, image.second->vez.image_view);
+    vezDestroyImage(api_handles_.device, image.second->vez.image);
+}
+    */
+
+    for (auto& shader : shaders_) {
+        vkDestroyShaderModule(api_handles_.device, shader->GetHandle(),
+                              nullptr);
+        shader->SetHandle(VK_NULL_HANDLE);
+    }
+    shaders_.clear();
+
+    for (auto& buffer : buffers_) {
+        vmaDestroyBuffer(api_handles_.allocator, buffer->GetHandle(),
+                         buffer->GetAllocation().allocation);
+        buffer->SetHandle(VK_NULL_HANDLE);
+    }
+    buffers_.clear();
+
+    if (api_handles_.pipeline_cache) {
+        size_t data_size;
+        vkGetPipelineCacheData(api_handles_.device, api_handles_.pipeline_cache,
+                               &data_size, nullptr);
+
+        std::vector<char> data(data_size);
+        vkGetPipelineCacheData(api_handles_.device, api_handles_.pipeline_cache,
+                               &data_size, static_cast<void*>(data.data()));
+
+        std::ofstream f(kPipelineCacheFilename,
+                        std::ios_base::out | std::ios_base::binary);
+        if (f.good()) {
+            f.write(data.data(), data.size());
+        }
+
+        vkDestroyPipelineCache(api_handles_.device, api_handles_.pipeline_cache,
+                               nullptr);
+        api_handles_.pipeline_cache = VK_NULL_HANDLE;
+    }
+
+    for (auto& pipeline : pipelines_) {
+        vkDestroyPipeline(api_handles_.device, pipeline->GetHandle(), nullptr);
+        pipeline->SetHandle(VK_NULL_HANDLE);
+    }
+    pipelines_.clear();
+
+    if (api_handles_.swapchain) {
+        vkDestroySwapchainKHR(api_handles_.device, api_handles_.swapchain,
+                              nullptr);
+        api_handles_.swapchain = VK_NULL_HANDLE;
+    }
+
+    if (api_handles_.surface) {
+        vkDestroySurfaceKHR(api_handles_.instance, api_handles_.surface,
+                            nullptr);
+        api_handles_.surface = VK_NULL_HANDLE;
+    }
+
+    if (api_handles_.allocator) {
+        vmaDestroyAllocator(api_handles_.allocator);
+        api_handles_.allocator = VK_NULL_HANDLE;
+    }
+
+    if (api_handles_.device) {
+        vkDestroyDevice(api_handles_.device, nullptr);
+        api_handles_.device = VK_NULL_HANDLE;
+    }
+
+    if (api_handles_.debug_callback) {
+        vkDestroyDebugReportCallbackEXT(api_handles_.instance,
+                                        api_handles_.debug_callback, nullptr);
+        api_handles_.debug_callback = VK_NULL_HANDLE;
+    }
+
+    if (api_handles_.instance) {
+        vkDestroyInstance(api_handles_.instance, nullptr);
+        api_handles_.instance = VK_NULL_HANDLE;
     }
 }
 
@@ -359,7 +501,11 @@ result<void> Device::Init() {
     OUTCOME_TRY(device, CreateDevice(physical_device, queue_family_index));
     api_handles_.device = device;
 
-    OUTCOME_TRY(allocator, CreateAllocator(instance, physical_device));
+    OUTCOME_TRY(pipeline_cache,
+                CreatePipelineCache(device, kPipelineCacheFilename));
+    api_handles_.pipeline_cache = pipeline_cache;
+
+    OUTCOME_TRY(allocator, CreateAllocator(physical_device, device));
     api_handles_.allocator = allocator;
 
     return outcome::success();
@@ -384,9 +530,213 @@ result<Buffer*> Device::CreateBuffer(const BufferDesc& buffer_desc) {
     auto buffer_ptr = std::make_unique<Buffer>(buffer_desc);
     buffer_ptr->SetHandle(buffer);
     buffer_ptr->SetAllocation({allocation, allocation_info});
-    buffers_.push_back(std::move(buffer_ptr));
 
-    return buffer_ptr.get();
+    buffers_.push_back(std::move(buffer_ptr));
+    return buffers_.back().get();
+}
+
+result<void*> Device::MapBuffer(Buffer* buffer) {
+    void* data = nullptr;
+    VK_CHECK(vmaMapMemory(api_handles_.allocator,
+                          buffer->GetAllocation().allocation, &data));
+
+    return data;
+}
+
+void Device::UnmapBuffer(Buffer* buffer) {
+    vmaUnmapMemory(api_handles_.allocator, buffer->GetAllocation().allocation);
+}
+
+result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
+    static const std::unordered_map<VkShaderStageFlagBits, EShLanguage>
+        stage_map = {{VK_SHADER_STAGE_VERTEX_BIT, EShLangVertex},
+                     {VK_SHADER_STAGE_FRAGMENT_BIT, EShLangFragment}};
+
+    glslang::InitializeProcess();
+    glslang::TShader shader{stage_map.at(shader_desc.stage)};
+
+    auto source = shader_desc.source.c_str();
+    shader.setStrings(&source, 1);
+
+    if (!shader_desc.preamble.empty()) {
+        shader.setPreamble(shader_desc.preamble.c_str());
+    }
+
+    shader.setEnvInput(glslang::EShSourceGlsl, EShLangVertex,
+                       glslang::EShClientVulkan, 100);
+    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
+    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
+
+    TBuiltInResource builtin_resources = {};
+    bool compilation_res =
+        shader.parse(&builtin_resources, 0, false, EShMsgDefault);
+
+    if (!compilation_res) {
+        auto info_log = shader.getInfoLog();
+        spdlog::info("Shader \"{}\" - compilation failed:\n{}",
+                     shader_desc.name, info_log);
+
+        return Error::ShaderCompilationFailed;
+    }
+
+    glslang::TProgram program;
+    program.addShader(&shader);
+    bool link_res = program.link(EShMsgDefault);
+
+    if (!link_res) {
+        auto info_log = program.getInfoLog();
+        spdlog::info("Shader \"{}\" - linking failed:\n{}", shader_desc.name,
+                     info_log);
+    }
+
+    std::vector<uint32_t> spirv;
+    spv::SpvBuildLogger logger;
+    glslang::SpvOptions spvOptions = {};
+    GlslangToSpv(*program.getIntermediate(EShLangVertex), spirv, &logger,
+                 &spvOptions);
+
+    glslang::FinalizeProcess();
+
+    VkShaderModuleCreateInfo shader_info = {
+        VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    shader_info.codeSize = sizeof(spirv[0]) * spirv.size();
+    shader_info.pCode = spirv.data();
+
+    VkShaderModule shader_module = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateShaderModule(api_handles_.device, &shader_info, nullptr,
+                                  &shader_module));
+
+    auto shader_ptr = std::make_unique<Shader>(std::move(shader_desc));
+    shader_ptr->SetHandle(shader_module);
+
+    // Shader reflection
+    spirv_cross::CompilerGLSL spirv_glsl{std::move(spirv)};
+    auto resources = spirv_glsl.get_shader_resources();
+    shader_ptr->SetResources(std::move(resources));
+
+    shaders_.push_back(std::move(shader_ptr));
+    return shaders_.back().get();
+}
+
+result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
+                                         FramebufferDesc& fb_desc) {
+    VkGraphicsPipelineCreateInfo pipeline_info = {
+        VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+
+    if (fb_desc.render_pass_ == VK_NULL_HANDLE) {
+        OUTCOME_TRY(render_pass,
+                    utils::CreateRenderPass(api_handles_.device, fb_desc));
+        fb_desc.render_pass_ = render_pass;
+    }
+
+    VkPipelineLayoutCreateInfo layout_info = {
+        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    layout_info.setLayoutCount = 0;  // TODO!
+
+    // TODO: move pipeline layout to shader (SPIRV-Cross?)
+    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+    VK_CHECK(vkCreatePipelineLayout(api_handles_.device, &layout_info, nullptr,
+                                    &pipeline_layout));
+    api_handles_.pipeline_layouts.push_back(pipeline_layout);
+
+    std::vector<VkPipelineShaderStageCreateInfo> stages;
+
+    for (const auto& shader : pipeline_desc.shaders) {
+        VkPipelineShaderStageCreateInfo stage = {
+            VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        stage.stage = shader->GetStage();
+        stage.module = shader->GetHandle();
+
+        stages.push_back(stage);
+    }
+
+    VkPipelineVertexInputStateCreateInfo vtx_input_state = {
+        VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+    vtx_input_state.vertexBindingDescriptionCount =
+        0;  // TODO: Get data from shader
+
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
+        VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    input_assembly_state.topology = pipeline_desc.primitive_topology;
+    input_assembly_state.primitiveRestartEnable = VK_TRUE;
+
+    VkPipelineRasterizationStateCreateInfo raster_state = {
+        VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    raster_state.depthClampEnable = VK_FALSE;
+    raster_state.rasterizerDiscardEnable = pipeline_desc.suppress_fragment;
+    raster_state.polygonMode = VK_POLYGON_MODE_FILL;
+    raster_state.cullMode = pipeline_desc.cull_mode;
+    raster_state.frontFace = pipeline_desc.front_face;
+    raster_state.depthBiasEnable = VK_FALSE;
+    raster_state.lineWidth = 1.0f;
+
+    VkPipelineMultisampleStateCreateInfo multisample_state = {
+        VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    multisample_state.rasterizationSamples = pipeline_desc.sample_count;
+    multisample_state.sampleShadingEnable =
+        pipeline_desc.sample_count > VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineDepthStencilStateCreateInfo ds_state = {
+        VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    ds_state.depthTestEnable = pipeline_desc.depth_test;
+    ds_state.depthWriteEnable = pipeline_desc.depth_write;
+    ds_state.depthCompareOp = pipeline_desc.depth_compare_op;
+    ds_state.stencilTestEnable = pipeline_desc.stencil_test;
+    ds_state.front = pipeline_desc.stencil_front_op;
+    ds_state.back = pipeline_desc.stencil_back_op;
+
+    VkPipelineColorBlendStateCreateInfo blend_state = {
+        VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+
+    std::vector<VkPipelineColorBlendAttachmentState> blend_attachments;
+
+    if (pipeline_desc.color_blend) {
+        blend_state.attachmentCount = pipeline_desc.blend_attachments.size();
+        blend_state.pAttachments = pipeline_desc.blend_attachments.data();
+    } else {
+        blend_attachments.resize(fb_desc.color_attachments.size(),
+                                 VkPipelineColorBlendAttachmentState{VK_FALSE});
+        blend_state.attachmentCount = blend_attachments.size();
+        blend_state.pAttachments = blend_attachments.data();
+    }
+
+    static const std::vector<VkDynamicState> dyn_states = {
+        VK_DYNAMIC_STATE_SCISSOR,
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
+        VK_DYNAMIC_STATE_STENCIL_REFERENCE,
+        VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
+        VK_DYNAMIC_STATE_BLEND_CONSTANTS};
+
+    VkPipelineDynamicStateCreateInfo dyn_state = {
+        VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+    dyn_state.dynamicStateCount = dyn_states.size();
+    dyn_state.pDynamicStates = dyn_states.data();
+
+    pipeline_info.stageCount = stages.size();
+    pipeline_info.pStages = stages.data();
+    pipeline_info.pVertexInputState = &vtx_input_state;
+    pipeline_info.pInputAssemblyState = &input_assembly_state;
+    pipeline_info.pTessellationState = nullptr;
+    pipeline_info.pViewportState = nullptr;
+    pipeline_info.pRasterizationState = &raster_state;
+    pipeline_info.pMultisampleState = &multisample_state;
+    pipeline_info.pDepthStencilState = &ds_state;
+    pipeline_info.pColorBlendState = &blend_state;
+    pipeline_info.pDynamicState = &dyn_state;
+    pipeline_info.layout = pipeline_layout;
+    pipeline_info.renderPass = fb_desc.render_pass_;
+    pipeline_info.subpass = 0;
+
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    vkCreateGraphicsPipelines(GetHandle(), api_handles_.pipeline_cache, 1,
+                              &pipeline_info, nullptr, &pipeline);
+
+    auto pipeline_ptr = std::make_unique<Pipeline>(std::move(pipeline_desc));
+    pipeline_ptr->SetHandle(pipeline);
+
+    pipelines_.push_back(std::move(pipeline_ptr));
+    return pipelines_.back().get();
 }
 
 }  // namespace goma

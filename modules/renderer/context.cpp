@@ -2,10 +2,17 @@
 
 #include "renderer/vulkan/device.hpp"
 #include "renderer/vulkan/image.hpp"
+#include "renderer/vulkan/utils.hpp"
 
 namespace goma {
 
 CommandBufferManager::CommandBufferManager(Device& device) : device_(device) {}
+
+CommandBufferManager::~CommandBufferManager() {
+    for (auto& pool : pools_) {
+        vkDestroyCommandPool(device_.GetHandle(), pool.second.pool, nullptr);
+    }
+}
 
 void CommandBufferManager::Reset() {
     for (auto& pool : pools_) {
@@ -96,6 +103,8 @@ result<void> Context::Begin() {
 
     VK_CHECK(vkBeginCommandBuffer(cmd_buf, &begin_info));
     active_cmd_buf_ = cmd_buf;
+
+    return outcome::success();
 }
 
 void Context::End() {
@@ -107,68 +116,26 @@ void Context::End() {
     active_cmd_buf_ = VK_NULL_HANDLE;
 }
 
-struct FramebufferDesc {
-    struct Attachment {
-        Image* image = nullptr;
-        VkAttachmentLoadOp load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        VkAttachmentStoreOp store_op = VK_ATTACHMENT_STORE_OP_STORE;
-        VkClearValue clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
-        Image* resolve_to = nullptr;
-    };
+GraphicsContext::GraphicsContext(Device& device) : Context(device) {}
 
-    std::vector<Attachment> color_attachments;
-    Attachment depth_attachment;
-};
-
-result<void> GraphicsContext::BindFramebuffer(FramebufferDesc desc) {
+result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     assert(active_cmd_buf_ != VK_NULL_HANDLE &&
            "Context is not in a recording state");
 
-    std::vector<VkAttachmentDescription> attachments;
-    std::vector<VkAttachmentReference> color_attachments;
-    std::vector<VkAttachmentReference> resolve_attachments;
-    std::vector<VkClearValue> clear_values;
+    if (desc.render_pass_ == VK_NULL_HANDLE) {
+        OUTCOME_TRY(render_pass,
+                    utils::CreateRenderPass(device_.GetHandle(), desc));
+        desc.render_pass_ = render_pass;
+    }
 
     std::vector<VkImageView> fb_attachments;
     VkExtent3D fb_size = {};
 
     for (const auto& c : desc.color_attachments) {
-        VkAttachmentDescription attachment = {};
-        attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        attachment.format = c.image->GetFormat();
-        attachment.loadOp = c.load_op;
-        attachment.storeOp = c.store_op;
-        attachment.samples = c.image->GetSampleCount();
-
-        attachments.push_back(attachment);
         fb_attachments.push_back(c.image->GetViewHandle());
-        clear_values.push_back(c.clear_value);
-
-        VkAttachmentReference attachment_ref = {};
-        attachment_ref.attachment = attachments.size() - 1;
-        attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        color_attachments.push_back(attachment_ref);
 
         if (c.resolve_to) {
-            VkAttachmentDescription attachment = {};
-            attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            attachment.format = c.resolve_to->GetFormat();
-            attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            attachment.samples = c.resolve_to->GetSampleCount();
-
-            attachments.push_back(attachment);
             fb_attachments.push_back(c.resolve_to->GetViewHandle());
-            clear_values.push_back(c.clear_value);
-
-            VkAttachmentReference attachment_ref = {};
-            attachment_ref.attachment = attachments.size() - 1;
-            attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-            resolve_attachments.push_back(attachment_ref);
         }
 
         auto image_size = c.image->GetSize();
@@ -180,27 +147,10 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc desc) {
         }
     }
 
-    VkAttachmentReference depth_attachment;
     auto& d = desc.depth_attachment;
 
     if (d.image) {
-        VkAttachmentDescription attachment = {};
-        attachment.initialLayout =
-            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        attachment.finalLayout =
-            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        attachment.format = d.image->GetFormat();
-        attachment.loadOp = d.load_op;
-        attachment.storeOp = d.store_op;
-        attachment.samples = d.image->GetSampleCount();
-
-        attachments.push_back(attachment);
         fb_attachments.push_back(d.image->GetViewHandle());
-        clear_values.push_back(d.clear_value);
-
-        depth_attachment.attachment = attachments.size() - 1;
-        depth_attachment.layout =
-            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
         // Note: we still check fb_size for the depth image as
         // there could be a depth-only pass
@@ -213,33 +163,9 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc desc) {
         }
     }
 
-    VkSubpassDescription subpass = {};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = color_attachments.size();
-    subpass.pColorAttachments = color_attachments.data();
-
-    if (depth_image) {
-        subpass.pDepthStencilAttachment = &depth_attachment;
-    }
-
-    if (!resolve_attachments.empty()) {
-        subpass.pResolveAttachments = resolve_attachments.data();
-    }
-
-    VkRenderPassCreateInfo rp_info = {
-        VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-    rp_info.attachmentCount = attachments.size();
-    rp_info.pAttachments = attachments.data();
-    rp_info.subpassCount = 1;
-    rp_info.pSubpasses = &subpass;
-
-    VkRenderPass render_pass = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateRenderPass(device_.GetHandle(), &rp_info, nullptr,
-                                &render_pass));
-
     VkFramebufferCreateInfo fb_info = {
         VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-    fb_info.renderPass = render_pass;
+    fb_info.renderPass = desc.render_pass_;
     fb_info.width = fb_size.width;
     fb_info.height = fb_size.height;
     fb_info.attachmentCount = fb_attachments.size();
@@ -254,13 +180,39 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc desc) {
     VkRenderPassBeginInfo rp_begin_info = {
         VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     rp_begin_info.renderArea = {VkOffset2D{}, {fb_size.width, fb_size.height}};
-    rp_begin_info.renderPass = render_pass;
+    rp_begin_info.renderPass = desc.render_pass_;
     rp_begin_info.framebuffer = framebuffer;
     rp_begin_info.clearValueCount = 0;
     rp_begin_info.pClearValues = {};
 
     vkCmdBeginRenderPass(active_cmd_buf_, &rp_begin_info,
                          VK_SUBPASS_CONTENTS_INLINE);
+
+    return outcome::success();
+}
+
+void GraphicsContext::SetVertexBuffer(Buffer& buffer, VkDeviceSize offset) {
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+
+    VkBuffer handle = buffer.GetHandle();
+    vkCmdBindVertexBuffers(active_cmd_buf_, 0, 1, &handle, &offset);
+}
+
+void GraphicsContext::SetIndexBuffer(Buffer& buffer, VkDeviceSize offset,
+                                     VkIndexType index_type) {
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+
+    VkBuffer handle = buffer.GetHandle();
+    vkCmdBindIndexBuffer(active_cmd_buf_, handle, offset, index_type);
+}
+
+void GraphicsContext::Draw() {
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+
+    vkCmdDraw(active_cmd_buf_, 3, 1, 0, 0);
 }
 
 }  // namespace goma

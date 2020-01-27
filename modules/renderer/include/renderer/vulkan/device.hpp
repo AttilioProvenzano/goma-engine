@@ -3,9 +3,12 @@
 #include "common/include.hpp"
 #include "common/vulkan.hpp"
 #include "renderer/buffer.hpp"
+#include "renderer/pipeline.hpp"
+#include "renderer/shader.hpp"
 
 namespace goma {
 
+struct FramebufferDesc;
 class Platform;
 
 class Device {
@@ -17,18 +20,24 @@ class Device {
         } fb_color_space = FbColorSpace::Srgb;
     };
 
-    Device(const Config& config = {});  // TODO: Teardown
-    result<void> InitWindow(Platform& platform);
+    Device(const Config& = {});
+    ~Device();
+
+    result<void> InitWindow(Platform&);
 
     VkDevice GetHandle();
     uint32_t GetQueueFamilyIndex();
-    result<Buffer*> CreateBuffer(const BufferDesc& buffer_desc);
+
+    result<Buffer*> CreateBuffer(const BufferDesc&);
+    result<void*> MapBuffer(Buffer*);
+    void UnmapBuffer(Buffer*);
+
+    result<Shader*> CreateShader(ShaderDesc);
+    result<Pipeline*> CreatePipeline(PipelineDesc, FramebufferDesc&);
 
     /*
 void ProcessWindowChanges(Platform&);
 Texture* CreateTexture(TextureDescription);
-Shader* CreateShader(ShaderDescription);
-Pipeline* CreatePipeline(PipelineDescription);
 
 Receipt SubmitWork(Context);
 void WaitOnWork(Receipt);
@@ -42,20 +51,24 @@ void Present();
     uint32_t queue_family_index_ = -1;
 
     struct {
-        VkInstance instance;
-        VkDebugReportCallbackEXT debug_callback;
-        VkPhysicalDevice physical_device;
-        VkPhysicalDeviceFeatures features;
-        VkPhysicalDeviceProperties properties;
-        VkDevice device;
+        VkInstance instance = VK_NULL_HANDLE;
+        VkDebugReportCallbackEXT debug_callback = VK_NULL_HANDLE;
+        VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+        VkPhysicalDeviceFeatures features = {};
+        VkPhysicalDeviceProperties properties = {};
+        VkDevice device = VK_NULL_HANDLE;
 
-        VkSurfaceKHR surface;
-        VkSwapchainKHR swapchain;
+        VkSurfaceKHR surface = VK_NULL_HANDLE;
+        VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 
-        VmaAllocator allocator;
+        VmaAllocator allocator = VK_NULL_HANDLE;
+        VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
+        std::vector<VkPipelineLayout> pipeline_layouts;
     } api_handles_;
 
     std::vector<std::unique_ptr<Buffer>> buffers_;
+    std::vector<std::unique_ptr<Pipeline>> pipelines_;
+    std::vector<std::unique_ptr<Shader>> shaders_;
 };
 
 }  // namespace goma

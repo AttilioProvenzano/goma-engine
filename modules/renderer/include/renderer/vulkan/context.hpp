@@ -6,10 +6,13 @@
 namespace goma {
 
 class Device;
+class Buffer;
+class Image;
 
 class CommandBufferManager {
   public:
     CommandBufferManager(Device& device);
+    ~CommandBufferManager();
 
     void Reset();
     VkCommandBuffer RequestPrimary(size_t thread_id = 0);
@@ -30,6 +33,21 @@ class CommandBufferManager {
 
     Pool& FindOrCreatePool(size_t thread_id);
     std::unordered_map<size_t, Pool> pools_;
+};
+
+struct FramebufferDesc {
+    struct Attachment {
+        Image* image = nullptr;
+        VkAttachmentLoadOp load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        VkAttachmentStoreOp store_op = VK_ATTACHMENT_STORE_OP_STORE;
+        VkClearValue clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
+        Image* resolve_to = nullptr;
+    };
+
+    std::vector<Attachment> color_attachments;
+    Attachment depth_attachment;
+
+    VkRenderPass render_pass_ = VK_NULL_HANDLE;  // for internal use
 };
 
 class Context {
@@ -55,7 +73,15 @@ class Context {
 };
 
 class GraphicsContext : public Context {
-    result<void> GraphicsContext::BindFramebuffer()
+  public:
+    GraphicsContext(Device& device);
+
+    result<void> GraphicsContext::BindFramebuffer(FramebufferDesc&);
+    void SetVertexBuffer(Buffer&, VkDeviceSize offset = 0);
+    void SetIndexBuffer(Buffer&, VkDeviceSize offset = 0,
+                        VkIndexType index_type = VK_INDEX_TYPE_UINT32);
+    void Draw();
+
     // void BeginParallel();
     /*
 void SetPipeline(Pipeline);

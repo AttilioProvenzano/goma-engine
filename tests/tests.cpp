@@ -1,9 +1,11 @@
 #include "gtest/gtest.h"
 
-#include "glslang/Public/ShaderLang.h"
-#include "SPIRV/GlslangToSpv.h"
+#include <glslang/Public/ShaderLang.h>
+#include <SPIRV/GlslangToSpv.h>
+#include <spirv_glsl.hpp>
 
 #include "platform/win32_platform.hpp"
+#include "renderer/context.hpp"
 #include "renderer/device.hpp"
 
 using namespace goma;
@@ -13,6 +15,9 @@ using namespace goma;
 #endif
 
 namespace {
+
+constexpr int kWindowWidth = 1024;
+constexpr int kWindowHeight = 768;
 
 TEST(GlslangTest, CanCompileShader) {
     using namespace glslang;
@@ -37,7 +42,7 @@ void main() {
     vtx_shader.setStrings(&vtx, 1);
     vtx_shader.setEnvInput(EShSourceGlsl, EShLangVertex, EShClientVulkan, 100);
     vtx_shader.setEnvClient(EShClientVulkan, EShTargetVulkan_1_1);
-    vtx_shader.setEnvTarget(EShTargetSpv, EShTargetSpv_1_3);
+    vtx_shader.setEnvTarget(EShTargetSpv, EShTargetSpv_1_0);
 
     TBuiltInResource builtin_resources = {};
     vtx_shader.parse(&builtin_resources, 0, false, EShMsgDefault);
@@ -61,15 +66,139 @@ void main() {
 
     FinalizeProcess();
     ASSERT_GT(spirv.size(), 0U);
+
+    // SPIRV-Cross reflection
+    spirv_cross::CompilerGLSL glsl(std::move(spirv));
+    spirv_cross::ShaderResources resources = glsl.get_shader_resources();
+
+    auto& uv_resource = resources.stage_inputs[1];
+    ASSERT_EQ(uv_resource.name, "inUVs");
+
+    auto uv_type = glsl.get_type(uv_resource.base_type_id);
+    ASSERT_EQ(uv_type.basetype, spirv_cross::SPIRType::Float);
+    ASSERT_EQ(uv_type.vecsize, 2);
 }
 
-TEST(RendererTest, CanCreateDevice) {
-    Win32Platform platform;
-    platform.InitWindow();
+class RendererTest : public ::testing::Test {
+  protected:
+    std::unique_ptr<Device> device;
 
-    Device device;
-    device.InitWindow(platform);
+    virtual void SetUp() override {
+        try {
+            device = std::make_unique<Device>();
+        } catch (std::runtime_error& ex) {
+            std::cerr << ex.what() << std::endl;
+            GTEST_SKIP();
+        }
+    }
+};
+
+TEST_F(RendererTest, CanCreateDevice) {
+    ASSERT_NE(device->GetHandle(), VkDevice{VK_NULL_HANDLE});
 }
+
+TEST_F(RendererTest, CanCreateCPUBuffer) {
+    std::vector<glm::vec3> colors = {
+        {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+
+    BufferDesc desc = {};
+    desc.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    desc.num_elements = colors.size();
+    desc.stride = sizeof(colors[0]);
+    desc.size = desc.num_elements * desc.stride;
+    desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+    auto buffer_res = device->CreateBuffer(desc);
+    ASSERT_FALSE(buffer_res.has_error()) << buffer_res.error();
+    auto buffer = buffer_res.value();
+
+    auto map_res = device->MapBuffer(buffer);
+    ASSERT_FALSE(map_res.has_error()) << map_res.error();
+    auto data = map_res.value();
+
+    memcpy(data, colors.data(), sizeof(colors[0]) * colors.size());
+    ASSERT_EQ(*static_cast<float*>(data), 1.0f);
+    device->UnmapBuffer(buffer);
+}
+
+TEST_F(RendererTest, CanCreateGPUBuffer) {
+    BufferDesc desc = {};
+    desc.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    desc.num_elements = 100;
+    desc.stride = 16;
+    desc.size = desc.num_elements * desc.stride;
+    desc.storage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+    device->CreateBuffer(desc);
+}
+
+TEST_F(RendererTest, CanCreateImage) {
+    // ImageDesc desc = {};
+    // device->CreateImage();
+    GTEST_SKIP();
+}
+
+TEST_F(RendererTest, CanCreateShader) {
+    static const char* vtx = R"(
+#version 450
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inUVs;
+
+layout(location = 0) out vec2 outUVs;
+
+void main() {
+    gl_Position = vec4(inPosition, 1.0);
+    outUVs = inUVs;
+}
+)";
+
+    ShaderDesc shader_desc = {};
+    shader_desc.name = "vtx";
+    shader_desc.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    shader_desc.source = vtx;
+
+    auto shader_res = device->CreateShader(std::move(shader_desc));
+    EXPECT_FALSE(shader_res.has_error());
+    auto shader = shader_res.value();
+
+    auto& uv_resource = shader->GetResources().stage_inputs[1];
+    ASSERT_EQ(uv_resource.name, "inUVs");
+}
+
+TEST_F(RendererTest, CanCreateGraphicsContext) {
+    GraphicsContext context(*device);
+    context.Begin();
+    context.End();
+}
+
+class RendererGraphicalTest : public RendererTest {
+  protected:
+    std::unique_ptr<Platform> platform;
+
+    void SetUp() override {
+        RendererTest::SetUp();
+
+        try {
+            platform = std::make_unique<Win32Platform>();
+            platform->InitWindow(kWindowWidth, kWindowHeight);
+            device->InitWindow(*platform);
+        } catch (std::runtime_error& ex) {
+            std::cerr << ex.what() << std::endl;
+            GTEST_SKIP();
+        }
+    }
+};
+
+TEST_F(RendererGraphicalTest, CanCreateWindow) {
+    ASSERT_NE(device->GetHandle(), VkDevice{VK_NULL_HANDLE});
+}
+
+// TEST_F(RendererTest, CanCreatePipeline) {}
+// TEST_F(RendererTest, SpinningCube) {}
+// TEST_F(RendererTest, OffscreenRendering) {}
+// TEST_F(RendererTest, Screenshot) {}
+// TEST_F(RendererTest, GUI) {}
 
 }  // namespace
 

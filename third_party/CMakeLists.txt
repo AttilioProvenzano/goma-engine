@@ -59,6 +59,24 @@ endforeach()
 add_library(outcome INTERFACE)
 target_include_directories(outcome INTERFACE outcome/single-header)
 
+# - SPIRV-Cross
+
+set(SPIRV_CROSS_CLI OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_HLSL OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_MSL OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_CPP OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_REFLECT OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_C_API OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_UTIL OFF CACHE BOOL "" FORCE)
+add_subdirectory(SPIRV-Cross)
+
+foreach(target spirv-cross-core spirv-cross-glsl)
+  if(TARGET ${target})
+    set_property(TARGET ${target} PROPERTY FOLDER ThirdParty/SPIRV-Cross)
+  endif()
+endforeach()
+
 # - Spdlog
 
 add_library(spdlog INTERFACE)

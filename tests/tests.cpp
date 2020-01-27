@@ -184,7 +184,7 @@ class RendererGraphicalTest : public RendererTest {
             auto res = platform->InitWindow(kWindowWidth, kWindowHeight);
 
             if (res.has_error()) {
-                std::cerr << res.error().message << std::endl;
+                std::cerr << res.error().message() << std::endl;
             } else {
                 device->InitWindow(*platform);
             }

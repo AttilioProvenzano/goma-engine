@@ -4,8 +4,8 @@ image:
 platform: x64
 
 configuration:
-# - Debug
-  - Release
+  - Debug
+# - Release
 
 init:
   - cmd: cmake --version

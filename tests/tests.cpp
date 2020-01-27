@@ -181,8 +181,13 @@ class RendererGraphicalTest : public RendererTest {
 
         try {
             platform = std::make_unique<Win32Platform>();
-            platform->InitWindow(kWindowWidth, kWindowHeight);
-            device->InitWindow(*platform);
+            auto res = platform->InitWindow(kWindowWidth, kWindowHeight);
+
+            if (res.has_error()) {
+                std::cerr << res.error().message << std::endl;
+            } else {
+                device->InitWindow(*platform);
+            }
         } catch (std::runtime_error& ex) {
             std::cerr << ex.what() << std::endl;
             GTEST_SKIP();

@@ -43,11 +43,12 @@ result<void> Win32Platform::InitWindow(int width, int height) {
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     window_ = glfwCreateWindow(width, height, "Goma Engine", nullptr, nullptr);
-    glfwSetInputMode(window_, GLFW_STICKY_KEYS, 1);
     if (!window_) {
         glfwTerminate();
         return Error::GlfwWindowCreationFailed;
     }
+
+    glfwSetInputMode(window_, GLFW_STICKY_KEYS, 1);
 
     return outcome::success();
 }

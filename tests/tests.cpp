@@ -86,7 +86,7 @@ class RendererTest : public ::testing::Test {
     virtual void SetUp() override {
         try {
             device = std::make_unique<Device>();
-        } catch (std::runtime_error& ex) {
+        } catch (const std::exception& ex) {
             std::cerr << ex.what() << std::endl;
             GTEST_SKIP();
         }
@@ -188,7 +188,7 @@ class RendererGraphicalTest : public RendererTest {
             } else {
                 device->InitWindow(*platform);
             }
-        } catch (std::runtime_error& ex) {
+        } catch (const std::exception& ex) {
             std::cerr << ex.what() << std::endl;
             GTEST_SKIP();
         }

@@ -87,7 +87,7 @@ class RendererTest : public ::testing::Test {
         try {
             device = std::make_unique<Device>();
         } catch (const std::exception& ex) {
-            std::cerr << ex.what() << std::endl;
+            std::cerr << "RendererTest exception: " << ex.what() << std::endl;
             GTEST_SKIP();
         }
     }
@@ -184,7 +184,8 @@ class RendererGraphicalTest : public RendererTest {
             auto res = platform->InitWindow(kWindowWidth, kWindowHeight);
 
             if (res.has_error()) {
-                std::cerr << res.error().message() << std::endl;
+                std::cerr << "RendererGraphicalTest exception: "
+                          << res.error().message() << std::endl;
             } else {
                 device->InitWindow(*platform);
             }

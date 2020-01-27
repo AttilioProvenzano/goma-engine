@@ -32,7 +32,8 @@ enum class Error {
     DimensionsNotMatching = 23,
     NoRenderPlan = 24,
 	QueueFamilyNotFound = 25,
-	SurfaceNotSupported = 26,
+    SurfaceNotSupported = 26,
+    ShaderCompilationFailed = 27,
 };
 
 }
@@ -112,6 +113,8 @@ class GomaError_category : public std::error_category {
                 return "could not find a suitable queue family";
             case goma::Error::SurfaceNotSupported:
                 return "rendering to the given surface is not supported";
+            case goma::Error::ShaderCompilationFailed:
+                return "shader compilation failed";
             default:
                 return "unknown error";
         }

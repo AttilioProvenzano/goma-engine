@@ -172,25 +172,26 @@ TEST_F(RendererTest, CanCreateGraphicsContext) {
     context.End();
 }
 
-class RendererGraphicalTest : public RendererTest {
+class RendererGraphicalTest : public ::testing::Test {
   protected:
+    std::unique_ptr<Device> device;
     std::unique_ptr<Platform> platform;
 
     void SetUp() override {
-        RendererTest::SetUp();
-
         try {
+            device = std::make_unique<Device>();
             platform = std::make_unique<Win32Platform>();
             auto res = platform->InitWindow(kWindowWidth, kWindowHeight);
 
             if (res.has_error()) {
-                std::cerr << "RendererGraphicalTest exception: "
+                std::cerr << "Window initialization failed: "
                           << res.error().message() << std::endl;
             } else {
                 device->InitWindow(*platform);
             }
         } catch (const std::exception& ex) {
-            std::cerr << ex.what() << std::endl;
+            std::cerr << "RendererGraphicalTest exception: " << ex.what()
+                      << std::endl;
             GTEST_SKIP();
         }
     }

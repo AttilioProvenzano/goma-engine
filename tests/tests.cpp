@@ -138,7 +138,7 @@ TEST_F(RendererTest, CanCreateImage) {
     GTEST_SKIP();
 }
 
-TEST_F(RendererTest, CanCreateShader) {
+TEST_F(RendererTest, CanCreateShaderAndPipeline) {
     static const char* vtx = R"(
 #version 450
 
@@ -159,11 +159,21 @@ void main() {
     shader_desc.source = vtx;
 
     auto shader_res = device->CreateShader(std::move(shader_desc));
-    EXPECT_FALSE(shader_res.has_error());
+    EXPECT_FALSE(shader_res.has_error())
+        << "Shader error: " << shader_res.error().message();
+
     auto shader = shader_res.value();
+    ASSERT_NE(shader->GetHandle(), VK_NULL_HANDLE);
 
     auto& uv_resource = shader->GetResources().stage_inputs[1];
     ASSERT_EQ(uv_resource.name, "inUVs");
+
+    auto pipeline_res = device->CreatePipeline({{shader}}, FramebufferDesc{});
+    EXPECT_FALSE(pipeline_res.has_error())
+        << "Pipeline error: " << pipeline_res.error().message();
+
+    auto pipeline = pipeline_res.value();
+    ASSERT_NE(pipeline->GetHandle(), VK_NULL_HANDLE);
 }
 
 TEST_F(RendererTest, CanCreateGraphicsContext) {

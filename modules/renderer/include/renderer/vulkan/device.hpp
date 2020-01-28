@@ -64,6 +64,7 @@ void Present();
         VmaAllocator allocator = VK_NULL_HANDLE;
         VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
         std::vector<VkPipelineLayout> pipeline_layouts;
+        std::vector<VkRenderPass> render_passes;
     } api_handles_;
 
     std::vector<std::unique_ptr<Buffer>> buffers_;

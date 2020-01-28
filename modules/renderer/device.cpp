@@ -421,6 +421,16 @@ for (auto image : api_handles_.fb_image_cache) {
     }
     pipelines_.clear();
 
+    for (auto& pipeline_layout : api_handles_.pipeline_layouts) {
+        vkDestroyPipelineLayout(api_handles_.device, pipeline_layout, nullptr);
+    }
+    api_handles_.pipeline_layouts.clear();
+
+    for (auto& render_pass : api_handles_.render_passes) {
+        vkDestroyRenderPass(api_handles_.device, render_pass, nullptr);
+    }
+    api_handles_.render_passes.clear();
+
     if (api_handles_.swapchain) {
         vkDestroySwapchainKHR(api_handles_.device, api_handles_.swapchain,
                               nullptr);
@@ -627,10 +637,11 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
         OUTCOME_TRY(render_pass,
                     utils::CreateRenderPass(api_handles_.device, fb_desc));
         fb_desc.render_pass_ = render_pass;
+        api_handles_.render_passes.push_back(render_pass);
     }
 
     VkPipelineLayoutCreateInfo layout_info = {
-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
     layout_info.setLayoutCount = 0;  // TODO!
 
     // TODO: move pipeline layout to shader (SPIRV-Cross?)
@@ -646,6 +657,7 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
             VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
         stage.stage = shader->GetStage();
         stage.module = shader->GetHandle();
+        stage.pName = "main";  // TODO: Store in shader
 
         stages.push_back(stage);
     }
@@ -654,6 +666,17 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     vtx_input_state.vertexBindingDescriptionCount =
         0;  // TODO: Get data from shader
+
+    VkPipelineViewportStateCreateInfo viewport_state = {
+        VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+
+    VkViewport viewport = {};
+    VkRect2D scissor = {};
+
+    viewport_state.viewportCount = 1;
+    viewport_state.pViewports = &viewport;
+    viewport_state.scissorCount = 1;
+    viewport_state.pScissors = &scissor;
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
@@ -718,7 +741,7 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
     pipeline_info.pVertexInputState = &vtx_input_state;
     pipeline_info.pInputAssemblyState = &input_assembly_state;
     pipeline_info.pTessellationState = nullptr;
-    pipeline_info.pViewportState = nullptr;
+    pipeline_info.pViewportState = &viewport_state;
     pipeline_info.pRasterizationState = &raster_state;
     pipeline_info.pMultisampleState = &multisample_state;
     pipeline_info.pDepthStencilState = &ds_state;
@@ -729,8 +752,8 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
     pipeline_info.subpass = 0;
 
     VkPipeline pipeline = VK_NULL_HANDLE;
-    vkCreateGraphicsPipelines(GetHandle(), api_handles_.pipeline_cache, 1,
-                              &pipeline_info, nullptr, &pipeline);
+    vkCreateGraphicsPipelines(api_handles_.device, api_handles_.pipeline_cache,
+                              1, &pipeline_info, nullptr, &pipeline);
 
     auto pipeline_ptr = std::make_unique<Pipeline>(std::move(pipeline_desc));
     pipeline_ptr->SetHandle(pipeline);

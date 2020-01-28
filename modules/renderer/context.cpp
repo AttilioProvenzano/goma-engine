@@ -118,6 +118,13 @@ void Context::End() {
 
 GraphicsContext::GraphicsContext(Device& device) : Context(device) {}
 
+GraphicsContext::~GraphicsContext() {
+    for (auto& render_pass : render_passes_) {
+        vkDestroyPipeline(device_.GetHandle(), render_pass, nullptr);
+    }
+    render_passes_.clear();
+}
+
 result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     assert(active_cmd_buf_ != VK_NULL_HANDLE &&
            "Context is not in a recording state");
@@ -126,6 +133,7 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
         OUTCOME_TRY(render_pass,
                     utils::CreateRenderPass(device_.GetHandle(), desc));
         desc.render_pass_ = render_pass;
+        render_passes_.push_back(render_pass);
     }
 
     std::vector<VkImageView> fb_attachments;

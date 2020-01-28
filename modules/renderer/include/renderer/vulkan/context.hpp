@@ -75,6 +75,7 @@ class Context {
 class GraphicsContext : public Context {
   public:
     GraphicsContext(Device& device);
+    ~GraphicsContext();
 
     result<void> GraphicsContext::BindFramebuffer(FramebufferDesc&);
     void SetVertexBuffer(Buffer&, VkDeviceSize offset = 0);
@@ -89,6 +90,8 @@ void SetVertexBuffer(Buffer);
 void SetIndexBuffer(Buffer);
 void Draw(...);
 */
+  private:
+    std::vector<VkRenderPass> render_passes_;
 };
 
 class ComputeContext : public Context {

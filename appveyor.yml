@@ -15,7 +15,7 @@ install:
   - cmd: git submodule update --init --recursive
   - cmd: if not exist VulkanSDK.exe ( curl -L --retry 5 --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe?Human=true )
   - cmd: if not exist C:\VulkanSDK\1.1.106.0\ ( .\VulkanSDK.exe /S ^ )
-  - cmd: if not exist vk_swiftshader.dll ( git clone https://swiftshader.googlesource.com/SwiftShader C:\swiftshader && pushd C:\swiftshader && git submodule update --init && cd build && cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=Release -DBUILD_VULKAN=ON -DBUILD_EGL=OFF -DBUILD_GLESv2=OFF -DBUILD_GLES_CM=OFF -DBUILD_SAMPLES=OFF -DBUILD_TESTS=OFF .. && cmake --build . && popd && cp C:\SwiftShader\build\Windows . )
+  - cmd: if not exist vk_swiftshader.dll ( git clone https://swiftshader.googlesource.com/SwiftShader C:\swiftshader && pushd C:\swiftshader && git submodule update --init && cd build && cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=Release -DBUILD_VULKAN=ON -DBUILD_EGL=OFF -DBUILD_GLESv2=OFF -DBUILD_GLES_CM=OFF -DBUILD_SAMPLES=OFF -DBUILD_TESTS=OFF -DCMAKE_DISABLE_FIND_PACKAGE_PythonInterp=ON .. && cmake --build . && popd && cp C:\SwiftShader\build\Windows . )
 
 environment:
   VULKAN_SDK: C:\VulkanSDK\1.1.106.0

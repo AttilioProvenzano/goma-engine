@@ -163,7 +163,7 @@ void main() {
         << "Shader error: " << shader_res.error().message();
 
     auto shader = shader_res.value();
-    ASSERT_NE(shader->GetHandle(), VK_NULL_HANDLE);
+    ASSERT_NE(shader->GetHandle(), VkShaderModule{VK_NULL_HANDLE});
 
     auto& uv_resource = shader->GetResources().stage_inputs[1];
     ASSERT_EQ(uv_resource.name, "inUVs");
@@ -173,7 +173,7 @@ void main() {
         << "Pipeline error: " << pipeline_res.error().message();
 
     auto pipeline = pipeline_res.value();
-    ASSERT_NE(pipeline->GetHandle(), VK_NULL_HANDLE);
+    ASSERT_NE(pipeline->GetHandle(), VkPipeline{VK_NULL_HANDLE});
 }
 
 TEST_F(RendererTest, CanCreateGraphicsContext) {

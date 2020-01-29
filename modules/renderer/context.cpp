@@ -120,7 +120,7 @@ GraphicsContext::GraphicsContext(Device& device) : Context(device) {}
 
 GraphicsContext::~GraphicsContext() {
     for (auto& render_pass : render_passes_) {
-        vkDestroyPipeline(device_.GetHandle(), render_pass, nullptr);
+        vkDestroyRenderPass(device_.GetHandle(), render_pass, nullptr);
     }
     render_passes_.clear();
 }

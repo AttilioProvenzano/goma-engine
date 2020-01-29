@@ -165,7 +165,7 @@ void main() {
     auto shader = shader_res.value();
     ASSERT_NE(shader->GetHandle(), VkShaderModule{VK_NULL_HANDLE});
 
-    auto& uv_resource = shader->GetResources().stage_inputs[1];
+    auto& uv_resource = shader->GetInputs().at(1);
     ASSERT_EQ(uv_resource.name, "inUVs");
 
     auto pipeline_res = device->CreatePipeline({{shader}}, FramebufferDesc{});

@@ -2,6 +2,7 @@
 
 #include <glslang/Public/ShaderLang.h>
 #include <SPIRV/GlslangToSpv.h>
+#include <spirv_glsl.hpp>
 
 #include "common/error_codes.hpp"
 #include "platform/platform.hpp"
@@ -622,7 +623,19 @@ result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
     // Shader reflection
     spirv_cross::CompilerGLSL spirv_glsl{std::move(spirv)};
     auto resources = spirv_glsl.get_shader_resources();
-    shader_ptr->SetResources(std::move(resources));
+
+    ShaderInputs inputs;
+    for (const auto& stage_input : resources.stage_inputs) {
+        ShaderInput input = {};
+        input.name = std::move(stage_input.name);
+        input.location =
+            spirv_glsl.get_decoration(stage_input.id, spv::DecorationLocation);
+        input.vecsize = spirv_glsl.get_type(stage_input.type_id).vecsize;
+
+        inputs.push_back(input);
+    };
+
+    shader_ptr->SetInputs(std::move(inputs));
 
     shaders_.push_back(std::move(shader_ptr));
     return shaders_.back().get();
@@ -664,8 +677,45 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
 
     VkPipelineVertexInputStateCreateInfo vtx_input_state = {
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-    vtx_input_state.vertexBindingDescriptionCount =
-        0;  // TODO: Get data from shader
+
+    static const std::vector<VkFormat> formats = {
+        VK_FORMAT_UNDEFINED, VK_FORMAT_R32_SFLOAT, VK_FORMAT_R32G32_SFLOAT,
+        VK_FORMAT_R32G32B32_SFLOAT, VK_FORMAT_R32G32B32A32_SFLOAT};
+
+    uint32_t current_offset = 0;
+    std::vector<VkVertexInputAttributeDescription> attributes;
+
+    for (const auto& input : pipeline_desc.shaders[0]->GetInputs()) {
+        VkVertexInputAttributeDescription desc = {};
+
+        auto format_index = input.vecsize;
+
+        if (format_index >= formats.size()) {
+            spdlog::warn(
+                "Shader resource \"{}\" has vector size {}, larger than the "
+                "maximum supported ({}).",
+                input.name, input.vecsize, formats.size() - 1);
+            format_index = formats.size() - 1;
+        }
+
+        desc.location = input.location;
+        desc.format = formats[format_index];
+        desc.binding = 0;
+        desc.offset = current_offset;
+
+        attributes.push_back(desc);
+        current_offset += sizeof(float) * input.vecsize;
+    }
+
+    VkVertexInputBindingDescription binding = {};
+    binding.binding = 0;
+    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    binding.stride = current_offset;
+
+    vtx_input_state.vertexBindingDescriptionCount = 1;
+    vtx_input_state.pVertexBindingDescriptions = &binding;
+    vtx_input_state.vertexAttributeDescriptionCount = attributes.size();
+    vtx_input_state.pVertexAttributeDescriptions = attributes.data();
 
     VkPipelineViewportStateCreateInfo viewport_state = {
         VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};

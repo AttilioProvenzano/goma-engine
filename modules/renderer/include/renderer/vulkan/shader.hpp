@@ -1,18 +1,22 @@
 #pragma once
 
-#include <spirv_glsl.hpp>
-
 #include "common/include.hpp"
 #include "common/vulkan.hpp"
 
 namespace goma {
+
+struct ShaderInput {
+    std::string name;
+    uint32_t location;
+    uint32_t vecsize;
+};
+using ShaderInputs = std::vector<ShaderInput>;
 
 struct ShaderDesc {
     std::string name;
     VkShaderStageFlagBits stage;
     std::string source;
     std::string preamble;
-    spirv_cross::ShaderResources resources = {};
 };
 
 class Shader {
@@ -30,11 +34,13 @@ class Shader {
     void SetHandle(VkShaderModule);
     VkShaderModule GetHandle();
 
-    void SetResources(spirv_cross::ShaderResources);
-    const spirv_cross::ShaderResources& GetResources();
+    void SetInputs(ShaderInputs);
+    const ShaderInputs& GetInputs();
 
   private:
     ShaderDesc desc_;
+
+    ShaderInputs inputs_ = {};
 
     struct {
         VkShaderModule shader = VK_NULL_HANDLE;

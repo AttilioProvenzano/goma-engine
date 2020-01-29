@@ -16,11 +16,7 @@ void Shader::ClearPreamble() { desc_.preamble.clear(); }
 void Shader::SetHandle(VkShaderModule shader) { api_handles_.shader = shader; }
 VkShaderModule Shader::GetHandle() { return api_handles_.shader; }
 
-void Shader::SetResources(spirv_cross::ShaderResources sr) {
-    desc_.resources = std::move(sr);
-}
-const spirv_cross::ShaderResources& Shader::GetResources() {
-    return desc_.resources;
-}
+void Shader::SetInputs(ShaderInputs si) { inputs_ = std::move(si); }
+const ShaderInputs& Shader::GetInputs() { return inputs_; }
 
 }  // namespace goma

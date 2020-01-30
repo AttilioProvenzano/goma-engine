@@ -29,7 +29,7 @@ build_script:
   - cmd: cmake --build . --target ALL_BUILD --config %configuration%
 
 test_script:
-  - cmd: cp ..\vk_swiftshader.dll ..\vk_swiftshader_icd.json .\bin\%configuration%\
+  - cmd: cp ..\vk_swiftshader.dll ..\vk_swiftshader_icd.json .
   - cmd: dir
   - cmd: .\bin\%configuration%\goma-tests.exe
 

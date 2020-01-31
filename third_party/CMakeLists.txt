@@ -35,8 +35,9 @@ set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
 set(ENABLE_SPVREMAPPER OFF CACHE BOOL "" FORCE)
 set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
 set(ENABLE_CTEST OFF CACHE BOOL "" FORCE)
-
+set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
 add_subdirectory(glslang)
+
 foreach(target glslang OGLCompiler OSDependent SPIRV)
   if(TARGET ${target})
     set_property(TARGET ${target} PROPERTY FOLDER ThirdParty/glslang)

@@ -4,8 +4,8 @@ image:
 platform: x64
 
 configuration:
-  - Debug
-# - Release
+# - Debug
+  - Release
 
 init:
   - cmd: cmake --version
@@ -15,9 +15,12 @@ install:
   - cmd: git submodule update --init --recursive
   - cmd: if not exist VulkanSDK.exe ( curl -L --retry 5 --silent --show-error --output VulkanSDK.exe https://vulkan.lunarg.com/sdk/download/1.1.106.0/windows/VulkanSDK-1.1.106.0-Installer.exe?Human=true )
   - cmd: if not exist C:\VulkanSDK\1.1.106.0\ ( .\VulkanSDK.exe /S ^ )
+  - cmd: if not exist vk_swiftshader.dll ( git clone https://github.com/AttilioProvenzano/swiftshader.git C:\swiftshader && pushd C:\swiftshader && git submodule update --init && cd build && cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=Release -DSWIFTSHADER_BUILD_VULKAN=ON -DSWIFTSHADER_BUILD_EGL=OFF -DSWIFTSHADER_BUILD_GLESv2=OFF -DSWIFTSHADER_BUILD_GLES_CM=OFF -DSWIFTSHADER_BUILD_SAMPLES=OFF -DSWIFTSHADER_BUILD_TESTS=OFF -Thost=x64 .. && cmake --build . --config Release && popd && cp "C:\SwiftShader\build\Windows\vk_swiftshader.dll" "C:\SwiftShader\build\Windows\vk_swiftshader_icd.json" . )
+  - cmd: dir
 
 environment:
   VULKAN_SDK: C:\VulkanSDK\1.1.106.0
+  VK_ICD_FILENAMES: .\vk_swiftshader_icd.json
 
 build_script:
   - cmd: mkdir -p build & exit 0 # ignore errors
@@ -26,11 +29,14 @@ build_script:
   - cmd: cmake --build . --target ALL_BUILD --config %configuration%
 
 test_script:
+  - cmd: cp ..\vk_swiftshader.dll ..\vk_swiftshader_icd.json .
   - cmd: dir
   - cmd: .\bin\%configuration%\goma-tests.exe
 
 cache:
   - VulkanSDK.exe -> appveyor.yml
+  - vk_swiftshader.dll -> appveyor.yml
+  - vk_swiftshader_icd.json -> appveyor.yml
 
 artifacts:
   - path: build\bin\%configuration%\goma-tests.exe

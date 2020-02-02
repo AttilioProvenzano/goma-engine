@@ -53,6 +53,7 @@ struct FramebufferDesc {
 class Context {
   public:
     Context(Device& device);
+    virtual ~Context() = default;
 
     result<void> Begin();
     void End();
@@ -63,7 +64,7 @@ class Context {
     Device& device_;
     VkCommandBuffer active_cmd_buf_ = VK_NULL_HANDLE;
 
-  private:
+  protected:
     uint8_t current_frame_ = 0;
 
     static constexpr int kFrameCount = 3;
@@ -99,9 +100,26 @@ class ComputeContext : public Context {
     void Dispatch();
 };
 
+struct BufferData {
+    size_t size;
+    const void* data;
+    size_t offset = 0;
+};
+
+struct ImageData {
+    const void* data;
+};
+
 class UploadContext : public Context {
-    // void UploadBuffer(Buffer, Data);
-    // void UploadTexture(Texture, Data);
+  public:
+    UploadContext(Device& device);
+    ~UploadContext();
+
+    result<void> UploadBuffer(Buffer&, BufferData);
+    result<void> UploadImage(Image&, ImageData);
+
+  private:
+    std::unordered_map<size_t, std::vector<Buffer*>> staging_buffers_;
 };
 
 }  // namespace goma

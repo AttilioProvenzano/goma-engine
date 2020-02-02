@@ -226,4 +226,56 @@ void GraphicsContext::Draw() {
     vkCmdDraw(active_cmd_buf_, 3, 1, 0, 0);
 }
 
+UploadContext::UploadContext(Device& device) : Context(device) {}
+
+UploadContext::~UploadContext() {
+    for (auto& staging_buffers_entry : staging_buffers_) {
+        for (auto& staging_buffer : staging_buffers_entry.second) {
+            // TODO: Ask the device to destroy the staging buffer
+        }
+    }
+}
+
+namespace {
+
+result<void> CopyBufferData(Device& device, Buffer& buffer, BufferData data) {
+    OUTCOME_TRY(mapped_data, device.MapBuffer(buffer));
+    memcpy(static_cast<uint8_t*>(mapped_data) + data.offset, data.data,
+           data.size);
+    device.UnmapBuffer(buffer);
+
+    return outcome::success();
+}
+
+}  // namespace
+
+result<void> UploadContext::UploadBuffer(Buffer& buffer, BufferData data) {
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+
+    if (buffer.GetStorage() == VMA_MEMORY_USAGE_GPU_ONLY) {
+        // We need a staging buffer in this case
+        BufferDesc staging_desc = {};
+        staging_desc.size = data.size;
+        staging_desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+        staging_desc.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+        OUTCOME_TRY(staging_buffer, device_.CreateBuffer(staging_desc));
+        OUTCOME_TRY(CopyBufferData(device_, *staging_buffer, data));
+
+        VkBufferCopy region = {};
+        region.dstOffset = data.offset;
+        region.size = data.size;
+
+        vkCmdCopyBuffer(active_cmd_buf_, staging_buffer->GetHandle(),
+                        buffer.GetHandle(), 1, &region);
+        staging_buffers_[current_frame_].push_back(staging_buffer);
+    } else {
+        // We can copy data directly
+        OUTCOME_TRY(CopyBufferData(device_, buffer, data));
+    }
+
+    return outcome::success();
+}
+
 }  // namespace goma

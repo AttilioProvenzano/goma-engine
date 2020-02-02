@@ -530,6 +530,10 @@ result<Buffer*> Device::CreateBuffer(const BufferDesc& buffer_desc) {
     buffer_info.size = buffer_desc.size;
     buffer_info.usage = buffer_desc.usage;
 
+    if (buffer_desc.storage == VMA_MEMORY_USAGE_GPU_ONLY) {
+        buffer_info.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    }
+
     VmaAllocationCreateInfo allocation_create_info = {};
     allocation_create_info.usage = buffer_desc.storage;
 

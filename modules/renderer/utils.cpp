@@ -14,6 +14,8 @@ result<VkRenderPass> CreateRenderPass(VkDevice device,
     std::vector<VkClearValue> clear_values;
 
     for (const auto& c : desc.color_attachments) {
+        assert(c.image && "Invalid image in color attachments");
+
         VkAttachmentDescription attachment = {};
         attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;

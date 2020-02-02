@@ -126,6 +126,7 @@ GraphicsContext::~GraphicsContext() {
 }
 
 result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
+    // TODO: Replace asserts with outcome::error
     assert(active_cmd_buf_ != VK_NULL_HANDLE &&
            "Context is not in a recording state");
 
@@ -140,6 +141,8 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     VkExtent3D fb_size = {};
 
     for (const auto& c : desc.color_attachments) {
+        assert(c.image && "Invalid image in color attachments");
+
         fb_attachments.push_back(c.image->GetViewHandle());
 
         if (c.resolve_to) {

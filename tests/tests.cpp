@@ -106,25 +106,30 @@ TEST_F(RendererTest, CanCreateDevice) {
 }
 
 TEST_F(RendererTest, CanCreateCPUBuffer) {
-    std::vector<glm::vec3> colors = {
-        {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
-
     BufferDesc desc = {};
     desc.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    desc.num_elements = colors.size();
-    desc.stride = sizeof(colors[0]);
-    desc.size = desc.num_elements * desc.stride;
+    desc.num_elements = static_cast<uint32_t>(buf_data.size());
+    desc.stride = sizeof(buf_data[0]);
+    desc.size = buf_data.size() * sizeof(buf_data[0]);
     desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
     auto buffer_res = device->CreateBuffer(desc);
     ASSERT_FALSE(buffer_res.has_error()) << buffer_res.error();
-    auto buffer = buffer_res.value();
+    auto& buffer = *buffer_res.value();
 
+    UploadContext ctx(*device);
+    ctx.Begin();
+    ctx.UploadBuffer(buffer,
+                     {buf_data.size() * sizeof(buf_data[0]), buf_data.data()});
+    ctx.End();
+
+    // TODO: submit and wait
+
+    // Let's check that the data was properly copied.
     auto map_res = device->MapBuffer(buffer);
     ASSERT_FALSE(map_res.has_error()) << map_res.error();
     auto data = map_res.value();
 
-    memcpy(data, colors.data(), sizeof(colors[0]) * colors.size());
     ASSERT_EQ(*static_cast<float*>(data), 1.0f);
     device->UnmapBuffer(buffer);
 }
@@ -137,7 +142,17 @@ TEST_F(RendererTest, CanCreateGPUBuffer) {
     desc.size = desc.num_elements * desc.stride;
     desc.storage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-    device->CreateBuffer(desc);
+    auto buffer_res = device->CreateBuffer(desc);
+    ASSERT_FALSE(buffer_res.has_error()) << buffer_res.error();
+    auto& buffer = *buffer_res.value();
+
+    UploadContext ctx(*device);
+    ctx.Begin();
+    ctx.UploadBuffer(buffer,
+                     {buf_data.size() * sizeof(buf_data[0]), buf_data.data()});
+    ctx.End();
+
+    // TODO: Submit, also abstract out the above (apart from CPU/GPU only)
 }
 
 TEST_F(RendererTest, CanCreateImage) {

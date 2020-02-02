@@ -220,7 +220,39 @@ TEST_F(RendererGraphicalTest, CanCreateWindow) {
     ASSERT_NE(device->GetHandle(), VkDevice{VK_NULL_HANDLE});
 }
 
-// TEST_F(RendererTest, CanCreatePipeline) {}
+TEST_F(RendererGraphicalTest, HelloTriangle) {
+    ShaderDesc shader_desc = {};
+    shader_desc.name = "vtx";
+    shader_desc.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    shader_desc.source = vtx;
+
+    auto shader_res = device->CreateShader(std::move(shader_desc));
+    EXPECT_FALSE(shader_res.has_error())
+        << "Shader error: " << shader_res.error().message();
+    auto shader = shader_res.value();
+
+    // TODO get swapchain image
+    Image* swapchain_image = nullptr;
+
+    FramebufferDesc fb_desc = {};
+    fb_desc.color_attachments.push_back({swapchain_image});
+
+    auto pipeline_res = device->CreatePipeline({{shader}}, fb_desc);
+    EXPECT_FALSE(pipeline_res.has_error())
+        << "Pipeline error: " << pipeline_res.error().message();
+    auto pipeline = pipeline_res.value();
+
+    // TODO: Consider OUTCOME_TRY, maybe wrapping the test body
+    GraphicsContext context(*device);
+    context.Begin();
+
+    context.BindFramebuffer(fb_desc);
+    // context.BindPipeline(pipeline);
+    context.Draw();
+
+    context.End();
+}
+
 // TEST_F(RendererTest, SpinningCube) {}
 // TEST_F(RendererTest, OffscreenRendering) {}
 // TEST_F(RendererTest, Screenshot) {}

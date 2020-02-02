@@ -176,7 +176,7 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     fb_info.renderPass = desc.render_pass_;
     fb_info.width = fb_size.width;
     fb_info.height = fb_size.height;
-    fb_info.attachmentCount = fb_attachments.size();
+    fb_info.attachmentCount = static_cast<uint32_t>(fb_attachments.size());
     fb_info.pAttachments = fb_attachments.data();
     fb_info.layers = 1;
 

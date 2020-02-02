@@ -26,7 +26,8 @@ result<VkRenderPass> CreateRenderPass(VkDevice device,
         clear_values.push_back(c.clear_value);
 
         VkAttachmentReference attachment_ref = {};
-        attachment_ref.attachment = attachments.size() - 1;
+        attachment_ref.attachment =
+            static_cast<uint32_t>(attachments.size()) - 1;
         attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
         color_attachments.push_back(attachment_ref);
@@ -44,7 +45,8 @@ result<VkRenderPass> CreateRenderPass(VkDevice device,
             clear_values.push_back(c.clear_value);
 
             VkAttachmentReference attachment_ref = {};
-            attachment_ref.attachment = attachments.size() - 1;
+            attachment_ref.attachment =
+                static_cast<uint32_t>(attachments.size()) - 1;
             attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
             resolve_attachments.push_back(attachment_ref);
@@ -68,14 +70,16 @@ result<VkRenderPass> CreateRenderPass(VkDevice device,
         attachments.push_back(attachment);
         clear_values.push_back(d.clear_value);
 
-        depth_attachment.attachment = attachments.size() - 1;
+        depth_attachment.attachment =
+            static_cast<uint32_t>(attachments.size()) - 1;
         depth_attachment.layout =
             VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     }
 
     VkSubpassDescription subpass = {};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = color_attachments.size();
+    subpass.colorAttachmentCount =
+        static_cast<uint32_t>(color_attachments.size());
     subpass.pColorAttachments = color_attachments.data();
 
     if (d.image) {
@@ -88,7 +92,7 @@ result<VkRenderPass> CreateRenderPass(VkDevice device,
 
     VkRenderPassCreateInfo rp_info = {
         VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-    rp_info.attachmentCount = attachments.size();
+    rp_info.attachmentCount = static_cast<uint32_t>(attachments.size());
     rp_info.pAttachments = attachments.data();
     rp_info.subpassCount = 1;
     rp_info.pSubpasses = &subpass;

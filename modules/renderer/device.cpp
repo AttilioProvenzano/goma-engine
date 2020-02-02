@@ -152,7 +152,8 @@ result<uint32_t> GetQueueFamilyIndex_(VkPhysicalDevice physical_device) {
         return Error::QueueFamilyNotFound;
     }
 
-    return selected_queue_family - queue_families.begin();
+    return static_cast<uint32_t>(selected_queue_family -
+                                 queue_families.begin());
 }
 
 result<VkDevice> CreateDevice(VkPhysicalDevice physical_device,
@@ -190,7 +191,7 @@ result<VkDevice> CreateDevice(VkPhysicalDevice physical_device,
 
     VkDeviceQueueCreateInfo queue_info = {
         VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
-    queue_info.queueCount = queue_priorities.size();
+    queue_info.queueCount = static_cast<uint32_t>(queue_priorities.size());
     queue_info.queueFamilyIndex = queue_family_index;
     queue_info.pQueuePriorities = queue_priorities.data();
 
@@ -695,7 +696,7 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
                 "Shader resource \"{}\" has vector size {}, larger than the "
                 "maximum supported ({}).",
                 input.name, input.vecsize, formats.size() - 1);
-            format_index = formats.size() - 1;
+            format_index = static_cast<uint32_t>(formats.size()) - 1;
         }
 
         desc.location = input.location;
@@ -714,7 +715,8 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
 
     vtx_input_state.vertexBindingDescriptionCount = 1;
     vtx_input_state.pVertexBindingDescriptions = &binding;
-    vtx_input_state.vertexAttributeDescriptionCount = attributes.size();
+    vtx_input_state.vertexAttributeDescriptionCount =
+        static_cast<uint32_t>(attributes.size());
     vtx_input_state.pVertexAttributeDescriptions = attributes.data();
 
     VkPipelineViewportStateCreateInfo viewport_state = {
@@ -764,12 +766,14 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
     std::vector<VkPipelineColorBlendAttachmentState> blend_attachments;
 
     if (pipeline_desc.color_blend) {
-        blend_state.attachmentCount = pipeline_desc.blend_attachments.size();
+        blend_state.attachmentCount =
+            static_cast<uint32_t>(pipeline_desc.blend_attachments.size());
         blend_state.pAttachments = pipeline_desc.blend_attachments.data();
     } else {
         blend_attachments.resize(fb_desc.color_attachments.size(),
                                  VkPipelineColorBlendAttachmentState{VK_FALSE});
-        blend_state.attachmentCount = blend_attachments.size();
+        blend_state.attachmentCount =
+            static_cast<uint32_t>(blend_attachments.size());
         blend_state.pAttachments = blend_attachments.data();
     }
 
@@ -783,10 +787,10 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
 
     VkPipelineDynamicStateCreateInfo dyn_state = {
         VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-    dyn_state.dynamicStateCount = dyn_states.size();
+    dyn_state.dynamicStateCount = static_cast<uint32_t>(dyn_states.size());
     dyn_state.pDynamicStates = dyn_states.data();
 
-    pipeline_info.stageCount = stages.size();
+    pipeline_info.stageCount = static_cast<uint32_t>(stages.size());
     pipeline_info.pStages = stages.data();
     pipeline_info.pVertexInputState = &vtx_input_state;
     pipeline_info.pInputAssemblyState = &input_assembly_state;

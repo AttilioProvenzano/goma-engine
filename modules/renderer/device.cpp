@@ -391,9 +391,11 @@ for (auto image : api_handles_.fb_image_cache) {
     shaders_.clear();
 
     for (auto& buffer : buffers_) {
-        vmaDestroyBuffer(api_handles_.allocator, buffer->GetHandle(),
-                         buffer->GetAllocation().allocation);
-        buffer->SetHandle(VK_NULL_HANDLE);
+        if (buffer->GetHandle() != VK_NULL_HANDLE) {
+            vmaDestroyBuffer(api_handles_.allocator, buffer->GetHandle(),
+                             buffer->GetAllocation().allocation);
+            buffer->SetHandle(VK_NULL_HANDLE);
+        }
     }
     buffers_.clear();
 

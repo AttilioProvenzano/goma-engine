@@ -553,16 +553,16 @@ result<Buffer*> Device::CreateBuffer(const BufferDesc& buffer_desc) {
     return buffers_.back().get();
 }
 
-result<void*> Device::MapBuffer(Buffer* buffer) {
+result<void*> Device::MapBuffer(Buffer& buffer) {
     void* data = nullptr;
     VK_CHECK(vmaMapMemory(api_handles_.allocator,
-                          buffer->GetAllocation().allocation, &data));
+                          buffer.GetAllocation().allocation, &data));
 
     return data;
 }
 
-void Device::UnmapBuffer(Buffer* buffer) {
-    vmaUnmapMemory(api_handles_.allocator, buffer->GetAllocation().allocation);
+void Device::UnmapBuffer(Buffer& buffer) {
+    vmaUnmapMemory(api_handles_.allocator, buffer.GetAllocation().allocation);
 }
 
 result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {

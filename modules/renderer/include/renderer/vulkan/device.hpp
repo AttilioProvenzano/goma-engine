@@ -29,8 +29,8 @@ class Device {
     uint32_t GetQueueFamilyIndex();
 
     result<Buffer*> CreateBuffer(const BufferDesc&);
-    result<void*> MapBuffer(Buffer*);
-    void UnmapBuffer(Buffer*);
+    result<void*> MapBuffer(Buffer&);
+    void UnmapBuffer(Buffer&);
 
     result<Shader*> CreateShader(ShaderDesc);
     result<Pipeline*> CreatePipeline(PipelineDesc, FramebufferDesc&);

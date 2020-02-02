@@ -16,15 +16,7 @@ using namespace goma;
 
 namespace {
 
-constexpr int kWindowWidth = 1024;
-constexpr int kWindowHeight = 768;
-
-TEST(GlslangTest, CanCompileShader) {
-    using namespace glslang;
-
-    InitializeProcess();
-
-    static const char* vtx = R"(
+static const char* vtx = R"(
 #version 450
 
 layout(location = 0) in vec3 inPosition;
@@ -37,6 +29,22 @@ void main() {
     outUVs = inUVs;
 }
 )";
+
+struct Vertex {
+    glm::vec3 pos;
+    glm::vec2 uv;
+};
+
+std::vector<Vertex> buf_data = {{{1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
+                                {{0.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}};
+
+constexpr int kWindowWidth = 1024;
+constexpr int kWindowHeight = 768;
+
+TEST(GlslangTest, CanCompileShader) {
+    using namespace glslang;
+
+    InitializeProcess();
 
     TShader vtx_shader{EShLangVertex};
     vtx_shader.setStrings(&vtx, 1);
@@ -139,20 +147,6 @@ TEST_F(RendererTest, CanCreateImage) {
 }
 
 TEST_F(RendererTest, CanCreateShaderAndPipeline) {
-    static const char* vtx = R"(
-#version 450
-
-layout(location = 0) in vec3 inPosition;
-layout(location = 1) in vec2 inUVs;
-
-layout(location = 0) out vec2 outUVs;
-
-void main() {
-    gl_Position = vec4(inPosition, 1.0);
-    outUVs = inUVs;
-}
-)";
-
     ShaderDesc shader_desc = {};
     shader_desc.name = "vtx";
     shader_desc.stage = VK_SHADER_STAGE_VERTEX_BIT;

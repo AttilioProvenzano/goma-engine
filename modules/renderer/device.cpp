@@ -515,6 +515,8 @@ result<void> Device::Init() {
     OUTCOME_TRY(device, CreateDevice(physical_device, queue_family_index));
     api_handles_.device = device;
 
+    vkGetDeviceQueue(device, queue_family_index_, 0, &api_handles_.queue);
+
     OUTCOME_TRY(pipeline_cache,
                 CreatePipelineCache(device, kPipelineCacheFilename));
     api_handles_.pipeline_cache = pipeline_cache;
@@ -821,5 +823,53 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
     pipelines_.push_back(std::move(pipeline_ptr));
     return pipelines_.back().get();
 }
+
+VkFence Device::GetFence() {
+    VkFence ret = VK_NULL_HANDLE;
+
+    if (!recycled_fences_.empty()) {
+        ret = recycled_fences_.back();
+        recycled_fences_.pop_back();
+    } else {
+        VkFenceCreateInfo fence_info = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+        vkCreateFence(api_handles_.device, &fence_info, nullptr, &ret);
+    }
+
+    return ret;
+}
+
+std::unique_ptr<Receipt> Device::Submit(Context& context) {
+    auto cmd_bufs = context.PopQueuedCommands();
+
+    VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    submit.commandBufferCount = static_cast<uint32_t>(cmd_bufs.size());
+    submit.pCommandBuffers = cmd_bufs.data();
+    submit.waitSemaphoreCount = 0;  // TODO: acquisition semaphore
+    submit.pWaitSemaphores = nullptr;
+    submit.signalSemaphoreCount = 0;  // TODO: presentation semaphore
+    submit.pSignalSemaphores = nullptr;
+
+    auto fence = GetFence();
+    vkQueueSubmit(api_handles_.queue, 1, &submit, fence);
+
+    auto submission_id = ++last_submission_id_;
+    submission_fences_[submission_id] = fence;
+
+    return std::make_unique<Receipt>(
+        Receipt{submission_id, api_handles_.device});
+}
+
+void Device::WaitOnWork(std::unique_ptr<Receipt> receipt) {
+    if (receipt->device && receipt->device == api_handles_.device) {
+        auto fence = submission_fences_[receipt->submission_id];
+        if (fence) {
+            vkWaitForFences(api_handles_.device, 1, &fence, VK_TRUE,
+                            UINT64_MAX);
+            recycled_fences_.push_back(fence);
+        }
+    }
+}
+
+void Present() {}
 
 }  // namespace goma

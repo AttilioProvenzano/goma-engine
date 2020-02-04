@@ -116,6 +116,15 @@ void Context::End() {
     active_cmd_buf_ = VK_NULL_HANDLE;
 }
 
+std::vector<VkCommandBuffer> Context::PopQueuedCommands() {
+    assert(active_cmd_buf_ == VK_NULL_HANDLE &&
+           "Context is in a recording state");
+
+    auto ret = std::move(submission_queue_);
+    submission_queue_.clear();
+    return ret;
+}
+
 GraphicsContext::GraphicsContext(Device& device) : Context(device) {}
 
 GraphicsContext::~GraphicsContext() {

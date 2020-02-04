@@ -9,7 +9,13 @@
 namespace goma {
 
 struct FramebufferDesc;
+class Context;
 class Platform;
+
+struct Receipt {
+    size_t submission_id;
+    VkDevice device = VK_NULL_HANDLE;
+};
 
 class Device {
   public:
@@ -35,17 +41,18 @@ class Device {
     result<Shader*> CreateShader(ShaderDesc);
     result<Pipeline*> CreatePipeline(PipelineDesc, FramebufferDesc&);
 
+    std::unique_ptr<Receipt> Submit(Context&);
+    void WaitOnWork(std::unique_ptr<Receipt>);
+    void Present();
+
     /*
 void ProcessWindowChanges(Platform&);
-Texture* CreateTexture(TextureDescription);
-
-Receipt SubmitWork(Context);
-void WaitOnWork(Receipt);
-void Present();
+Image* CreateImage(ImageDescription);
 */
 
   private:
     result<void> Init();
+    VkFence GetFence();
 
     Config config_;
     uint32_t queue_family_index_ = -1;
@@ -57,6 +64,7 @@ void Present();
         VkPhysicalDeviceFeatures features = {};
         VkPhysicalDeviceProperties properties = {};
         VkDevice device = VK_NULL_HANDLE;
+        VkQueue queue = VK_NULL_HANDLE;
 
         VkSurfaceKHR surface = VK_NULL_HANDLE;
         VkSwapchainKHR swapchain = VK_NULL_HANDLE;
@@ -70,6 +78,11 @@ void Present();
     std::vector<std::unique_ptr<Buffer>> buffers_;
     std::vector<std::unique_ptr<Pipeline>> pipelines_;
     std::vector<std::unique_ptr<Shader>> shaders_;
+
+    std::vector<VkFence> recycled_fences_;
+    std::unordered_map<size_t, VkFence> submission_fences_;
+
+    size_t last_submission_id_ = 0;
 };
 
 }  // namespace goma

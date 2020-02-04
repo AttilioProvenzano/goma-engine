@@ -60,11 +60,11 @@ class Context {
     void NextFrame();
     // void ResourceBarrier(BarrierDescription);
 
+    std::vector<VkCommandBuffer> PopQueuedCommands();
+
   protected:
     Device& device_;
     VkCommandBuffer active_cmd_buf_ = VK_NULL_HANDLE;
-
-  protected:
     uint8_t current_frame_ = 0;
 
     static constexpr int kFrameCount = 3;

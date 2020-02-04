@@ -105,57 +105,45 @@ TEST_F(RendererTest, CanCreateDevice) {
     ASSERT_NE(device->GetHandle(), VkDevice{VK_NULL_HANDLE});
 }
 
-TEST_F(RendererTest, CanCreateCPUBuffer) {
+result<Buffer*> CreateBufferTest(Device& device, VmaMemoryUsage storage) {
     BufferDesc desc = {};
     desc.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     desc.num_elements = static_cast<uint32_t>(buf_data.size());
     desc.stride = sizeof(buf_data[0]);
     desc.size = buf_data.size() * sizeof(buf_data[0]);
-    desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    desc.storage = storage;
 
-    auto buffer_res = device->CreateBuffer(desc);
-    ASSERT_FALSE(buffer_res.has_error()) << buffer_res.error();
-    auto& buffer = *buffer_res.value();
+    OUTCOME_TRY(buffer, device.CreateBuffer(desc));
 
-    UploadContext ctx(*device);
-    ctx.Begin();
-    ctx.UploadBuffer(buffer,
-                     {buf_data.size() * sizeof(buf_data[0]), buf_data.data()});
+    UploadContext ctx(device);
+    OUTCOME_TRY(ctx.Begin());
+    OUTCOME_TRY(ctx.UploadBuffer(
+        *buffer, {buf_data.size() * sizeof(buf_data[0]), buf_data.data()}));
     ctx.End();
 
-    auto receipt = device->Submit(ctx);
-    device->WaitOnWork(std::move(receipt));
+    OUTCOME_TRY(receipt, device.Submit(ctx));
+    OUTCOME_TRY(device.WaitOnWork(std::move(receipt)));
+
+    return buffer;
+}
+
+TEST_F(RendererTest, CanCreateCPUBuffer) {
+    auto buffer_res = CreateBufferTest(*device, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    ASSERT_FALSE(buffer_res.has_error()) << buffer_res.error().message();
+    auto& buffer = buffer_res.value();
 
     // Let's check that the data was properly copied.
-    auto map_res = device->MapBuffer(buffer);
-    ASSERT_FALSE(map_res.has_error()) << map_res.error();
-    auto data = map_res.value();
+    auto data_res = device->MapBuffer(*buffer);
+    ASSERT_FALSE(data_res.has_error()) << data_res.error().message();
+    auto& data = data_res.value();
 
     ASSERT_EQ(*static_cast<float*>(data), 1.0f);
-    device->UnmapBuffer(buffer);
+    device->UnmapBuffer(*buffer);
 }
 
 TEST_F(RendererTest, CanCreateGPUBuffer) {
-    BufferDesc desc = {};
-    desc.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    desc.num_elements = static_cast<uint32_t>(buf_data.size());
-    desc.stride = sizeof(buf_data[0]);
-    desc.size = buf_data.size() * sizeof(buf_data[0]);
-    desc.storage = VMA_MEMORY_USAGE_GPU_ONLY;
-
-    auto buffer_res = device->CreateBuffer(desc);
-    ASSERT_FALSE(buffer_res.has_error()) << buffer_res.error();
-    auto& buffer = *buffer_res.value();
-
-    UploadContext ctx(*device);
-    ctx.Begin();
-    ctx.UploadBuffer(buffer,
-                     {buf_data.size() * sizeof(buf_data[0]), buf_data.data()});
-    ctx.End();
-
-    auto receipt = device->Submit(ctx);
-    device->WaitOnWork(std::move(receipt));
-    // TODO: abstract out the above (apart from CPU/GPU only)
+    auto buffer_res = CreateBufferTest(*device, VMA_MEMORY_USAGE_GPU_ONLY);
+    ASSERT_FALSE(buffer_res.has_error()) << buffer_res.error().message();
 }
 
 TEST_F(RendererTest, CanCreateImage) {
@@ -190,7 +178,8 @@ TEST_F(RendererTest, CanCreateShaderAndPipeline) {
 
 TEST_F(RendererTest, CanCreateGraphicsContext) {
     GraphicsContext context(*device);
-    context.Begin();
+    auto res = context.Begin();
+    ASSERT_FALSE(res.has_error()) << res.error().message();
     context.End();
 }
 
@@ -203,14 +192,12 @@ class RendererGraphicalTest : public ::testing::Test {
         try {
             device = std::make_unique<Device>();
             platform = std::make_unique<Win32Platform>();
-            auto res = platform->InitWindow(kWindowWidth, kWindowHeight);
 
-            if (res.has_error()) {
-                std::cerr << "Window initialization failed: "
-                          << res.error().message() << std::endl;
-            } else {
-                device->InitWindow(*platform);
-            }
+            auto res = platform->InitWindow(kWindowWidth, kWindowHeight);
+            ASSERT_FALSE(res.has_error()) << res.error().message();
+
+            res = device->InitWindow(*platform);
+            ASSERT_FALSE(res.has_error()) << res.error().message();
         } catch (const std::exception& ex) {
             std::cerr << "RendererGraphicalTest exception: " << ex.what()
                       << std::endl;
@@ -241,19 +228,24 @@ TEST_F(RendererGraphicalTest, HelloTriangle) {
     fb_desc.color_attachments.push_back({swapchain_image});
 
     auto pipeline_res = device->CreatePipeline({{shader}}, fb_desc);
-    EXPECT_FALSE(pipeline_res.has_error())
+    ASSERT_FALSE(pipeline_res.has_error())
         << "Pipeline error: " << pipeline_res.error().message();
     auto pipeline = pipeline_res.value();
 
-    // TODO: Consider OUTCOME_TRY, maybe wrapping the test body
-    GraphicsContext context(*device);
-    context.Begin();
+    auto res = [&]() -> result<void> {
+        GraphicsContext context(*device);
 
-    context.BindFramebuffer(fb_desc);
-    // context.BindPipeline(pipeline);
-    context.Draw();
+        OUTCOME_TRY(context.Begin());
+        OUTCOME_TRY(context.BindFramebuffer(fb_desc));
 
-    context.End();
+        // context.BindPipeline(pipeline);
+        context.Draw();
+
+        context.End();
+
+        return outcome::success();
+    }();
+    ASSERT_FALSE(res.has_error()) << res.error().message();
 }
 
 // TEST_F(RendererTest, SpinningCube) {}

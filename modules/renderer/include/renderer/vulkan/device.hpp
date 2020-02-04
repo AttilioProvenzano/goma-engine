@@ -16,6 +16,7 @@ struct Receipt {
     size_t submission_id;
     VkDevice device = VK_NULL_HANDLE;
 };
+using ReceiptPtr = std::unique_ptr<Receipt>;
 
 class Device {
   public:
@@ -41,9 +42,9 @@ class Device {
     result<Shader*> CreateShader(ShaderDesc);
     result<Pipeline*> CreatePipeline(PipelineDesc, FramebufferDesc&);
 
-    std::unique_ptr<Receipt> Submit(Context&);
-    void WaitOnWork(std::unique_ptr<Receipt>);
-    void Present();
+    result<ReceiptPtr> Submit(Context&);
+    result<void> WaitOnWork(ReceiptPtr&&);
+    result<void> Present();
 
     /*
 void ProcessWindowChanges(Platform&);

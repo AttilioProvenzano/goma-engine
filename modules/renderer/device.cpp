@@ -838,7 +838,7 @@ VkFence Device::GetFence() {
     return ret;
 }
 
-std::unique_ptr<Receipt> Device::Submit(Context& context) {
+result<ReceiptPtr> Device::Submit(Context& context) {
     auto cmd_bufs = context.PopQueuedCommands();
 
     VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
@@ -850,7 +850,7 @@ std::unique_ptr<Receipt> Device::Submit(Context& context) {
     submit.pSignalSemaphores = nullptr;
 
     auto fence = GetFence();
-    vkQueueSubmit(api_handles_.queue, 1, &submit, fence);
+    VK_CHECK(vkQueueSubmit(api_handles_.queue, 1, &submit, fence));
 
     auto submission_id = ++last_submission_id_;
     submission_fences_[submission_id] = fence;
@@ -859,12 +859,12 @@ std::unique_ptr<Receipt> Device::Submit(Context& context) {
         Receipt{submission_id, api_handles_.device});
 }
 
-void Device::WaitOnWork(std::unique_ptr<Receipt> receipt) {
+result<void> Device::WaitOnWork(ReceiptPtr&& receipt) {
     if (receipt->device && receipt->device == api_handles_.device) {
         auto fence = submission_fences_[receipt->submission_id];
         if (fence) {
-            vkWaitForFences(api_handles_.device, 1, &fence, VK_TRUE,
-                            UINT64_MAX);
+            VK_CHECK(vkWaitForFences(api_handles_.device, 1, &fence, VK_TRUE,
+                                     UINT64_MAX));
             recycled_fences_.push_back(fence);
         }
     }

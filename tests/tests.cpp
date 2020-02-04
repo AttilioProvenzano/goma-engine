@@ -123,7 +123,8 @@ TEST_F(RendererTest, CanCreateCPUBuffer) {
                      {buf_data.size() * sizeof(buf_data[0]), buf_data.data()});
     ctx.End();
 
-    // TODO: submit and wait
+    auto receipt = device->Submit(ctx);
+    device->WaitOnWork(std::move(receipt));
 
     // Let's check that the data was properly copied.
     auto map_res = device->MapBuffer(buffer);
@@ -137,9 +138,9 @@ TEST_F(RendererTest, CanCreateCPUBuffer) {
 TEST_F(RendererTest, CanCreateGPUBuffer) {
     BufferDesc desc = {};
     desc.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    desc.num_elements = 100;
-    desc.stride = 16;
-    desc.size = desc.num_elements * desc.stride;
+    desc.num_elements = static_cast<uint32_t>(buf_data.size());
+    desc.stride = sizeof(buf_data[0]);
+    desc.size = buf_data.size() * sizeof(buf_data[0]);
     desc.storage = VMA_MEMORY_USAGE_GPU_ONLY;
 
     auto buffer_res = device->CreateBuffer(desc);
@@ -152,7 +153,9 @@ TEST_F(RendererTest, CanCreateGPUBuffer) {
                      {buf_data.size() * sizeof(buf_data[0]), buf_data.data()});
     ctx.End();
 
-    // TODO: Submit, also abstract out the above (apart from CPU/GPU only)
+    auto receipt = device->Submit(ctx);
+    device->WaitOnWork(std::move(receipt));
+    // TODO: abstract out the above (apart from CPU/GPU only)
 }
 
 TEST_F(RendererTest, CanCreateImage) {

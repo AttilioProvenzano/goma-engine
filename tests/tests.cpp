@@ -153,9 +153,20 @@ TEST_F(RendererTest, CanCreateGPUBuffer) {
     ASSERT_FALSE(buffer_res.has_error()) << buffer_res.error().message();
 }
 
-TEST_F(RendererTest, CanCreateImage) {
+TEST_F(RendererTest, CanCreateColorAttachment) {
     auto desc = ImageDesc::ColorAttachmentDesc;
     desc.size = {800, 600, 1};
+
+    GOMA_TEST_TRY(image, device->CreateImage(desc));
+
+    ASSERT_NE(image->GetHandle(), VkImage{VK_NULL_HANDLE});
+    ASSERT_NE(image->GetView(), VkImageView{VK_NULL_HANDLE});
+    ASSERT_NE(image->GetAllocation().allocation, VmaAllocation{VK_NULL_HANDLE});
+}
+
+TEST_F(RendererTest, CanCreateTexture) {
+    auto desc = ImageDesc::TextureDesc;
+    desc.size = {64, 64, 1};
 
     GOMA_TEST_TRY(image, device->CreateImage(desc));
 

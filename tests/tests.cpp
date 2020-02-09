@@ -14,6 +14,13 @@ using namespace goma;
 #define GOMA_ASSETS_DIR "assets/"
 #endif
 
+#ifndef GOMA_TEST_TRY
+#define GOMA_TEST_TRY(HANDLE, FN)                                             \
+    auto HANDLE##_res = FN;                                                   \
+    ASSERT_FALSE(HANDLE##_res.has_error()) << HANDLE##_res.error().message(); \
+    auto& HANDLE = HANDLE##_res.value();
+#endif
+
 namespace {
 
 static const char* vtx = R"(

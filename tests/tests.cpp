@@ -154,9 +154,16 @@ TEST_F(RendererTest, CanCreateGPUBuffer) {
 }
 
 TEST_F(RendererTest, CanCreateImage) {
-    // ImageDesc desc = {};
-    // device->CreateImage();
-    GTEST_SKIP();
+    auto desc = ImageDesc::ColorAttachmentDesc;
+    desc.size = {800, 600, 1};
+
+    GOMA_TEST_TRY(image, device->CreateImage(desc));
+
+    ASSERT_NE(image->GetHandle(), VkImage{VK_NULL_HANDLE});
+    ASSERT_NE(image->GetView(), VkImageView{VK_NULL_HANDLE});
+    ASSERT_NE(image->GetAllocation().allocation, VmaAllocation{VK_NULL_HANDLE});
+
+    // TODO: upload data
 }
 
 TEST_F(RendererTest, CanCreateShaderAndPipeline) {

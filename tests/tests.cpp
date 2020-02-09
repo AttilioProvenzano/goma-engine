@@ -239,7 +239,7 @@ TEST_F(RendererGraphicalTest, HelloTriangle) {
     Image* swapchain_image = nullptr;
 
     FramebufferDesc fb_desc = {};
-    fb_desc.color_attachments.push_back({swapchain_image});
+    // fb_desc.color_attachments.push_back({swapchain_image});
 
     auto pipeline_res = device->CreatePipeline({{shader}}, fb_desc);
     ASSERT_FALSE(pipeline_res.has_error())
@@ -252,8 +252,10 @@ TEST_F(RendererGraphicalTest, HelloTriangle) {
         OUTCOME_TRY(context.Begin());
         OUTCOME_TRY(context.BindFramebuffer(fb_desc));
 
-        // context.BindPipeline(pipeline);
+        /*
+        context.BindPipeline(pipeline);
         context.Draw();
+        */
 
         context.End();
 

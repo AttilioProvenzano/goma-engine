@@ -15,10 +15,16 @@ using namespace goma;
 #endif
 
 #ifndef GOMA_TEST_TRY
-#define GOMA_TEST_TRY(HANDLE, FN)                                             \
-    auto HANDLE##_res = FN;                                                   \
-    ASSERT_FALSE(HANDLE##_res.has_error()) << HANDLE##_res.error().message(); \
-    auto& HANDLE = HANDLE##_res.value();
+#define GOMA_TEST_TRYV(fn)                                      \
+    {                                                           \
+        auto res = fn;                                          \
+        ASSERT_FALSE(res.has_error()) << res.error().message(); \
+    }
+
+#define GOMA_TEST_TRY(handle, fn)                                             \
+    auto handle##_res = fn;                                                   \
+    ASSERT_FALSE(handle##_res.has_error()) << handle##_res.error().message(); \
+    auto& handle = handle##_res.value();
 #endif
 
 namespace {
@@ -135,22 +141,17 @@ result<Buffer*> CreateBufferTest(Device& device, VmaMemoryUsage storage) {
 }
 
 TEST_F(RendererTest, CanCreateCPUBuffer) {
-    auto buffer_res = CreateBufferTest(*device, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    ASSERT_FALSE(buffer_res.has_error()) << buffer_res.error().message();
-    auto& buffer = buffer_res.value();
+    GOMA_TEST_TRY(buffer,
+                  CreateBufferTest(*device, VMA_MEMORY_USAGE_CPU_TO_GPU));
 
     // Let's check that the data was properly copied.
-    auto data_res = device->MapBuffer(*buffer);
-    ASSERT_FALSE(data_res.has_error()) << data_res.error().message();
-    auto& data = data_res.value();
-
+    GOMA_TEST_TRY(data, device->MapBuffer(*buffer));
     ASSERT_EQ(*static_cast<float*>(data), 1.0f);
     device->UnmapBuffer(*buffer);
 }
 
 TEST_F(RendererTest, CanCreateGPUBuffer) {
-    auto buffer_res = CreateBufferTest(*device, VMA_MEMORY_USAGE_GPU_ONLY);
-    ASSERT_FALSE(buffer_res.has_error()) << buffer_res.error().message();
+    GOMA_TEST_TRY(buffer, CreateBufferTest(*device, VMA_MEMORY_USAGE_GPU_ONLY));
 }
 
 TEST_F(RendererTest, CanCreateColorAttachment) {
@@ -183,28 +184,20 @@ TEST_F(RendererTest, CanCreateShaderAndPipeline) {
     shader_desc.stage = VK_SHADER_STAGE_VERTEX_BIT;
     shader_desc.source = vtx;
 
-    auto shader_res = device->CreateShader(std::move(shader_desc));
-    EXPECT_FALSE(shader_res.has_error())
-        << "Shader error: " << shader_res.error().message();
-
-    auto shader = shader_res.value();
+    GOMA_TEST_TRY(shader, device->CreateShader(std::move(shader_desc)));
     ASSERT_NE(shader->GetHandle(), VkShaderModule{VK_NULL_HANDLE});
 
     auto& uv_resource = shader->GetInputs().at(1);
     ASSERT_EQ(uv_resource.name, "inUVs");
 
-    auto pipeline_res = device->CreatePipeline({{shader}}, FramebufferDesc{});
-    EXPECT_FALSE(pipeline_res.has_error())
-        << "Pipeline error: " << pipeline_res.error().message();
-
-    auto pipeline = pipeline_res.value();
+    GOMA_TEST_TRY(pipeline,
+                  device->CreatePipeline({{shader}}, FramebufferDesc{}));
     ASSERT_NE(pipeline->GetHandle(), VkPipeline{VK_NULL_HANDLE});
 }
 
 TEST_F(RendererTest, CanCreateGraphicsContext) {
     GraphicsContext context(*device);
-    auto res = context.Begin();
-    ASSERT_FALSE(res.has_error()) << res.error().message();
+    GOMA_TEST_TRYV(context.Begin());
     context.End();
 }
 
@@ -218,11 +211,8 @@ class RendererGraphicalTest : public ::testing::Test {
             device = std::make_unique<Device>();
             platform = std::make_unique<Win32Platform>();
 
-            auto res = platform->InitWindow(kWindowWidth, kWindowHeight);
-            ASSERT_FALSE(res.has_error()) << res.error().message();
-
-            res = device->InitWindow(*platform);
-            ASSERT_FALSE(res.has_error()) << res.error().message();
+            GOMA_TEST_TRYV(platform->InitWindow(kWindowWidth, kWindowHeight));
+            GOMA_TEST_TRYV(device->InitWindow(*platform));
         } catch (const std::exception& ex) {
             std::cerr << "RendererGraphicalTest exception: " << ex.what()
                       << std::endl;
@@ -241,10 +231,7 @@ TEST_F(RendererGraphicalTest, HelloTriangle) {
     shader_desc.stage = VK_SHADER_STAGE_VERTEX_BIT;
     shader_desc.source = vtx;
 
-    auto shader_res = device->CreateShader(std::move(shader_desc));
-    EXPECT_FALSE(shader_res.has_error())
-        << "Shader error: " << shader_res.error().message();
-    auto shader = shader_res.value();
+    GOMA_TEST_TRY(shader, device->CreateShader(std::move(shader_desc)));
 
     // TODO get swapchain image
     Image* swapchain_image = nullptr;
@@ -252,27 +239,19 @@ TEST_F(RendererGraphicalTest, HelloTriangle) {
     FramebufferDesc fb_desc = {};
     // fb_desc.color_attachments.push_back({swapchain_image});
 
-    auto pipeline_res = device->CreatePipeline({{shader}}, fb_desc);
-    ASSERT_FALSE(pipeline_res.has_error())
-        << "Pipeline error: " << pipeline_res.error().message();
-    auto pipeline = pipeline_res.value();
+    GOMA_TEST_TRY(pipeline, device->CreatePipeline({{shader}}, fb_desc));
 
-    auto res = [&]() -> result<void> {
-        GraphicsContext context(*device);
+    GraphicsContext context(*device);
 
-        OUTCOME_TRY(context.Begin());
-        OUTCOME_TRY(context.BindFramebuffer(fb_desc));
+    GOMA_TEST_TRYV(context.Begin());
+    GOMA_TEST_TRYV(context.BindFramebuffer(fb_desc));
 
-        /*
-        context.BindPipeline(pipeline);
-        context.Draw();
-        */
+    /*
+    context.BindPipeline(pipeline);
+    context.Draw();
+    */
 
-        context.End();
-
-        return outcome::success();
-    }();
-    ASSERT_FALSE(res.has_error()) << res.error().message();
+    context.End();
 }
 
 // TEST_F(RendererTest, SpinningCube) {}

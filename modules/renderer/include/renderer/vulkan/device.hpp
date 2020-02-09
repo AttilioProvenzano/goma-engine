@@ -3,6 +3,7 @@
 #include "common/include.hpp"
 #include "common/vulkan.hpp"
 #include "renderer/buffer.hpp"
+#include "renderer/image.hpp"
 #include "renderer/pipeline.hpp"
 #include "renderer/shader.hpp"
 
@@ -38,6 +39,8 @@ class Device {
     result<Buffer*> CreateBuffer(const BufferDesc&);
     result<void*> MapBuffer(Buffer&);
     void UnmapBuffer(Buffer&);
+
+    result<Image*> CreateImage(const ImageDesc&);
 
     result<Shader*> CreateShader(ShaderDesc);
     result<Pipeline*> CreatePipeline(PipelineDesc, FramebufferDesc&);
@@ -77,6 +80,7 @@ Image* CreateImage(ImageDescription);
     } api_handles_;
 
     std::vector<std::unique_ptr<Buffer>> buffers_;
+    std::vector<std::unique_ptr<Image>> images_;
     std::vector<std::unique_ptr<Pipeline>> pipelines_;
     std::vector<std::unique_ptr<Shader>> shaders_;
 

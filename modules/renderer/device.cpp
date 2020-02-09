@@ -399,6 +399,17 @@ for (auto image : api_handles_.fb_image_cache) {
     }
     buffers_.clear();
 
+    for (auto& image : images_) {
+        if (image->GetHandle() != VK_NULL_HANDLE) {
+            vkDestroyImageView(api_handles_.device, image->GetView(), nullptr);
+            vmaDestroyImage(api_handles_.allocator, image->GetHandle(),
+                            image->GetAllocation().allocation);
+            image->SetView(VK_NULL_HANDLE);
+            image->SetHandle(VK_NULL_HANDLE);
+        }
+    }
+    images_.clear();
+
     if (api_handles_.pipeline_cache) {
         size_t data_size;
         vkGetPipelineCacheData(api_handles_.device, api_handles_.pipeline_cache,
@@ -565,6 +576,65 @@ result<void*> Device::MapBuffer(Buffer& buffer) {
 
 void Device::UnmapBuffer(Buffer& buffer) {
     vmaUnmapMemory(api_handles_.allocator, buffer.GetAllocation().allocation);
+}
+
+result<Image*> Device::CreateImage(const ImageDesc& image_desc) {
+    static const std::unordered_map<VkImageViewType, VkImageType>
+        image_types_map = {
+            {VK_IMAGE_VIEW_TYPE_1D, VK_IMAGE_TYPE_1D},
+            {VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_TYPE_2D},
+            {VK_IMAGE_VIEW_TYPE_3D, VK_IMAGE_TYPE_3D},
+            {VK_IMAGE_VIEW_TYPE_CUBE, VK_IMAGE_TYPE_2D},
+            {VK_IMAGE_VIEW_TYPE_1D_ARRAY, VK_IMAGE_TYPE_1D},
+            {VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_TYPE_2D},
+            {VK_IMAGE_VIEW_TYPE_CUBE_ARRAY, VK_IMAGE_TYPE_2D},
+        };
+
+    VkImageCreateInfo image_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    image_info.extent = image_desc.size;
+    image_info.format = image_desc.format;
+    image_info.mipLevels = image_desc.mip_levels;
+    image_info.arrayLayers = image_desc.array_layers;
+    image_info.samples = image_desc.samples;
+    image_info.tiling = image_desc.tiling;
+    image_info.usage = image_desc.usage;
+    image_info.imageType = image_types_map.at(image_desc.type);
+
+    VmaAllocationCreateInfo allocation_create_info = {};
+    allocation_create_info.usage = image_desc.storage;
+
+    VkImage image = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    VmaAllocationInfo allocation_info = {};
+
+    VK_CHECK(vmaCreateImage(api_handles_.allocator, &image_info,
+                            &allocation_create_info, &image, &allocation,
+                            &allocation_info));
+
+    VkImageAspectFlags aspect =
+        image_desc.usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+            ? VK_IMAGE_ASPECT_DEPTH_BIT
+            : VK_IMAGE_ASPECT_COLOR_BIT;
+
+    VkImageViewCreateInfo image_view_info = {
+        VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    image_view_info.image = image;
+    image_view_info.format = image_desc.format;
+    image_view_info.viewType = image_desc.type;
+    image_view_info.subresourceRange = {aspect, 0, VK_REMAINING_MIP_LEVELS, 0,
+                                        VK_REMAINING_ARRAY_LAYERS};
+
+    VkImageView image_view = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateImageView(api_handles_.device, &image_view_info, nullptr,
+                               &image_view));
+
+    auto image_ptr = std::make_unique<Image>(image_desc);
+    image_ptr->SetHandle(image);
+    image_ptr->SetAllocation({allocation, allocation_info});
+    image_ptr->SetView(image_view);
+
+    images_.push_back(std::move(image_ptr));
+    return images_.back().get();
 }
 
 result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
@@ -868,6 +938,8 @@ result<void> Device::WaitOnWork(ReceiptPtr&& receipt) {
             recycled_fences_.push_back(fence);
         }
     }
+
+    return outcome::success();
 }
 
 void Present() {}

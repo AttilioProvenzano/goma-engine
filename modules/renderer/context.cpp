@@ -152,10 +152,10 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     for (const auto& c : desc.color_attachments) {
         assert(c.image && "Invalid image in color attachments");
 
-        fb_attachments.push_back(c.image->GetViewHandle());
+        fb_attachments.push_back(c.image->GetView());
 
         if (c.resolve_to) {
-            fb_attachments.push_back(c.resolve_to->GetViewHandle());
+            fb_attachments.push_back(c.resolve_to->GetView());
         }
 
         auto image_size = c.image->GetSize();
@@ -170,7 +170,7 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     auto& d = desc.depth_attachment;
 
     if (d.image) {
-        fb_attachments.push_back(d.image->GetViewHandle());
+        fb_attachments.push_back(d.image->GetView());
 
         // Note: we still check fb_size for the depth image as
         // there could be a depth-only pass

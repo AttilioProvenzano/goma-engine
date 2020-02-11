@@ -233,11 +233,10 @@ TEST_F(RendererGraphicalTest, HelloTriangle) {
 
     GOMA_TEST_TRY(shader, device->CreateShader(std::move(shader_desc)));
 
-    // TODO get swapchain image
-    Image* swapchain_image = nullptr;
+    GOMA_TEST_TRY(swapchain_image, device->AcquireSwapchainImage());
 
     FramebufferDesc fb_desc = {};
-    // fb_desc.color_attachments.push_back({swapchain_image});
+    fb_desc.color_attachments.push_back({swapchain_image});
 
     GOMA_TEST_TRY(pipeline, device->CreatePipeline({{shader}}, fb_desc));
 
@@ -246,12 +245,13 @@ TEST_F(RendererGraphicalTest, HelloTriangle) {
     GOMA_TEST_TRYV(context.Begin());
     GOMA_TEST_TRYV(context.BindFramebuffer(fb_desc));
 
-    /*
-    context.BindPipeline(pipeline);
-    context.Draw();
-    */
+    // context.BindPipeline(pipeline);
+    // context.Draw();
 
     context.End();
+
+    GOMA_TEST_TRYV(device->Submit(context));
+    GOMA_TEST_TRYV(device->Present());
 }
 
 // TEST_F(RendererTest, SpinningCube) {}

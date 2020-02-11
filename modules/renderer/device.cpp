@@ -364,7 +364,57 @@ result<VmaAllocator> CreateAllocator(VkPhysicalDevice physical_device,
     return allocator;
 }
 
+using ImagePtr = std::unique_ptr<Image>;
+result<std::vector<ImagePtr>> GetSwapchainImages(const Platform& platform,
+                                                 VkDevice device,
+                                                 VkSwapchainKHR swapchain,
+                                                 VkFormat fb_format) {
+    uint32_t image_count;
+    vkGetSwapchainImagesKHR(device, swapchain, &image_count, nullptr);
+
+    std::vector<VkImage> images(image_count);
+    vkGetSwapchainImagesKHR(device, swapchain, &image_count, images.data());
+
+    std::vector<ImagePtr> ret;
+    for (auto image : images) {
+        // TODO: abstract out the CreateImageView helper (used in CreateImage
+        // too)
+
+        auto image_desc = ImageDesc::ColorAttachmentDesc;
+        image_desc.size = {platform.GetWidth(), platform.GetHeight(), 1};
+        image_desc.format = fb_format;
+        // TODO: other parameters
+
+        VkImageAspectFlags aspect =
+            image_desc.usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+                ? VK_IMAGE_ASPECT_DEPTH_BIT
+                : VK_IMAGE_ASPECT_COLOR_BIT;
+
+        VkImageViewCreateInfo image_view_info = {
+            VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        image_view_info.image = image;
+        image_view_info.format = image_desc.format;
+        image_view_info.viewType = image_desc.type;
+        image_view_info.subresourceRange = {aspect, 0, VK_REMAINING_MIP_LEVELS,
+                                            0, VK_REMAINING_ARRAY_LAYERS};
+
+        VkImageView image_view = VK_NULL_HANDLE;
+        VK_CHECK(
+            vkCreateImageView(device, &image_view_info, nullptr, &image_view));
+
+        auto image_ptr = std::make_unique<Image>(image_desc);
+        image_ptr->SetHandle(image);
+        image_ptr->SetView(image_view);
+
+        ret.push_back(std::move(image_ptr));
+    }
+
+    return ret;
+}
+
 }  // namespace
+
+const uint32_t Device::kInvalidSwapchainIndex = UINT32_MAX;
 
 Device::Device(const Device::Config& config) : config_(config) {
     auto res = Init();
@@ -375,13 +425,6 @@ Device::Device(const Device::Config& config) : config_(config) {
 
 Device::~Device() {
     vkDeviceWaitIdle(api_handles_.device);
-
-    /*
-for (auto image : api_handles_.fb_image_cache) {
-    vezDestroyImageView(api_handles_.device, image.second->vez.image_view);
-    vezDestroyImage(api_handles_.device, image.second->vez.image);
-}
-    */
 
     for (auto& shader : shaders_) {
         vkDestroyShaderModule(api_handles_.device, shader->GetHandle(),
@@ -446,6 +489,23 @@ for (auto image : api_handles_.fb_image_cache) {
     }
     api_handles_.render_passes.clear();
 
+    for (auto& semaphore : acquisition_semaphores_) {
+        vkDestroySemaphore(api_handles_.device, semaphore.second, nullptr);
+    }
+    acquisition_semaphores_.clear();
+
+    for (auto& semaphores : presentation_semaphores_) {
+        for (auto& semaphore : semaphores.second) {
+            vkDestroySemaphore(api_handles_.device, semaphore, nullptr);
+        }
+    }
+    presentation_semaphores_.clear();
+
+    for (auto& semaphore : recycled_semaphores_) {
+        vkDestroySemaphore(api_handles_.device, semaphore, nullptr);
+    }
+    recycled_semaphores_.clear();
+
     if (api_handles_.swapchain) {
         vkDestroySwapchainKHR(api_handles_.device, api_handles_.swapchain,
                               nullptr);
@@ -494,6 +554,11 @@ result<void> Device::InitWindow(Platform& platform) {
                                 api_handles_.device, api_handles_.surface,
                                 fb_format, queue_family_index_));
     api_handles_.swapchain = swapchain;
+
+    OUTCOME_TRY(swapchain_images,
+                GetSwapchainImages(platform, api_handles_.device,
+                                   api_handles_.swapchain, fb_format));
+    swapchain_images_ = std::move(swapchain_images);
 
     return outcome::success();
 }
@@ -576,6 +641,31 @@ result<void*> Device::MapBuffer(Buffer& buffer) {
 
 void Device::UnmapBuffer(Buffer& buffer) {
     vmaUnmapMemory(api_handles_.allocator, buffer.GetAllocation().allocation);
+}
+
+result<Image*> Device::AcquireSwapchainImage() {
+    auto semaphore = GetSemaphore();
+    VK_CHECK(vkAcquireNextImageKHR(api_handles_.device, api_handles_.swapchain,
+                                   UINT64_MAX, semaphore, VK_NULL_HANDLE,
+                                   &swapchain_index_));
+
+    // Recycle the old acquisition semaphore, if present
+    auto old_semaphore = acquisition_semaphores_.find(swapchain_index_);
+    if (old_semaphore != acquisition_semaphores_.end()) {
+        recycled_semaphores_.push_back(old_semaphore->second);
+    }
+
+    // Recycle any old presentation semaphores for this swapchain image
+    auto& old_ps = presentation_semaphores_.find(swapchain_index_);
+    if (old_ps != presentation_semaphores_.end()) {
+        for (auto& ps : old_ps->second) {
+            recycled_semaphores_.push_back(ps);
+        }
+        old_ps->second.clear();
+    }
+
+    acquisition_semaphores_[swapchain_index_] = semaphore;
+    return swapchain_images_.at(swapchain_index_).get();
 }
 
 result<Image*> Device::CreateImage(const ImageDesc& image_desc) {
@@ -894,6 +984,21 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
     return pipelines_.back().get();
 }
 
+VkSemaphore Device::GetSemaphore() {
+    VkSemaphore ret = VK_NULL_HANDLE;
+
+    if (!recycled_semaphores_.empty()) {
+        ret = recycled_semaphores_.back();
+        recycled_semaphores_.pop_back();
+    } else {
+        VkSemaphoreCreateInfo semaphore_info = {
+            VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+        vkCreateSemaphore(api_handles_.device, &semaphore_info, nullptr, &ret);
+    }
+
+    return ret;
+}
+
 VkFence Device::GetFence() {
     VkFence ret = VK_NULL_HANDLE;
 
@@ -911,13 +1016,28 @@ VkFence Device::GetFence() {
 result<ReceiptPtr> Device::Submit(Context& context) {
     auto cmd_bufs = context.PopQueuedCommands();
 
+    std::vector<VkSemaphore> wait_semaphores;
+    std::vector<VkPipelineStageFlags> dst_stages;
+    std::vector<VkSemaphore> signal_semaphores;
+
+    if (swapchain_index_ != kInvalidSwapchainIndex) {
+        wait_semaphores.push_back(acquisition_semaphores_.at(swapchain_index_));
+        dst_stages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+        auto ps = GetSemaphore();
+        presentation_semaphores_[swapchain_index_].push_back(ps);
+        signal_semaphores.push_back(ps);
+    }
+
     VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit.commandBufferCount = static_cast<uint32_t>(cmd_bufs.size());
     submit.pCommandBuffers = cmd_bufs.data();
-    submit.waitSemaphoreCount = 0;  // TODO: acquisition semaphore
-    submit.pWaitSemaphores = nullptr;
-    submit.signalSemaphoreCount = 0;  // TODO: presentation semaphore
-    submit.pSignalSemaphores = nullptr;
+    submit.waitSemaphoreCount = static_cast<uint32_t>(wait_semaphores.size());
+    submit.pWaitSemaphores = wait_semaphores.data();
+    submit.pWaitDstStageMask = dst_stages.data();
+    submit.signalSemaphoreCount =
+        static_cast<uint32_t>(signal_semaphores.size());
+    submit.pSignalSemaphores = signal_semaphores.data();
 
     auto fence = GetFence();
     VK_CHECK(vkQueueSubmit(api_handles_.queue, 1, &submit, fence));
@@ -937,11 +1057,34 @@ result<void> Device::WaitOnWork(ReceiptPtr&& receipt) {
                                      UINT64_MAX));
             recycled_fences_.push_back(fence);
         }
+
+        submission_fences_.erase(receipt->submission_id);
     }
 
     return outcome::success();
 }
 
-void Present() {}
+result<void> Device::Present() {
+    assert(swapchain_index_ != kInvalidSwapchainIndex &&
+           "An image must be acquired before calling Present()");
+
+    auto& ps = presentation_semaphores_[swapchain_index_];
+
+    VkPresentInfoKHR present_info = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
+    present_info.swapchainCount = 1;
+    present_info.pSwapchains = &api_handles_.swapchain;
+    present_info.pImageIndices = &swapchain_index_;
+    present_info.waitSemaphoreCount = static_cast<uint32_t>(ps.size());
+    present_info.pWaitSemaphores = ps.data();
+
+    VkResult result;
+    present_info.pResults = &result;
+
+    VK_CHECK(vkQueuePresentKHR(api_handles_.queue, &present_info));
+    VK_CHECK(result);
+
+    swapchain_index_ = kInvalidSwapchainIndex;
+    return outcome::success();
+}
 
 }  // namespace goma

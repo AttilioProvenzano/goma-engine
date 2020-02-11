@@ -40,6 +40,7 @@ class Device {
     result<void*> MapBuffer(Buffer&);
     void UnmapBuffer(Buffer&);
 
+    result<Image*> AcquireSwapchainImage();
     result<Image*> CreateImage(const ImageDesc&);
 
     result<Shader*> CreateShader(ShaderDesc);
@@ -56,6 +57,7 @@ Image* CreateImage(ImageDescription);
 
   private:
     result<void> Init();
+    VkSemaphore GetSemaphore();
     VkFence GetFence();
 
     Config config_;
@@ -81,13 +83,21 @@ Image* CreateImage(ImageDescription);
 
     std::vector<std::unique_ptr<Buffer>> buffers_;
     std::vector<std::unique_ptr<Image>> images_;
+    std::vector<std::unique_ptr<Image>> swapchain_images_;
     std::vector<std::unique_ptr<Pipeline>> pipelines_;
     std::vector<std::unique_ptr<Shader>> shaders_;
+
+    std::vector<VkSemaphore> recycled_semaphores_;
+    std::unordered_map<size_t, VkSemaphore> acquisition_semaphores_;
+    std::unordered_map<size_t, std::vector<VkSemaphore>>
+        presentation_semaphores_;
 
     std::vector<VkFence> recycled_fences_;
     std::unordered_map<size_t, VkFence> submission_fences_;
 
+    static const uint32_t kInvalidSwapchainIndex;
     size_t last_submission_id_ = 0;
+    uint32_t swapchain_index_ = kInvalidSwapchainIndex;
 };
 
 }  // namespace goma

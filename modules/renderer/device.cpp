@@ -1155,8 +1155,12 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
             static_cast<uint32_t>(pipeline_desc.blend_attachments.size());
         blend_state.pAttachments = pipeline_desc.blend_attachments.data();
     } else {
-        blend_attachments.resize(fb_desc.color_attachments.size(),
-                                 VkPipelineColorBlendAttachmentState{VK_FALSE});
+        VkPipelineColorBlendAttachmentState blend_att{VK_FALSE};
+        blend_att.colorWriteMask =
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+            VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+        blend_attachments.resize(fb_desc.color_attachments.size(), blend_att);
         blend_state.attachmentCount =
             static_cast<uint32_t>(blend_attachments.size());
         blend_state.pAttachments = blend_attachments.data();

@@ -1135,8 +1135,6 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
     VkPipelineMultisampleStateCreateInfo multisample_state = {
         VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
     multisample_state.rasterizationSamples = pipeline_desc.sample_count;
-    multisample_state.sampleShadingEnable =
-        pipeline_desc.sample_count > VK_SAMPLE_COUNT_1_BIT;
 
     VkPipelineDepthStencilStateCreateInfo ds_state = {
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};

@@ -134,10 +134,24 @@ GraphicsContext::~GraphicsContext() {
     render_passes_.clear();
 }
 
+void GraphicsContext::End() {
+    if (current_fb_.render_pass_) {
+        vkCmdEndRenderPass(active_cmd_buf_);
+    }
+    current_fb_ = FramebufferDesc{};
+
+    Context::End();
+}
+
 result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     // TODO: Replace asserts with outcome::error
     assert(active_cmd_buf_ != VK_NULL_HANDLE &&
            "Context is not in a recording state");
+
+    if (current_fb_.render_pass_) {
+        // End the current render pass
+        vkCmdEndRenderPass(active_cmd_buf_);
+    }
 
     if (desc.render_pass_ == VK_NULL_HANDLE) {
         OUTCOME_TRY(render_pass,
@@ -145,6 +159,7 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
         desc.render_pass_ = render_pass;
         render_passes_.push_back(render_pass);
     }
+    current_fb_ = desc;
 
     std::vector<VkImageView> fb_attachments;
     VkExtent3D fb_size = {};

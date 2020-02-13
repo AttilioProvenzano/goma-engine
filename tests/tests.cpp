@@ -255,32 +255,40 @@ TEST_F(RendererGraphicalTest, CanCreateWindow) {
 }
 
 TEST_F(RendererGraphicalTest, HelloTriangle) {
-    ShaderDesc shader_desc = {};
-    shader_desc.name = "vtx";
-    shader_desc.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    shader_desc.source = vtx;
+    ShaderDesc vtx_desc = {};
+    vtx_desc.name = "vtx";
+    vtx_desc.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vtx_desc.source = triangle_vtx;
 
-    GOMA_TEST_TRY(shader, device->CreateShader(std::move(shader_desc)));
+    ShaderDesc frag_desc = {};
+    frag_desc.name = "frag";
+    frag_desc.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    frag_desc.source = triangle_frag;
+
+    GOMA_TEST_TRY(vtx, device->CreateShader(std::move(vtx_desc)));
+    GOMA_TEST_TRY(frag, device->CreateShader(std::move(frag_desc)));
 
     GOMA_TEST_TRY(swapchain_image, device->AcquireSwapchainImage());
 
     FramebufferDesc fb_desc = {};
     fb_desc.color_attachments.push_back({swapchain_image});
 
-    GOMA_TEST_TRY(pipeline, device->CreatePipeline({{shader}}, fb_desc));
+    GOMA_TEST_TRY(pipeline, device->CreatePipeline({{vtx, frag}}, fb_desc));
 
     GraphicsContext context(*device);
 
     GOMA_TEST_TRYV(context.Begin());
     GOMA_TEST_TRYV(context.BindFramebuffer(fb_desc));
 
-    // context.BindPipeline(pipeline);
-    // context.Draw();
+    context.BindGraphicsPipeline(*pipeline);
+    context.Draw(3);
 
     context.End();
 
     GOMA_TEST_TRYV(device->Submit(context));
     GOMA_TEST_TRYV(device->Present());
+
+    Sleep(1000);
 }
 
 // TEST_F(RendererTest, SpinningCube) {}

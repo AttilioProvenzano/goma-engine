@@ -88,9 +88,13 @@ Image* CreateImage(ImageDescription);
     std::vector<std::unique_ptr<Shader>> shaders_;
 
     std::vector<VkSemaphore> recycled_semaphores_;
+
     std::unordered_map<size_t, VkSemaphore> acquisition_semaphores_;
-    std::unordered_map<size_t, std::vector<VkSemaphore>>
-        presentation_semaphores_;
+    std::unordered_map<size_t, VkSemaphore> presentation_semaphores_;
+
+    std::unordered_map<size_t, VkCommandBuffer> acquisition_cmd_bufs_;
+    std::unordered_map<size_t, VkCommandBuffer> presentation_cmd_bufs_;
+    VkCommandPool cmd_pool_;
 
     std::vector<VkFence> recycled_fences_;
     std::unordered_map<size_t, VkFence> submission_fences_;

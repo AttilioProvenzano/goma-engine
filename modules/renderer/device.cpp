@@ -509,10 +509,8 @@ Device::~Device() {
     }
     acquisition_semaphores_.clear();
 
-    for (auto& semaphores : presentation_semaphores_) {
-        for (auto& semaphore : semaphores.second) {
-            vkDestroySemaphore(api_handles_.device, semaphore, nullptr);
-        }
+    for (auto& semaphore : presentation_semaphores_) {
+        vkDestroySemaphore(api_handles_.device, semaphore.second, nullptr);
     }
     presentation_semaphores_.clear();
 
@@ -574,6 +572,82 @@ result<void> Device::InitWindow(Platform& platform) {
                 GetSwapchainImages(platform, api_handles_.device,
                                    api_handles_.swapchain, fb_format));
     swapchain_images_ = std::move(swapchain_images);
+
+    VkCommandPoolCreateInfo cmd_pool_info{
+        VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+    cmd_pool_info.queueFamilyIndex = GetQueueFamilyIndex();
+
+    VK_CHECK(vkCreateCommandPool(api_handles_.device, &cmd_pool_info, nullptr,
+                                 &cmd_pool_));
+
+    std::vector<VkCommandBuffer> cmd_bufs(2 * swapchain_images_.size());
+
+    VkCommandBufferAllocateInfo cmd_buf_info{
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+    cmd_buf_info.commandPool = cmd_pool_;
+    cmd_buf_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmd_buf_info.commandBufferCount = static_cast<uint32_t>(cmd_bufs.size());
+
+    VK_CHECK(vkAllocateCommandBuffers(api_handles_.device, &cmd_buf_info,
+                                      cmd_bufs.data()));
+
+    for (size_t i = 0; i < swapchain_images_.size(); i++) {
+        auto& image = swapchain_images_[i];
+
+        {
+            auto& acquisition_cmd_buf = cmd_bufs[2 * i];
+
+            VkCommandBufferBeginInfo begin_info{
+                VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+            VK_CHECK(vkBeginCommandBuffer(acquisition_cmd_buf, &begin_info));
+
+            VkImageMemoryBarrier image_barrier = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+            image_barrier.srcAccessMask = 0;
+            image_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            image_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            image_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            image_barrier.image = image->GetHandle();
+            image_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1,
+                                              0, 1};
+
+            vkCmdPipelineBarrier(acquisition_cmd_buf,
+                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0,
+                                 nullptr, 1, &image_barrier);
+
+            vkEndCommandBuffer(acquisition_cmd_buf);
+            acquisition_cmd_bufs_[i] = acquisition_cmd_buf;
+        }
+
+        {
+            auto& presentation_cmd_buf = cmd_bufs[2 * i + 1];
+
+            VkCommandBufferBeginInfo begin_info{
+                VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+            VK_CHECK(vkBeginCommandBuffer(presentation_cmd_buf, &begin_info));
+
+            VkImageMemoryBarrier image_barrier = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+            image_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            image_barrier.dstAccessMask = 0;
+            image_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            image_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            image_barrier.image = image->GetHandle();
+            image_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1,
+                                              0, 1};
+
+            vkCmdPipelineBarrier(presentation_cmd_buf,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                 VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0,
+                                 nullptr, 1, &image_barrier);
+
+            vkEndCommandBuffer(presentation_cmd_buf);
+            presentation_cmd_bufs_[i] = presentation_cmd_buf;
+        }
+    }
 
     return outcome::success();
 }
@@ -667,9 +741,21 @@ void Device::UnmapBuffer(Buffer& buffer) {
 
 result<Image*> Device::AcquireSwapchainImage() {
     auto semaphore = GetSemaphore();
+
     VK_CHECK(vkAcquireNextImageKHR(api_handles_.device, api_handles_.swapchain,
                                    UINT64_MAX, semaphore, VK_NULL_HANDLE,
                                    &swapchain_index_));
+
+    std::stringstream str;
+    str << "Acquisition Semaphore #" << swapchain_index_;
+    std::string name = str.str();
+
+    VkDebugUtilsObjectNameInfoEXT name_info = {
+        VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+    name_info.objectType = VK_OBJECT_TYPE_SEMAPHORE;
+    name_info.objectHandle = reinterpret_cast<uint64_t>(semaphore);
+    name_info.pObjectName = name.c_str();
+    VK_CHECK(vkSetDebugUtilsObjectNameEXT(api_handles_.device, &name_info));
 
     // Recycle the old acquisition semaphore, if present
     auto old_semaphore = acquisition_semaphores_.find(swapchain_index_);
@@ -677,14 +763,15 @@ result<Image*> Device::AcquireSwapchainImage() {
         recycled_semaphores_.push_back(old_semaphore->second);
     }
 
-    // Recycle any old presentation semaphores for this swapchain image
-    auto& old_ps = presentation_semaphores_.find(swapchain_index_);
-    if (old_ps != presentation_semaphores_.end()) {
-        for (auto& ps : old_ps->second) {
-            recycled_semaphores_.push_back(ps);
-        }
-        old_ps->second.clear();
-    }
+    VkPipelineStageFlags stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    submit.waitSemaphoreCount = 1;
+    submit.pWaitSemaphores = &semaphore;
+    submit.pWaitDstStageMask = &stage;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &acquisition_cmd_bufs_[swapchain_index_];
+    VK_CHECK(vkQueueSubmit(api_handles_.queue, 1, &submit, VK_NULL_HANDLE));
 
     acquisition_semaphores_[swapchain_index_] = semaphore;
     return swapchain_images_.at(swapchain_index_).get();
@@ -1045,28 +1132,9 @@ VkFence Device::GetFence() {
 result<ReceiptPtr> Device::Submit(Context& context) {
     auto cmd_bufs = context.PopQueuedCommands();
 
-    std::vector<VkSemaphore> wait_semaphores;
-    std::vector<VkPipelineStageFlags> dst_stages;
-    std::vector<VkSemaphore> signal_semaphores;
-
-    if (swapchain_index_ != kInvalidSwapchainIndex) {
-        wait_semaphores.push_back(acquisition_semaphores_.at(swapchain_index_));
-        dst_stages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-
-        auto ps = GetSemaphore();
-        presentation_semaphores_[swapchain_index_].push_back(ps);
-        signal_semaphores.push_back(ps);
-    }
-
     VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit.commandBufferCount = static_cast<uint32_t>(cmd_bufs.size());
     submit.pCommandBuffers = cmd_bufs.data();
-    submit.waitSemaphoreCount = static_cast<uint32_t>(wait_semaphores.size());
-    submit.pWaitSemaphores = wait_semaphores.data();
-    submit.pWaitDstStageMask = dst_stages.data();
-    submit.signalSemaphoreCount =
-        static_cast<uint32_t>(signal_semaphores.size());
-    submit.pSignalSemaphores = signal_semaphores.data();
 
     auto fence = GetFence();
     VK_CHECK(vkQueueSubmit(api_handles_.queue, 1, &submit, fence));
@@ -1097,14 +1165,36 @@ result<void> Device::Present() {
     assert(swapchain_index_ != kInvalidSwapchainIndex &&
            "An image must be acquired before calling Present()");
 
-    auto& ps = presentation_semaphores_[swapchain_index_];
+    if (presentation_semaphores_[swapchain_index_] == VK_NULL_HANDLE) {
+        auto semaphore = GetSemaphore();
+
+        std::stringstream str;
+        str << "Presentation Semaphore #" << swapchain_index_;
+        std::string name = str.str();
+
+        VkDebugUtilsObjectNameInfoEXT name_info = {
+            VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+        name_info.objectType = VK_OBJECT_TYPE_SEMAPHORE;
+        name_info.objectHandle = reinterpret_cast<uint64_t>(semaphore);
+        name_info.pObjectName = name.c_str();
+        VK_CHECK(vkSetDebugUtilsObjectNameEXT(api_handles_.device, &name_info));
+
+        presentation_semaphores_[swapchain_index_] = semaphore;
+    }
+
+    VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &presentation_cmd_bufs_[swapchain_index_];
+    submit.signalSemaphoreCount = 1;
+    submit.pSignalSemaphores = &presentation_semaphores_[swapchain_index_];
+    VK_CHECK(vkQueueSubmit(api_handles_.queue, 1, &submit, VK_NULL_HANDLE));
 
     VkPresentInfoKHR present_info = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     present_info.swapchainCount = 1;
     present_info.pSwapchains = &api_handles_.swapchain;
     present_info.pImageIndices = &swapchain_index_;
-    present_info.waitSemaphoreCount = static_cast<uint32_t>(ps.size());
-    present_info.pWaitSemaphores = ps.data();
+    present_info.waitSemaphoreCount = 1;
+    present_info.pWaitSemaphores = &presentation_semaphores_[swapchain_index_];
 
     VkResult result;
     present_info.pResults = &result;

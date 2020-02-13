@@ -1121,7 +1121,6 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
     VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     input_assembly_state.topology = pipeline_desc.primitive_topology;
-    input_assembly_state.primitiveRestartEnable = VK_TRUE;
 
     VkPipelineRasterizationStateCreateInfo raster_state = {
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};

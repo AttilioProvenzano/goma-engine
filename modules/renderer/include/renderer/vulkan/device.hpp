@@ -65,7 +65,7 @@ Image* CreateImage(ImageDescription);
 
     struct {
         VkInstance instance = VK_NULL_HANDLE;
-        VkDebugReportCallbackEXT debug_callback = VK_NULL_HANDLE;
+        VkDebugUtilsMessengerEXT debug_messenger = VK_NULL_HANDLE;
         VkPhysicalDevice physical_device = VK_NULL_HANDLE;
         VkPhysicalDeviceFeatures features = {};
         VkPhysicalDeviceProperties properties = {};

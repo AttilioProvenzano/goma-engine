@@ -15,15 +15,28 @@ namespace {
 
 const char* kPipelineCacheFilename = "pipeline_cache.data";
 
-VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(
-    VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT, uint64_t, size_t,
-    int32_t, const char* pLayerPrefix, const char* pMessage, void*) {
-    if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
-        spdlog::error("{} - {}", pLayerPrefix, pMessage);
-    } else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) {
-        spdlog::warn("{} - {}", pLayerPrefix, pMessage);
-    } else {
-        spdlog::info("{} - {}", pLayerPrefix, pMessage);
+VKAPI_ATTR VkBool32 VKAPI_CALL
+DebugMessenger(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+               VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+               const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+               void* pUserData) {
+    switch (messageSeverity) {
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+            spdlog::error("{} - {}", pCallbackData->pMessageIdName,
+                          pCallbackData->pMessage);
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+            spdlog::warn("{} - {}", pCallbackData->pMessageIdName,
+                         pCallbackData->pMessage);
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+            spdlog::info("{} - {}", pCallbackData->pMessageIdName,
+                         pCallbackData->pMessage);
+            break;
+        default:
+            spdlog::debug("{} - {}", pCallbackData->pMessageIdName,
+                          pCallbackData->pMessage);
+            break;
     }
 
     return VK_FALSE;
@@ -37,7 +50,7 @@ result<VkInstance> CreateInstance() {
     appInfo.engineVersion = VK_MAKE_VERSION(0, 0, 1);
 
     std::vector<const char*> enabled_layers{
-        "VK_LAYER_LUNARG_standard_validation",
+        "VK_LAYER_KHRONOS_validation",
         "VK_LAYER_LUNARG_monitor",
     };
 
@@ -59,7 +72,8 @@ result<VkInstance> CreateInstance() {
     }
 
     std::vector<const char*> enabled_extensions{
-        "VK_KHR_surface", "VK_KHR_win32_surface", "VK_EXT_debug_report"};
+        VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
 
     uint32_t instance_extension_count;
     vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count,
@@ -96,22 +110,23 @@ result<VkInstance> CreateInstance() {
     return instance;
 }
 
-result<VkDebugReportCallbackEXT> CreateDebugCallback(VkInstance instance) {
-    VkDebugReportCallbackCreateInfoEXT debug_callback_info{};
-    debug_callback_info.sType =
-        VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-    debug_callback_info.flags =
-        // VK_DEBUG_REPORT_DEBUG_BIT_EXT |
-        // VK_DEBUG_REPORT_INFORMATION_BIT_EXT |
-        VK_DEBUG_REPORT_WARNING_BIT_EXT |
-        VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
-        VK_DEBUG_REPORT_ERROR_BIT_EXT;
-    debug_callback_info.pfnCallback = &DebugReportCallback;
+result<VkDebugUtilsMessengerEXT> CreateDebugMessenger(VkInstance instance) {
+    VkDebugUtilsMessengerCreateInfoEXT debug_messenger_info{};
+    debug_messenger_info.sType =
+        VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    debug_messenger_info.messageSeverity =
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+    debug_messenger_info.messageType =
+        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+    debug_messenger_info.pfnUserCallback = &DebugMessenger;
 
-    VkDebugReportCallbackEXT debug_callback = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateDebugReportCallbackEXT(instance, &debug_callback_info,
-                                            nullptr, &debug_callback));
-    return debug_callback;
+    VkDebugUtilsMessengerEXT debug_messenger = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateDebugUtilsMessengerEXT(instance, &debug_messenger_info,
+                                            nullptr, &debug_messenger));
+    return debug_messenger;
 }
 
 result<VkPhysicalDevice> CreatePhysicalDevice(VkInstance instance) {
@@ -528,10 +543,10 @@ Device::~Device() {
         api_handles_.device = VK_NULL_HANDLE;
     }
 
-    if (api_handles_.debug_callback) {
-        vkDestroyDebugReportCallbackEXT(api_handles_.instance,
-                                        api_handles_.debug_callback, nullptr);
-        api_handles_.debug_callback = VK_NULL_HANDLE;
+    if (api_handles_.debug_messenger) {
+        vkDestroyDebugUtilsMessengerEXT(api_handles_.instance,
+                                        api_handles_.debug_messenger, nullptr);
+        api_handles_.debug_messenger = VK_NULL_HANDLE;
     }
 
     if (api_handles_.instance) {
@@ -579,8 +594,8 @@ result<void> Device::Init() {
     OUTCOME_TRY(instance, CreateInstance());
     api_handles_.instance = instance;
 
-    OUTCOME_TRY(debug_callback, CreateDebugCallback(instance));
-    api_handles_.debug_callback = debug_callback;
+    OUTCOME_TRY(debug_messenger, CreateDebugMessenger(instance));
+    api_handles_.debug_messenger = debug_messenger;
 
     OUTCOME_TRY(physical_device, CreatePhysicalDevice(instance));
     api_handles_.physical_device = physical_device;
@@ -592,6 +607,13 @@ result<void> Device::Init() {
     api_handles_.device = device;
 
     vkGetDeviceQueue(device, queue_family_index_, 0, &api_handles_.queue);
+
+    VkDebugUtilsObjectNameInfoEXT name_info = {
+        VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+    name_info.objectType = VK_OBJECT_TYPE_QUEUE;
+    name_info.objectHandle = reinterpret_cast<uint64_t>(api_handles_.queue);
+    name_info.pObjectName = "Graphics Queue";
+    VK_CHECK(vkSetDebugUtilsObjectNameEXT(api_handles_.device, &name_info));
 
     OUTCOME_TRY(pipeline_cache,
                 CreatePipelineCache(device, kPipelineCacheFilename));
@@ -976,6 +998,13 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
     VkPipeline pipeline = VK_NULL_HANDLE;
     vkCreateGraphicsPipelines(api_handles_.device, api_handles_.pipeline_cache,
                               1, &pipeline_info, nullptr, &pipeline);
+
+    VkDebugUtilsObjectNameInfoEXT name_info = {
+        VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+    name_info.objectType = VK_OBJECT_TYPE_PIPELINE;
+    name_info.objectHandle = reinterpret_cast<uint64_t>(pipeline);
+    name_info.pObjectName = "HelloTriangle";
+    VK_CHECK(vkSetDebugUtilsObjectNameEXT(api_handles_.device, &name_info));
 
     auto pipeline_ptr = std::make_unique<Pipeline>(std::move(pipeline_desc));
     pipeline_ptr->SetHandle(pipeline);

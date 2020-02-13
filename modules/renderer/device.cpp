@@ -1098,8 +1098,11 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
     binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
     binding.stride = current_offset;
 
-    vtx_input_state.vertexBindingDescriptionCount = 1;
-    vtx_input_state.pVertexBindingDescriptions = &binding;
+    if (!pipeline_desc.shaders[0]->GetInputs().empty()) {
+        vtx_input_state.vertexBindingDescriptionCount = 1;
+        vtx_input_state.pVertexBindingDescriptions = &binding;
+    }
+
     vtx_input_state.vertexAttributeDescriptionCount =
         static_cast<uint32_t>(attributes.size());
     vtx_input_state.pVertexAttributeDescriptions = attributes.data();

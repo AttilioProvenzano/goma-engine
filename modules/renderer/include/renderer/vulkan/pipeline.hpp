@@ -18,7 +18,7 @@ struct PipelineDesc {
 
     bool depth_test = false;
     bool depth_write = false;
-    VkCompareOp depth_compare_op = VK_COMPARE_OP_NEVER;
+    VkCompareOp depth_compare_op = VK_COMPARE_OP_LESS;
 
     bool stencil_test = false;
     VkStencilOpState stencil_front_op = {};

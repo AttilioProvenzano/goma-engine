@@ -212,13 +212,34 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     VK_CHECK(vkCreateFramebuffer(device_.GetHandle(), &fb_info, nullptr,
                                  &framebuffer));
 
+    VkViewport viewport = {};
+    viewport.width = static_cast<float>(fb_size.width);
+    viewport.height = static_cast<float>(fb_size.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    SetViewport(std::move(viewport));
+
+    VkRect2D scissor = {};
+    scissor.extent = {fb_size.width, fb_size.height};
+    SetScissor(std::move(scissor));
+
+    // Note: if loadOp is LOAD_OP_LOAD, clearValue is ignored
+    std::vector<VkClearValue> clear_values;
+    for (const auto& attachment : desc.color_attachments) {
+        clear_values.push_back(attachment.clear_value);
+    }
+
+    if (desc.depth_attachment.image) {
+        clear_values.push_back(desc.depth_attachment.clear_value);
+    }
+
     VkRenderPassBeginInfo rp_begin_info = {
         VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     rp_begin_info.renderArea = {VkOffset2D{}, {fb_size.width, fb_size.height}};
     rp_begin_info.renderPass = desc.render_pass_;
     rp_begin_info.framebuffer = framebuffer;
-    rp_begin_info.clearValueCount = 0;
-    rp_begin_info.pClearValues = {};
+    rp_begin_info.clearValueCount = static_cast<uint32_t>(clear_values.size());
+    rp_begin_info.pClearValues = clear_values.data();
 
     vkCmdBeginRenderPass(active_cmd_buf_, &rp_begin_info,
                          VK_SUBPASS_CONTENTS_INLINE);
@@ -226,7 +247,21 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     return outcome::success();
 }
 
-void GraphicsContext::SetVertexBuffer(Buffer& buffer, VkDeviceSize offset) {
+void GraphicsContext::SetViewport(VkViewport viewport) {
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+
+    vkCmdSetViewport(active_cmd_buf_, 0, 1, &viewport);
+}
+
+void GraphicsContext::SetScissor(VkRect2D scissor) {
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+
+    vkCmdSetScissor(active_cmd_buf_, 0, 1, &scissor);
+}
+
+void GraphicsContext::BindVertexBuffer(Buffer& buffer, VkDeviceSize offset) {
     assert(active_cmd_buf_ != VK_NULL_HANDLE &&
            "Context is not in a recording state");
 
@@ -234,8 +269,8 @@ void GraphicsContext::SetVertexBuffer(Buffer& buffer, VkDeviceSize offset) {
     vkCmdBindVertexBuffers(active_cmd_buf_, 0, 1, &handle, &offset);
 }
 
-void GraphicsContext::SetIndexBuffer(Buffer& buffer, VkDeviceSize offset,
-                                     VkIndexType index_type) {
+void GraphicsContext::BindIndexBuffer(Buffer& buffer, VkDeviceSize offset,
+                                      VkIndexType index_type) {
     assert(active_cmd_buf_ != VK_NULL_HANDLE &&
            "Context is not in a recording state");
 
@@ -243,11 +278,39 @@ void GraphicsContext::SetIndexBuffer(Buffer& buffer, VkDeviceSize offset,
     vkCmdBindIndexBuffer(active_cmd_buf_, handle, offset, index_type);
 }
 
-void GraphicsContext::Draw() {
+void GraphicsContext::BindGraphicsPipeline(Pipeline& pipeline) {
     assert(active_cmd_buf_ != VK_NULL_HANDLE &&
            "Context is not in a recording state");
 
-    vkCmdDraw(active_cmd_buf_, 3, 1, 0, 0);
+    VkPipeline handle = pipeline.GetHandle();
+    vkCmdBindPipeline(active_cmd_buf_, VK_PIPELINE_BIND_POINT_GRAPHICS, handle);
+}
+
+void GraphicsContext::BindComputePipeline(Pipeline& pipeline) {
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+
+    VkPipeline handle = pipeline.GetHandle();
+    vkCmdBindPipeline(active_cmd_buf_, VK_PIPELINE_BIND_POINT_COMPUTE, handle);
+}
+
+void GraphicsContext::Draw(uint32_t vertex_count, uint32_t instance_count,
+                           uint32_t first_vertex, uint32_t first_instance) {
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+
+    vkCmdDraw(active_cmd_buf_, vertex_count, instance_count, first_vertex,
+              first_instance);
+}
+
+void GraphicsContext::DrawIndexed(uint32_t index_count, uint32_t instance_count,
+                                  uint32_t first_index, uint32_t vertex_offset,
+                                  uint32_t first_instance) {
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+
+    vkCmdDrawIndexed(active_cmd_buf_, index_count, instance_count, first_index,
+                     vertex_offset, first_instance);
 }
 
 UploadContext::UploadContext(Device& device) : Context(device) {}

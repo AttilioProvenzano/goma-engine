@@ -8,6 +8,7 @@ namespace goma {
 class Device;
 class Buffer;
 class Image;
+class Pipeline;
 
 class CommandBufferManager {
   public:
@@ -56,7 +57,7 @@ class Context {
     virtual ~Context() = default;
 
     result<void> Begin();
-    void End();
+    virtual void End();
     void NextFrame();
     // void ResourceBarrier(BarrierDescription);
 
@@ -78,21 +79,28 @@ class GraphicsContext : public Context {
     GraphicsContext(Device& device);
     ~GraphicsContext();
 
+    virtual void End() override;
+
     result<void> GraphicsContext::BindFramebuffer(FramebufferDesc&);
-    void SetVertexBuffer(Buffer&, VkDeviceSize offset = 0);
-    void SetIndexBuffer(Buffer&, VkDeviceSize offset = 0,
-                        VkIndexType index_type = VK_INDEX_TYPE_UINT32);
-    void Draw();
+    void SetViewport(VkViewport viewport);
+    void SetScissor(VkRect2D scissor);
+
+    void BindVertexBuffer(Buffer&, VkDeviceSize offset = 0);
+    void BindIndexBuffer(Buffer&, VkDeviceSize offset = 0,
+                         VkIndexType index_type = VK_INDEX_TYPE_UINT32);
+    void BindGraphicsPipeline(Pipeline&);
+    void BindComputePipeline(Pipeline&);
+
+    void Draw(uint32_t vertex_count, uint32_t instance_count = 1,
+              uint32_t first_vertex = 0, uint32_t first_instance = 0);
+    void DrawIndexed(uint32_t index_count, uint32_t instance_count = 1,
+                     uint32_t first_index = 0, uint32_t vertex_offset = 0,
+                     uint32_t first_instance = 0);
 
     // void BeginParallel();
-    /*
-void SetPipeline(Pipeline);
-void SetVertexBuffer(Buffer);
-void SetIndexBuffer(Buffer);
-void Draw(...);
-*/
   private:
     std::vector<VkRenderPass> render_passes_;
+    FramebufferDesc current_fb_;
 };
 
 class ComputeContext : public Context {

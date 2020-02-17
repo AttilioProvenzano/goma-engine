@@ -70,6 +70,10 @@ layout(location = 2) in vec2 inUVs;
 layout(location = 0) out vec3 outColor;
 layout(location = 1) out vec2 outUVs;
 
+layout(binding = 0, std140) uniform UBO {
+    mat4 mvp;
+} ubo;
+
 void main() {
     gl_Position = vec4(inPosition, 1.0);
     outUVs = inUVs;
@@ -235,6 +239,9 @@ TEST_F(RendererTest, CanCreateShaderAndPipeline) {
 
     auto& uv_resource = shader->GetInputs().at(1);
     ASSERT_EQ(uv_resource.name, "inUVs");
+
+    auto& uniform_buffer = shader->GetBindings().at(0);
+    ASSERT_EQ(uniform_buffer.name, "UBO");
 
     GOMA_TEST_TRY(pipeline,
                   device->CreatePipeline({{shader}}, FramebufferDesc{}));

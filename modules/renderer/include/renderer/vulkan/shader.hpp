@@ -12,6 +12,12 @@ struct ShaderInput {
 };
 using ShaderInputs = std::vector<ShaderInput>;
 
+struct ShaderBinding {
+    std::string name;
+    VkDescriptorType type;
+};
+using ShaderBindings = std::unordered_map<uint32_t, ShaderBinding>;
+
 struct ShaderDesc {
     std::string name;
     VkShaderStageFlagBits stage;
@@ -37,10 +43,14 @@ class Shader {
     void SetInputs(ShaderInputs);
     const ShaderInputs& GetInputs();
 
+    void SetBindings(ShaderBindings);
+    const ShaderBindings& GetBindings();
+
   private:
     ShaderDesc desc_;
 
     ShaderInputs inputs_ = {};
+    ShaderBindings bindings_ = {};
 
     struct {
         VkShaderModule shader = VK_NULL_HANDLE;

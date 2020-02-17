@@ -999,16 +999,49 @@ result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
 
     ShaderInputs inputs;
     for (const auto& stage_input : resources.stage_inputs) {
-        ShaderInput input = {};
-        input.name = std::move(stage_input.name);
+        ShaderInput input = {stage_input.name};
         input.location =
             spirv_glsl.get_decoration(stage_input.id, spv::DecorationLocation);
         input.vecsize = spirv_glsl.get_type(stage_input.type_id).vecsize;
 
         inputs.push_back(input);
     };
-
     shader_ptr->SetInputs(std::move(inputs));
+
+    ShaderBindings bindings;
+    for (const auto& uniform_buffer : resources.uniform_buffers) {
+        ShaderBinding binding = {uniform_buffer.name};
+        binding.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+
+        uint32_t binding_id = spirv_glsl.get_decoration(uniform_buffer.id,
+                                                        spv::DecorationBinding);
+        bindings[binding_id] = binding;
+    }
+    for (const auto& separate_sampler : resources.separate_samplers) {
+        ShaderBinding binding = {separate_sampler.name};
+        binding.type = VK_DESCRIPTOR_TYPE_SAMPLER;
+
+        uint32_t binding_id = spirv_glsl.get_decoration(separate_sampler.id,
+                                                        spv::DecorationBinding);
+        bindings[binding_id] = binding;
+    }
+    for (const auto& separate_image : resources.separate_images) {
+        ShaderBinding binding = {separate_image.name};
+        binding.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+
+        uint32_t binding_id = spirv_glsl.get_decoration(separate_image.id,
+                                                        spv::DecorationBinding);
+        bindings[binding_id] = binding;
+    }
+    for (const auto& sampled_image : resources.sampled_images) {
+        ShaderBinding binding = {sampled_image.name};
+        binding.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+        uint32_t binding_id =
+            spirv_glsl.get_decoration(sampled_image.id, spv::DecorationBinding);
+        bindings[binding_id] = binding;
+    }
+    shader_ptr->SetBindings(std::move(bindings));
 
     shaders_.push_back(std::move(shader_ptr));
     return shaders_.back().get();

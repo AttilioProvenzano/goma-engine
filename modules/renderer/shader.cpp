@@ -19,4 +19,7 @@ VkShaderModule Shader::GetHandle() { return api_handles_.shader; }
 void Shader::SetInputs(ShaderInputs si) { inputs_ = std::move(si); }
 const ShaderInputs& Shader::GetInputs() { return inputs_; }
 
+void Shader::SetBindings(ShaderBindings sb) { bindings_ = std::move(sb); }
+const ShaderBindings& Shader::GetBindings() { return bindings_; }
+
 }  // namespace goma

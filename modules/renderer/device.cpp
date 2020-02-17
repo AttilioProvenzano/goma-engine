@@ -608,7 +608,7 @@ result<void> Device::InitWindow(Platform& platform) {
     VK_CHECK(vkCreateCommandPool(api_handles_.device, &cmd_pool_info, nullptr,
                                  &cmd_pool_));
 
-    std::vector<VkCommandBuffer> cmd_bufs(2 * swapchain_images_.size());
+    std::vector<VkCommandBuffer> cmd_bufs(swapchain_images_.size());
 
     VkCommandBufferAllocateInfo cmd_buf_info{
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
@@ -621,60 +621,29 @@ result<void> Device::InitWindow(Platform& platform) {
 
     for (size_t i = 0; i < swapchain_images_.size(); i++) {
         auto& image = swapchain_images_[i];
+        auto& presentation_cmd_buf = cmd_bufs[i];
 
-        {
-            auto& acquisition_cmd_buf = cmd_bufs[2 * i];
+        VkCommandBufferBeginInfo begin_info{
+            VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        VK_CHECK(vkBeginCommandBuffer(presentation_cmd_buf, &begin_info));
 
-            VkCommandBufferBeginInfo begin_info{
-                VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-            VK_CHECK(vkBeginCommandBuffer(acquisition_cmd_buf, &begin_info));
+        VkImageMemoryBarrier image_barrier = {
+            VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        image_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        image_barrier.dstAccessMask = 0;
+        image_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        image_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        image_barrier.image = image->GetHandle();
+        image_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0,
+                                          1};
 
-            VkImageMemoryBarrier image_barrier = {
-                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-            image_barrier.srcAccessMask = 0;
-            image_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            image_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            image_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            image_barrier.image = image->GetHandle();
-            image_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1,
-                                              0, 1};
+        vkCmdPipelineBarrier(
+            presentation_cmd_buf, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_DEPENDENCY_BY_REGION_BIT,
+            0, nullptr, 0, nullptr, 1, &image_barrier);
 
-            vkCmdPipelineBarrier(acquisition_cmd_buf,
-                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                 VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0,
-                                 nullptr, 1, &image_barrier);
-
-            vkEndCommandBuffer(acquisition_cmd_buf);
-            acquisition_cmd_bufs_[i] = acquisition_cmd_buf;
-        }
-
-        {
-            auto& presentation_cmd_buf = cmd_bufs[2 * i + 1];
-
-            VkCommandBufferBeginInfo begin_info{
-                VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-            VK_CHECK(vkBeginCommandBuffer(presentation_cmd_buf, &begin_info));
-
-            VkImageMemoryBarrier image_barrier = {
-                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-            image_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            image_barrier.dstAccessMask = 0;
-            image_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            image_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            image_barrier.image = image->GetHandle();
-            image_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1,
-                                              0, 1};
-
-            vkCmdPipelineBarrier(presentation_cmd_buf,
-                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                 VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0,
-                                 nullptr, 1, &image_barrier);
-
-            vkEndCommandBuffer(presentation_cmd_buf);
-            presentation_cmd_bufs_[i] = presentation_cmd_buf;
-        }
+        vkEndCommandBuffer(presentation_cmd_buf);
+        presentation_cmd_bufs_[i] = presentation_cmd_buf;
     }
 
     return outcome::success();
@@ -790,16 +759,6 @@ result<Image*> Device::AcquireSwapchainImage() {
     if (old_semaphore != acquisition_semaphores_.end()) {
         recycled_semaphores_.push_back(old_semaphore->second);
     }
-
-    VkPipelineStageFlags stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-    VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
-    submit.waitSemaphoreCount = 1;
-    submit.pWaitSemaphores = &semaphore;
-    submit.pWaitDstStageMask = &stage;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &acquisition_cmd_bufs_[swapchain_index_];
-    VK_CHECK(vkQueueSubmit(api_handles_.queue, 1, &submit, VK_NULL_HANDLE));
 
     acquisition_semaphores_[swapchain_index_] = semaphore;
     return swapchain_images_.at(swapchain_index_).get();
@@ -1275,6 +1234,13 @@ result<ReceiptPtr> Device::Submit(Context& context) {
     VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit.commandBufferCount = static_cast<uint32_t>(cmd_bufs.size());
     submit.pCommandBuffers = cmd_bufs.data();
+
+    VkPipelineStageFlags stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    if (swapchain_index_ != kInvalidSwapchainIndex) {
+        submit.waitSemaphoreCount = 1;
+        submit.pWaitSemaphores = &acquisition_semaphores_[swapchain_index_];
+        submit.pWaitDstStageMask = &stage;
+    }
 
     auto fence = GetFence();
     VK_CHECK(vkQueueSubmit(api_handles_.queue, 1, &submit, fence));

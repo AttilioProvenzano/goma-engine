@@ -230,13 +230,45 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
 
     // Note: if loadOp is LOAD_OP_LOAD, clearValue is ignored
     std::vector<VkClearValue> clear_values;
+    std::vector<VkImageMemoryBarrier> image_barriers;
+
     for (const auto& attachment : desc.color_attachments) {
         clear_values.push_back(attachment.clear_value);
+
+        VkImageMemoryBarrier image_barrier = {
+            VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        image_barrier.srcAccessMask = 0;
+        image_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        image_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        image_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        image_barrier.image = attachment.image->GetHandle();
+        image_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0,
+                                          1};
+        image_barriers.push_back(image_barrier);
     }
 
     if (desc.depth_attachment.image) {
         clear_values.push_back(desc.depth_attachment.clear_value);
+
+        VkImageMemoryBarrier image_barrier = {
+            VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        image_barrier.srcAccessMask = 0;
+        image_barrier.dstAccessMask =
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        image_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        image_barrier.newLayout =
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        image_barrier.image = desc.depth_attachment.image->GetHandle();
+        image_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0,
+                                          1};
+        image_barriers.push_back(image_barrier);
     }
+
+    vkCmdPipelineBarrier(active_cmd_buf_, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr,
+                         static_cast<uint32_t>(image_barriers.size()),
+                         image_barriers.data());
 
     VkRenderPassBeginInfo rp_begin_info = {
         VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};

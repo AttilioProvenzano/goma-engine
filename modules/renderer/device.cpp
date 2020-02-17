@@ -513,6 +513,12 @@ Device::~Device() {
     }
     api_handles_.pipeline_layouts.clear();
 
+    for (auto& descriptor_set_layout : api_handles_.descriptor_set_layouts) {
+        vkDestroyDescriptorSetLayout(api_handles_.device, descriptor_set_layout,
+                                     nullptr);
+    }
+    api_handles_.descriptor_set_layouts.clear();
+
     for (auto& render_pass : api_handles_.render_passes) {
         vkDestroyRenderPass(api_handles_.device, render_pass, nullptr);
     }

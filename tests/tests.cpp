@@ -247,6 +247,60 @@ TEST_F(RendererTest, CanCreateGraphicsContext) {
     context.End();
 }
 
+void HelloTriangle(Device* device, bool offscreen) {
+    ShaderDesc vtx_desc = {};
+    vtx_desc.name = "vtx";
+    vtx_desc.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vtx_desc.source = triangle_vtx;
+
+    ShaderDesc frag_desc = {};
+    frag_desc.name = "frag";
+    frag_desc.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    frag_desc.source = triangle_frag;
+
+    GOMA_TEST_TRY(vtx, device->CreateShader(std::move(vtx_desc)));
+    GOMA_TEST_TRY(frag, device->CreateShader(std::move(frag_desc)));
+
+    Image* render_target = nullptr;
+
+    if (!offscreen) {
+        GOMA_TEST_TRY(swapchain_image, device->AcquireSwapchainImage());
+        render_target = swapchain_image;
+    } else {
+        auto desc = ImageDesc::ColorAttachmentDesc;
+        desc.size = {800, 600, 1};
+        GOMA_TEST_TRY(image, device->CreateImage(desc));
+        render_target = image;
+    }
+
+    FramebufferDesc fb_desc = {};
+    fb_desc.color_attachments.push_back({render_target});
+
+    GOMA_TEST_TRY(pipeline, device->CreatePipeline({{vtx, frag}}, fb_desc));
+
+    GraphicsContext context(*device);
+
+    GOMA_TEST_TRYV(context.Begin());
+    GOMA_TEST_TRYV(context.BindFramebuffer(fb_desc));
+
+    context.BindGraphicsPipeline(*pipeline);
+    context.Draw(3);
+
+    context.End();
+
+    GOMA_TEST_TRY(receipt, device->Submit(context));
+
+    if (!offscreen) {
+        GOMA_TEST_TRYV(device->Present());
+    }
+
+    GOMA_TEST_TRYV(device->WaitOnWork(std::move(receipt)));
+}
+
+TEST_F(RendererTest, HelloTriangleOffscreen) {
+    HelloTriangle(device.get(), true);
+}
+
 class RendererGraphicalTest : public ::testing::Test {
   protected:
     std::unique_ptr<Device> device;
@@ -272,39 +326,7 @@ TEST_F(RendererGraphicalTest, CanCreateWindow) {
 }
 
 TEST_F(RendererGraphicalTest, HelloTriangle) {
-    ShaderDesc vtx_desc = {};
-    vtx_desc.name = "vtx";
-    vtx_desc.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vtx_desc.source = triangle_vtx;
-
-    ShaderDesc frag_desc = {};
-    frag_desc.name = "frag";
-    frag_desc.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    frag_desc.source = triangle_frag;
-
-    GOMA_TEST_TRY(vtx, device->CreateShader(std::move(vtx_desc)));
-    GOMA_TEST_TRY(frag, device->CreateShader(std::move(frag_desc)));
-
-    GOMA_TEST_TRY(swapchain_image, device->AcquireSwapchainImage());
-
-    FramebufferDesc fb_desc = {};
-    fb_desc.color_attachments.push_back({swapchain_image});
-
-    GOMA_TEST_TRY(pipeline, device->CreatePipeline({{vtx, frag}}, fb_desc));
-
-    GraphicsContext context(*device);
-
-    GOMA_TEST_TRYV(context.Begin());
-    GOMA_TEST_TRYV(context.BindFramebuffer(fb_desc));
-
-    context.BindGraphicsPipeline(*pipeline);
-    context.Draw(3);
-
-    context.End();
-
-    GOMA_TEST_TRYV(device->Submit(context));
-    GOMA_TEST_TRYV(device->Present());
-
+    HelloTriangle(device.get(), false);
     Sleep(1000);
 }
 

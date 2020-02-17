@@ -1059,11 +1059,39 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
         api_handles_.render_passes.push_back(render_pass);
     }
 
+    // Accumulate bindings from each shader, adding the respective stages to the
+    // "stage" bitmask
+    std::unordered_map<uint32_t, VkDescriptorSetLayoutBinding> bindings_map;
+    for (const auto& shader : pipeline_desc.shaders) {
+        for (const auto& binding : shader->GetBindings()) {
+            VkDescriptorSetLayoutBinding& b = bindings_map[binding.first];
+            b.binding = binding.first;
+            b.descriptorType = binding.second.type;
+            b.descriptorCount = 1;
+            b.stageFlags |= shader->GetStage();
+        }
+    }
+
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
+    for (const auto& binding : bindings_map) {
+        bindings.push_back(binding.second);
+    }
+
+    VkDescriptorSetLayoutCreateInfo set_layout_info{
+        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    set_layout_info.bindingCount = static_cast<uint32_t>(bindings.size());
+    set_layout_info.pBindings = bindings.data();
+
+    VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateDescriptorSetLayout(api_handles_.device, &set_layout_info,
+                                         nullptr, &set_layout));
+    api_handles_.descriptor_set_layouts.push_back(set_layout);
+
     VkPipelineLayoutCreateInfo layout_info = {
         VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-    layout_info.setLayoutCount = 0;  // TODO!
+    layout_info.setLayoutCount = 1;
+    layout_info.pSetLayouts = &set_layout;
 
-    // TODO: move pipeline layout to shader (SPIRV-Cross?)
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
     VK_CHECK(vkCreatePipelineLayout(api_handles_.device, &layout_info, nullptr,
                                     &pipeline_layout));

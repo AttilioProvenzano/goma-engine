@@ -77,6 +77,7 @@ Image* CreateImage(ImageDescription);
 
         VmaAllocator allocator = VK_NULL_HANDLE;
         VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
+        std::vector<VkDescriptorSetLayout> descriptor_set_layouts;
         std::vector<VkPipelineLayout> pipeline_layouts;
         std::vector<VkRenderPass> render_passes;
     } api_handles_;

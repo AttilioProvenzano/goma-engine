@@ -458,15 +458,29 @@ Device::~Device() {
     buffers_.clear();
 
     for (auto& image : images_) {
-        if (image->GetHandle() != VK_NULL_HANDLE) {
+        if (image->GetView() != VK_NULL_HANDLE) {
             vkDestroyImageView(api_handles_.device, image->GetView(), nullptr);
+        }
+
+        if (image->GetHandle() != VK_NULL_HANDLE) {
             vmaDestroyImage(api_handles_.allocator, image->GetHandle(),
                             image->GetAllocation().allocation);
-            image->SetView(VK_NULL_HANDLE);
-            image->SetHandle(VK_NULL_HANDLE);
         }
+
+        image->SetView(VK_NULL_HANDLE);
+        image->SetHandle(VK_NULL_HANDLE);
     }
     images_.clear();
+
+    for (auto& image : swapchain_images_) {
+        if (image->GetView() != VK_NULL_HANDLE) {
+            vkDestroyImageView(api_handles_.device, image->GetView(), nullptr);
+        }
+
+        image->SetView(VK_NULL_HANDLE);
+        image->SetHandle(VK_NULL_HANDLE);
+    }
+    swapchain_images_.clear();
 
     if (api_handles_.pipeline_cache) {
         size_t data_size;
@@ -504,6 +518,10 @@ Device::~Device() {
     }
     api_handles_.render_passes.clear();
 
+    if (cmd_pool_ != VK_NULL_HANDLE) {
+        vkDestroyCommandPool(api_handles_.device, cmd_pool_, nullptr);
+    }
+
     for (auto& semaphore : acquisition_semaphores_) {
         vkDestroySemaphore(api_handles_.device, semaphore.second, nullptr);
     }
@@ -518,6 +536,16 @@ Device::~Device() {
         vkDestroySemaphore(api_handles_.device, semaphore, nullptr);
     }
     recycled_semaphores_.clear();
+
+    for (auto& fence : submission_fences_) {
+        vkDestroyFence(api_handles_.device, fence.second, nullptr);
+    }
+    submission_fences_.clear();
+
+    for (auto& fence : recycled_fences_) {
+        vkDestroyFence(api_handles_.device, fence, nullptr);
+    }
+    recycled_fences_.clear();
 
     if (api_handles_.swapchain) {
         vkDestroySwapchainKHR(api_handles_.device, api_handles_.swapchain,

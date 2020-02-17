@@ -92,9 +92,8 @@ Image* CreateImage(ImageDescription);
     std::unordered_map<size_t, VkSemaphore> acquisition_semaphores_;
     std::unordered_map<size_t, VkSemaphore> presentation_semaphores_;
 
-    std::unordered_map<size_t, VkCommandBuffer> acquisition_cmd_bufs_;
     std::unordered_map<size_t, VkCommandBuffer> presentation_cmd_bufs_;
-    VkCommandPool cmd_pool_;
+    VkCommandPool cmd_pool_ = VK_NULL_HANDLE;
 
     std::vector<VkFence> recycled_fences_;
     std::unordered_map<size_t, VkFence> submission_fences_;

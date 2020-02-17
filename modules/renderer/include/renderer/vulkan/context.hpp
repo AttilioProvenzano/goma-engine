@@ -100,6 +100,7 @@ class GraphicsContext : public Context {
     // void BeginParallel();
   private:
     std::vector<VkRenderPass> render_passes_;
+    std::vector<VkFramebuffer> framebuffers_;
     FramebufferDesc current_fb_;
 };
 

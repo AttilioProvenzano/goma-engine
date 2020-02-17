@@ -128,6 +128,11 @@ std::vector<VkCommandBuffer> Context::PopQueuedCommands() {
 GraphicsContext::GraphicsContext(Device& device) : Context(device) {}
 
 GraphicsContext::~GraphicsContext() {
+    for (auto& framebuffer : framebuffers_) {
+        vkDestroyFramebuffer(device_.GetHandle(), framebuffer, nullptr);
+    }
+    framebuffers_.clear();
+
     for (auto& render_pass : render_passes_) {
         vkDestroyRenderPass(device_.GetHandle(), render_pass, nullptr);
     }
@@ -207,10 +212,10 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     fb_info.pAttachments = fb_attachments.data();
     fb_info.layers = 1;
 
-    // TODO: Store them for cleanup
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VK_CHECK(vkCreateFramebuffer(device_.GetHandle(), &fb_info, nullptr,
                                  &framebuffer));
+    framebuffers_.push_back(framebuffer);
 
     VkViewport viewport = {};
     viewport.width = static_cast<float>(fb_size.width);

@@ -50,10 +50,7 @@ class Device {
     result<void> WaitOnWork(ReceiptPtr&&);
     result<void> Present();
 
-    /*
-void ProcessWindowChanges(Platform&);
-Image* CreateImage(ImageDescription);
-*/
+    // void ProcessWindowChanges(Platform&);
 
   private:
     result<void> Init();

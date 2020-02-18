@@ -315,6 +315,11 @@ void GraphicsContext::BindIndexBuffer(Buffer& buffer, VkDeviceSize offset,
     vkCmdBindIndexBuffer(active_cmd_buf_, handle, offset, index_type);
 }
 
+void GraphicsContext::BindDescriptorSet(const DescriptorSet& set) {
+    for (const auto& descriptor : set) {
+    }
+}
+
 void GraphicsContext::BindGraphicsPipeline(Pipeline& pipeline) {
     assert(active_cmd_buf_ != VK_NULL_HANDLE &&
            "Context is not in a recording state");

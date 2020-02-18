@@ -74,11 +74,20 @@ class Context {
     std::vector<VkCommandBuffer> submission_queue_;
 };
 
+struct Descriptor {
+    VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    Buffer* buffer = nullptr;
+    Image* image = nullptr;
+};
+
+using DescriptorSet = std::vector<Descriptor>;
+
 class GraphicsContext : public Context {
   public:
     GraphicsContext(Device& device);
     ~GraphicsContext();
 
+    // void BeginParallel();
     virtual void End() override;
 
     result<void> GraphicsContext::BindFramebuffer(FramebufferDesc&);
@@ -88,6 +97,8 @@ class GraphicsContext : public Context {
     void BindVertexBuffer(Buffer&, VkDeviceSize offset = 0);
     void BindIndexBuffer(Buffer&, VkDeviceSize offset = 0,
                          VkIndexType index_type = VK_INDEX_TYPE_UINT32);
+    void BindDescriptorSet(const DescriptorSet& = {});
+
     void BindGraphicsPipeline(Pipeline&);
     void BindComputePipeline(Pipeline&);
 
@@ -97,7 +108,6 @@ class GraphicsContext : public Context {
                      uint32_t first_index = 0, uint32_t vertex_offset = 0,
                      uint32_t first_instance = 0);
 
-    // void BeginParallel();
   private:
     std::vector<VkRenderPass> render_passes_;
     std::vector<VkFramebuffer> framebuffers_;

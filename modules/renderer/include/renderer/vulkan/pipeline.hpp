@@ -17,7 +17,7 @@ struct PipelineDesc {
     VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT;
 
     bool depth_test = false;
-    bool depth_write = false;
+    bool depth_write = true;
     VkCompareOp depth_compare_op = VK_COMPARE_OP_LESS;
 
     bool stencil_test = false;

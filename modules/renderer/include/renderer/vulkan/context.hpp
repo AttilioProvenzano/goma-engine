@@ -157,7 +157,7 @@ class GraphicsContext : public Context {
 };
 
 class ComputeContext : public Context {
-    // void SetPipeline(Pipeline);
+    void BindComputePipeline(Pipeline&);
     void Dispatch();
 };
 

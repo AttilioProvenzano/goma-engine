@@ -551,6 +551,11 @@ Device::~Device() {
     }
     submission_fences_.clear();
 
+    for (auto& fence : presentation_fences_) {
+        vkDestroyFence(api_handles_.device, fence.second, nullptr);
+    }
+    presentation_fences_.clear();
+
     for (auto& fence : recycled_fences_) {
         vkDestroyFence(api_handles_.device, fence, nullptr);
     }
@@ -1369,12 +1374,22 @@ result<void> Device::Present() {
         presentation_semaphores_[swapchain_index_] = semaphore;
     }
 
+    VkFence fence = presentation_fences_[swapchain_index_];
+    if (fence) {
+        VK_CHECK(vkWaitForFences(api_handles_.device, 1, &fence, VK_TRUE,
+                                 UINT64_MAX));
+        VK_CHECK(vkResetFences(api_handles_.device, 1, &fence));
+    } else {
+        fence = GetFence();
+        presentation_fences_[swapchain_index_] = fence;
+    }
+
     VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &presentation_cmd_bufs_[swapchain_index_];
     submit.signalSemaphoreCount = 1;
     submit.pSignalSemaphores = &presentation_semaphores_[swapchain_index_];
-    VK_CHECK(vkQueueSubmit(api_handles_.queue, 1, &submit, VK_NULL_HANDLE));
+    VK_CHECK(vkQueueSubmit(api_handles_.queue, 1, &submit, fence));
 
     VkPresentInfoKHR present_info = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     present_info.swapchainCount = 1;

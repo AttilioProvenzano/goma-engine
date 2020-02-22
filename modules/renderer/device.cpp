@@ -1037,7 +1037,7 @@ result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
     ShaderBindings bindings;
     for (const auto& uniform_buffer : resources.uniform_buffers) {
         ShaderBinding binding = {uniform_buffer.name};
-        binding.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        binding.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 
         uint32_t binding_id = spirv_glsl.get_decoration(uniform_buffer.id,
                                                         spv::DecorationBinding);

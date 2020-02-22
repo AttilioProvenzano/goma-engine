@@ -637,6 +637,18 @@ result<void> Device::InitWindow(Platform& platform) {
         auto& image = swapchain_images_[i];
         auto& presentation_cmd_buf = cmd_bufs[i];
 
+        std::stringstream str;
+        str << "Presentation command buffer #" << i;
+        std::string name = str.str();
+
+        VkDebugUtilsObjectNameInfoEXT name_info = {
+            VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+        name_info.objectType = VK_OBJECT_TYPE_COMMAND_BUFFER;
+        name_info.objectHandle =
+            reinterpret_cast<uint64_t>(presentation_cmd_buf);
+        name_info.pObjectName = name.c_str();
+        VK_CHECK(vkSetDebugUtilsObjectNameEXT(api_handles_.device, &name_info));
+
         VkCommandBufferBeginInfo begin_info{
             VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
         VK_CHECK(vkBeginCommandBuffer(presentation_cmd_buf, &begin_info));

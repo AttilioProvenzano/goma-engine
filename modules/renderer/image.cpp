@@ -8,7 +8,7 @@ const ImageDesc ImageDesc::ColorAttachmentDesc = {
     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT};
 const ImageDesc ImageDesc::DepthAttachmentDesc = {
     {},
-    VK_FORMAT_D24_UNORM_S8_UINT,
+    VK_FORMAT_D32_SFLOAT_S8_UINT,
     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT};
 const ImageDesc ImageDesc::TextureDesc = {
     {},

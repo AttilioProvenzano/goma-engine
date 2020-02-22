@@ -84,8 +84,139 @@ VkCommandBuffer CommandBufferManager::RequestSecondary(size_t thread_id) {
     return cmd_buf;
 }
 
+DescriptorSetManager::DescriptorSetManager(Device& device) : device_(device) {}
+
+DescriptorSetManager::~DescriptorSetManager() {
+    for (auto& pool_set : pool_sets_) {
+        for (auto& pool : pool_set.second.pools) {
+            vkDestroyDescriptorPool(device_.GetHandle(), pool.pool, nullptr);
+        }
+    }
+}
+
+void DescriptorSetManager::Reset() {
+    for (auto& pool_set : pool_sets_) {
+        pool_set.second.first_available_pool = 0;
+        pool_set.second.first_available_set = 0;
+    }
+}
+
+DescriptorSetManager::Pool* DescriptorSetManager::FindOrCreatePool(
+    PoolSet& pool_set, const Pipeline& pipeline) {
+    // Create a new pool if necessary
+    while (pool_set.pools.size() <= pool_set.first_available_pool) {
+        std::vector<VkDescriptorPoolSize> desc_pool_sizes;
+
+        const auto& bindings = pipeline.GetBindings();
+
+        for (const auto& type :
+             {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+              VK_DESCRIPTOR_TYPE_SAMPLER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+              VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC}) {
+            auto count = std::count_if(
+                bindings.begin(), bindings.end(),
+                [type](const auto& b) { return b.descriptorType == type; });
+
+            if (count > 0) {
+                VkDescriptorPoolSize desc_pool_size;
+                desc_pool_size.descriptorCount =
+                    static_cast<uint32_t>(pool_size_ * count);
+                desc_pool_size.type = type;
+                desc_pool_sizes.push_back(desc_pool_size);
+            }
+        }
+
+        // Cannot create an empty descriptor pool
+        if (desc_pool_sizes.empty()) {
+            return nullptr;
+        }
+
+        VkDescriptorPoolCreateInfo pool_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+        pool_info.poolSizeCount = static_cast<uint32_t>(desc_pool_sizes.size());
+        pool_info.pPoolSizes = desc_pool_sizes.data();
+        pool_info.maxSets = static_cast<uint32_t>(pool_size_);
+
+        VkDescriptorPool pool = VK_NULL_HANDLE;
+        vkCreateDescriptorPool(device_.GetHandle(), &pool_info, nullptr, &pool);
+
+        VkDescriptorSetAllocateInfo allocate_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+        allocate_info.descriptorPool = pool;
+        allocate_info.descriptorSetCount = static_cast<uint32_t>(pool_size_);
+
+        std::vector<VkDescriptorSetLayout> layouts(
+            pool_size_, pipeline.GetDescriptorSetLayout());
+        allocate_info.pSetLayouts = layouts.data();
+
+        std::vector<VkDescriptorSet> sets(pool_size_);
+        vkAllocateDescriptorSets(device_.GetHandle(), &allocate_info,
+                                 sets.data());
+
+        pool_set.pools.push_back({pool, std::move(sets)});
+    }
+
+    return &pool_set.pools[pool_set.first_available_pool];
+}
+
+VkDescriptorSet DescriptorSetManager::RequestDescriptorSet(
+    const Pipeline& pipeline, const DescriptorSet& set) {
+    auto& pool_set = pool_sets_[pipeline.GetDescriptorSetLayout()];
+
+    if (pool_set.first_available_set >= pool_size_) {
+        pool_set.first_available_pool++;
+        pool_set.first_available_set = 0;
+    }
+
+    auto pool = FindOrCreatePool(pool_set, pipeline);
+    if (!pool) {
+        return VK_NULL_HANDLE;
+    }
+
+    auto desc_set = pool->sets[pool_set.first_available_set++];
+
+    if (!set.empty()) {
+        std::vector<VkWriteDescriptorSet> set_writes;
+        for (const auto& descriptor : set) {
+            VkWriteDescriptorSet set_write = {
+                VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            set_write.dstSet = desc_set;
+            set_write.descriptorCount = 1;
+            set_write.descriptorType = descriptor.second.type;
+            set_write.dstBinding = descriptor.first;
+
+            VkDescriptorBufferInfo buffer_info = {};
+            if (descriptor.second.buffer) {
+                buffer_info.buffer = descriptor.second.buffer->GetHandle();
+                buffer_info.range = descriptor.second.buffer->GetSize();
+                set_write.pBufferInfo = &buffer_info;
+            }
+
+            VkDescriptorImageInfo image_info = {};
+            if (descriptor.second.image) {
+                image_info.imageLayout =
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                image_info.imageView = descriptor.second.image->GetView();
+                image_info.sampler = VK_NULL_HANDLE;
+                set_write.pImageInfo = &image_info;
+            }
+
+            set_writes.push_back(std::move(set_write));
+        }
+
+        vkUpdateDescriptorSets(device_.GetHandle(),
+                               static_cast<uint32_t>(set_writes.size()),
+                               set_writes.data(), 0, nullptr);
+    }
+
+    return desc_set;
+}
+
 Context::Context(Device& device)
-    : device_(device), cmd_buf_managers_(kFrameCount, {device}) {}
+    : device_(device),
+      cmd_buf_managers_(kFrameCount, {device}),
+      desc_set_managers_(kFrameCount, {device}) {}
 
 void Context::NextFrame() {
     current_frame_ = (current_frame_ + 1) % kFrameCount;
@@ -317,8 +448,19 @@ void GraphicsContext::BindIndexBuffer(Buffer& buffer, VkDeviceSize offset,
 }
 
 void GraphicsContext::BindDescriptorSet(const DescriptorSet& set) {
-    for (const auto& descriptor : set) {
-    }
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+    assert(current_pipeline_ &&
+           "A pipeline needs to be bound when binding a descriptor set");
+
+    auto& desc_set_manager = desc_set_managers_[current_frame_];
+    auto desc_set =
+        desc_set_manager.RequestDescriptorSet(*current_pipeline_, set);
+
+    // TODO: bind point compute
+    vkCmdBindDescriptorSets(active_cmd_buf_, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            current_pipeline_->GetLayout(), 0, 1, &desc_set, 0,
+                            nullptr);
 }
 
 void GraphicsContext::BindGraphicsPipeline(Pipeline& pipeline) {
@@ -327,6 +469,8 @@ void GraphicsContext::BindGraphicsPipeline(Pipeline& pipeline) {
 
     VkPipeline handle = pipeline.GetHandle();
     vkCmdBindPipeline(active_cmd_buf_, VK_PIPELINE_BIND_POINT_GRAPHICS, handle);
+
+    current_pipeline_ = &pipeline;
 }
 
 void GraphicsContext::BindComputePipeline(Pipeline& pipeline) {
@@ -335,6 +479,8 @@ void GraphicsContext::BindComputePipeline(Pipeline& pipeline) {
 
     VkPipeline handle = pipeline.GetHandle();
     vkCmdBindPipeline(active_cmd_buf_, VK_PIPELINE_BIND_POINT_COMPUTE, handle);
+
+    current_pipeline_ = &pipeline;
 }
 
 void GraphicsContext::Draw(uint32_t vertex_count, uint32_t instance_count,

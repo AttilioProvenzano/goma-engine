@@ -36,6 +36,51 @@ class CommandBufferManager {
     std::unordered_map<size_t, Pool> pools_;
 };
 
+struct Descriptor {
+    VkDescriptorType type;
+    Buffer* buffer;
+    Image* image;
+
+    Descriptor()
+        : type(VK_DESCRIPTOR_TYPE_MAX_ENUM), buffer(nullptr), image(nullptr) {}
+    Descriptor(Buffer& b)
+        : type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER), buffer(&b), image(nullptr) {}
+    Descriptor(Image& i)
+        : type(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE), buffer(nullptr), image(&i) {}
+};
+
+using DescriptorSet = std::unordered_map<uint32_t, Descriptor>;
+
+class DescriptorSetManager {
+  public:
+    DescriptorSetManager(Device& device);
+    ~DescriptorSetManager();
+
+    void Reset();
+    VkDescriptorSet RequestDescriptorSet(const Pipeline& pipeline,
+                                         const DescriptorSet& set = {});
+
+  private:
+    Device& device_;
+
+    struct Pool {
+        VkDescriptorPool pool = VK_NULL_HANDLE;
+        std::vector<VkDescriptorSet> sets;
+    };
+
+    struct PoolSet {
+        std::vector<Pool> pools;
+        size_t first_available_pool = 0;
+        size_t first_available_set = 0;
+    };
+
+    size_t pool_size_ = 256;
+
+    Pool* FindOrCreatePool(PoolSet& pool_set, const Pipeline& pipeline);
+
+    std::unordered_map<VkDescriptorSetLayout, PoolSet> pool_sets_;
+};
+
 struct FramebufferDesc {
     struct Attachment {
         Image* image = nullptr;
@@ -58,7 +103,7 @@ class Context {
 
     result<void> Begin();
     virtual void End();
-    void NextFrame();
+    virtual void NextFrame();
     // void ResourceBarrier(BarrierDescription);
 
     std::vector<VkCommandBuffer> PopQueuedCommands();
@@ -70,17 +115,10 @@ class Context {
 
     static constexpr int kFrameCount = 3;
     std::vector<CommandBufferManager> cmd_buf_managers_;
+    std::vector<DescriptorSetManager> desc_set_managers_;
 
     std::vector<VkCommandBuffer> submission_queue_;
 };
-
-struct Descriptor {
-    VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
-    Buffer* buffer = nullptr;
-    Image* image = nullptr;
-};
-
-using DescriptorSet = std::vector<Descriptor>;
 
 class GraphicsContext : public Context {
   public:
@@ -89,6 +127,7 @@ class GraphicsContext : public Context {
 
     // void BeginParallel();
     virtual void End() override;
+    virtual void NextFrame() override;
 
     result<void> GraphicsContext::BindFramebuffer(FramebufferDesc&);
     void SetViewport(VkViewport viewport);
@@ -110,8 +149,11 @@ class GraphicsContext : public Context {
 
   private:
     std::vector<VkRenderPass> render_passes_;
-    std::vector<VkFramebuffer> framebuffers_;
+
+    std::unordered_map<size_t, std::vector<VkFramebuffer>> framebuffer_map_;
     FramebufferDesc current_fb_;
+
+    Pipeline* current_pipeline_ = nullptr;
 };
 
 class ComputeContext : public Context {

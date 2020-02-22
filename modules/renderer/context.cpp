@@ -576,16 +576,14 @@ result<void> UploadContext::UploadBuffer(Buffer& buffer, BufferData data) {
 }
 
 result<void> UploadContext::UploadImage(Image& image, ImageData data) {
+    return UploadImageArray(image, {{{0, std::move(data)}}});
+}
+
+result<void> UploadContext::UploadImageArray(Image& image,
+                                             ImageArrayData data) {
     assert(active_cmd_buf_ != VK_NULL_HANDLE &&
            "Context is not in a recording state");
 
-    auto& mip_data = data.mip_data;
-    if (mip_data.empty()) {
-        // Nothing to upload
-        return outcome::success();
-    }
-
-    // TODO: restrict barrier to relevant array layers
     VkImageMemoryBarrier image_barrier = {
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
     image_barrier.srcAccessMask = 0;
@@ -605,30 +603,33 @@ result<void> UploadContext::UploadImage(Image& image, ImageData data) {
     auto extent = image.GetSize();
     auto format_info = utils::GetFormatInfo(image.GetFormat());
 
-    for (auto& mip : mip_data) {
-        auto mip_extent =
-            VkExtent3D{std::max(extent.width >> mip.first, 1U),
-                       std::max(extent.height >> mip.first, 1U), 1};
+    for (auto& layer : data.array_data) {
+        for (auto& mip : layer.second.mip_data) {
+            auto mip_extent =
+                VkExtent3D{std::max(extent.width >> mip.first, 1U),
+                           std::max(extent.height >> mip.first, 1U), 1};
 
-        // We create staging buffers, then we copy the image from there
-        BufferDesc staging_desc = {};
-        staging_desc.size =
-            mip_extent.width * mip_extent.height * format_info.size;
-        staging_desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-        staging_desc.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+            // We create staging buffers, then we copy the image from there
+            BufferDesc staging_desc = {};
+            staging_desc.size =
+                mip_extent.width * mip_extent.height * format_info.size;
+            staging_desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+            staging_desc.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
-        OUTCOME_TRY(staging_buffer, device_.CreateBuffer(staging_desc));
-        OUTCOME_TRY(CopyBufferData(device_, *staging_buffer,
-                                   {staging_desc.size, mip.second}));
-        staging_buffers_[current_frame_].push_back(staging_buffer);
+            OUTCOME_TRY(staging_buffer, device_.CreateBuffer(staging_desc));
+            OUTCOME_TRY(CopyBufferData(device_, *staging_buffer,
+                                       {staging_desc.size, mip.second}));
+            staging_buffers_[current_frame_].push_back(staging_buffer);
 
-        VkBufferImageCopy region = {};
-        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip.first, 0, 1};
-        region.imageExtent = mip_extent;
+            VkBufferImageCopy region = {};
+            region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip.first,
+                                       layer.first, 1};
+            region.imageExtent = mip_extent;
 
-        vkCmdCopyBufferToImage(
-            active_cmd_buf_, staging_buffer->GetHandle(), image.GetHandle(),
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+            vkCmdCopyBufferToImage(
+                active_cmd_buf_, staging_buffer->GetHandle(), image.GetHandle(),
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        }
     }
 
     image_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;

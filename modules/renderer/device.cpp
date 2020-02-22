@@ -502,11 +502,14 @@ Device::~Device() {
         api_handles_.pipeline_cache = VK_NULL_HANDLE;
     }
 
-    for (auto& pipeline : pipelines_) {
-        vkDestroyPipeline(api_handles_.device, pipeline->GetHandle(), nullptr);
-        pipeline->SetHandle(VK_NULL_HANDLE);
+    for (auto& pipeline : pipeline_map_) {
+        vkDestroyPipeline(api_handles_.device, pipeline.second->GetHandle(),
+                          nullptr);
+        pipeline.second->SetHandle(VK_NULL_HANDLE);
+        pipeline.second->SetLayout(VK_NULL_HANDLE);
+        pipeline.second->SetDescriptorSetLayout(VK_NULL_HANDLE);
     }
-    pipelines_.clear();
+    pipeline_map_.clear();
 
     for (auto& pipeline_layout : api_handles_.pipeline_layouts) {
         vkDestroyPipelineLayout(api_handles_.device, pipeline_layout, nullptr);
@@ -1055,6 +1058,12 @@ result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
 
 result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
                                          FramebufferDesc& fb_desc) {
+    // FIXME: cache based on other parameters as well!
+    auto pipe_res = pipeline_map_.find(pipeline_desc.shaders);
+    if (pipe_res != pipeline_map_.end()) {
+        return pipe_res->second.get();
+    }
+
     VkGraphicsPipelineCreateInfo pipeline_info = {
         VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
 
@@ -1087,6 +1096,8 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     set_layout_info.bindingCount = static_cast<uint32_t>(bindings.size());
     set_layout_info.pBindings = bindings.data();
+
+    // TODO: cache descriptor set layouts to limit descriptor pool creation
 
     VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
     VK_CHECK(vkCreateDescriptorSetLayout(api_handles_.device, &set_layout_info,
@@ -1261,9 +1272,12 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
 
     auto pipeline_ptr = std::make_unique<Pipeline>(std::move(pipeline_desc));
     pipeline_ptr->SetHandle(pipeline);
+    pipeline_ptr->SetLayout(pipeline_layout);
+    pipeline_ptr->SetDescriptorSetLayout(set_layout);
+    pipeline_ptr->SetBindings(std::move(bindings));
 
-    pipelines_.push_back(std::move(pipeline_ptr));
-    return pipelines_.back().get();
+    pipeline_map_[pipeline_desc.shaders] = std::move(pipeline_ptr);
+    return pipeline_map_[pipeline_desc.shaders].get();
 }
 
 VkSemaphore Device::GetSemaphore() {

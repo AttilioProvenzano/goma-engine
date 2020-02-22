@@ -220,6 +220,8 @@ Context::Context(Device& device)
 
 void Context::NextFrame() {
     current_frame_ = (current_frame_ + 1) % kFrameCount;
+    cmd_buf_managers_[current_frame_].Reset();
+    desc_set_managers_[current_frame_].Reset();
 }
 
 result<void> Context::Begin() {

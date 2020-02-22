@@ -93,8 +93,12 @@ class Device {
     std::vector<std::unique_ptr<Buffer>> buffers_;
     std::vector<std::unique_ptr<Image>> images_;
     std::vector<std::unique_ptr<Image>> swapchain_images_;
-    std::vector<std::unique_ptr<Pipeline>> pipelines_;
     std::vector<std::unique_ptr<Shader>> shaders_;
+
+    using PipelineMap =
+        std::unordered_map<std::vector<Shader*>, std::unique_ptr<Pipeline>,
+                           VectorHash<Shader*>>;
+    PipelineMap pipeline_map_;
 
     std::vector<VkSemaphore> recycled_semaphores_;
 
@@ -106,6 +110,7 @@ class Device {
 
     std::vector<VkFence> recycled_fences_;
     std::unordered_map<size_t, VkFence> submission_fences_;
+    std::unordered_map<size_t, VkFence> presentation_fences_;
 
     static const uint32_t kInvalidSwapchainIndex;
     size_t last_submission_id_ = 0;

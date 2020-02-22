@@ -294,8 +294,15 @@ TEST_F(RendererTest, CanCreateTexture) {
     auto width = 64U;
     auto height = 64U;
 
+    auto mip_levels = 1;
+    auto min_wh = std::min(width, height);
+    while (min_wh >> mip_levels) {
+        mip_levels++;
+    }
+
     auto desc = ImageDesc::TextureDesc;
     desc.size = {width, height, 1};
+    desc.mip_levels = mip_levels;
 
     std::vector<uint8_t> image_data(width * height *
                                     utils::GetFormatInfo(desc.format).size);
@@ -327,6 +334,7 @@ TEST_F(RendererTest, CanCreateTexture) {
 
     ImageData d = {{{0, image_data.data()}}};
     GOMA_TEST_TRYV(ctx.UploadImage(*image, std::move(d)));
+    ctx.GenerateMipmaps(*image);
     ctx.End();
 
     GOMA_TEST_TRY(receipt, device->Submit(ctx));

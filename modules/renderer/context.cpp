@@ -645,4 +645,83 @@ result<void> UploadContext::UploadImageArray(Image& image,
     return outcome::success();
 }
 
+void UploadContext::GenerateMipmaps(Image& image) {
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+
+    VkImageMemoryBarrier image_barrier = {
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    image_barrier.srcAccessMask = 0;
+    image_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    image_barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    image_barrier.image = image.GetHandle();
+    image_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0,
+                                      VK_REMAINING_MIP_LEVELS, 0,
+                                      VK_REMAINING_ARRAY_LAYERS};
+
+    vkCmdPipelineBarrier(active_cmd_buf_, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1,
+                         &image_barrier);
+
+    VkImageMemoryBarrier mip_barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    mip_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    mip_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    mip_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    mip_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    mip_barrier.image = image.GetHandle();
+    mip_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0,
+                                    VK_REMAINING_ARRAY_LAYERS};
+
+    vkCmdPipelineBarrier(active_cmd_buf_, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1,
+                         &mip_barrier);
+
+    auto mip_extent = image.GetSize();
+    for (uint32_t mip = 1; mip < image.GetMipLevels(); mip++) {
+        auto half_width = std::max(mip_extent.width / 2, 1U);
+        auto half_height = std::max(mip_extent.height / 2, 1U);
+
+        VkImageBlit region = {};
+
+        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip - 1, 0,
+                                 image.GetLayerCount()};
+        region.srcOffsets[1].x = mip_extent.width;
+        region.srcOffsets[1].y = mip_extent.height;
+        region.srcOffsets[1].z = 1;
+
+        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip, 0,
+                                 image.GetLayerCount()};
+        region.dstOffsets[1].x = half_width;
+        region.dstOffsets[1].y = half_height;
+        region.dstOffsets[1].z = 1;
+
+        mip_extent = {half_width, half_height, 1};
+
+        vkCmdBlitImage(active_cmd_buf_, image.GetHandle(),
+                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image.GetHandle(),
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region,
+                       VK_FILTER_LINEAR);
+
+        mip_barrier.subresourceRange.baseMipLevel = mip;
+        vkCmdPipelineBarrier(active_cmd_buf_, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0,
+                             nullptr, 1, &mip_barrier);
+    }
+
+    // All mip levels are now in layout TRANSFER_SRC_OPTIMAL
+    image_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    image_barrier.dstAccessMask = 0;
+    image_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    image_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    vkCmdPipelineBarrier(active_cmd_buf_, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1,
+                         &image_barrier);
+}
+
 }  // namespace goma

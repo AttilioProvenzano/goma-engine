@@ -29,6 +29,8 @@ class Image {
     VkExtent3D GetSize();
     VkFormat GetFormat();
     VkSampleCountFlagBits GetSampleCount();
+    uint32_t GetLayerCount();
+    uint32_t GetMipLevels();
 
     void SetHandle(VkImage);
     VkImage GetHandle();

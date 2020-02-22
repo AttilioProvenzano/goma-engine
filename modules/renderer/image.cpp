@@ -10,16 +10,19 @@ const ImageDesc ImageDesc::DepthAttachmentDesc = {
     {},
     VK_FORMAT_D32_SFLOAT_S8_UINT,
     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT};
-const ImageDesc ImageDesc::TextureDesc = {
-    {},
-    VK_FORMAT_R8G8B8A8_UNORM,
-    VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT};
+const ImageDesc ImageDesc::TextureDesc = {{},
+                                          VK_FORMAT_R8G8B8A8_UNORM,
+                                          VK_IMAGE_USAGE_SAMPLED_BIT |
+                                              VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                                              VK_IMAGE_USAGE_TRANSFER_DST_BIT};
 
 Image::Image(const ImageDesc& image_desc) : desc_(image_desc) {}
 
 VkExtent3D Image::GetSize() { return desc_.size; }
 VkFormat Image::GetFormat() { return desc_.format; }
 VkSampleCountFlagBits Image::GetSampleCount() { return desc_.samples; }
+uint32_t Image::GetLayerCount() { return desc_.array_layers; }
+uint32_t Image::GetMipLevels() { return desc_.mip_levels; }
 
 void Image::SetHandle(VkImage image) { api_handles_.image = image; }
 VkImage Image::GetHandle() { return api_handles_.image; }

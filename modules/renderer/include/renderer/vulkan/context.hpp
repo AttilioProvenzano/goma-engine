@@ -186,6 +186,8 @@ class UploadContext : public Context {
     result<void> UploadImage(Image&, ImageData);
     result<void> UploadImageArray(Image&, ImageArrayData);
 
+    void GenerateMipmaps(Image&);
+
   private:
     std::unordered_map<size_t, std::vector<Buffer*>> staging_buffers_;
 };

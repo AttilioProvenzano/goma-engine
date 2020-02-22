@@ -262,15 +262,27 @@ std::vector<VkCommandBuffer> Context::PopQueuedCommands() {
 GraphicsContext::GraphicsContext(Device& device) : Context(device) {}
 
 GraphicsContext::~GraphicsContext() {
-    for (auto& framebuffer : framebuffers_) {
-        vkDestroyFramebuffer(device_.GetHandle(), framebuffer, nullptr);
+    for (auto& framebuffer_vec : framebuffer_map_) {
+        for (auto& framebuffer : framebuffer_vec.second) {
+            vkDestroyFramebuffer(device_.GetHandle(), framebuffer, nullptr);
+        }
     }
-    framebuffers_.clear();
+    framebuffer_map_.clear();
 
     for (auto& render_pass : render_passes_) {
         vkDestroyRenderPass(device_.GetHandle(), render_pass, nullptr);
     }
     render_passes_.clear();
+}
+
+void GraphicsContext::NextFrame() {
+    Context::NextFrame();
+
+    auto& framebuffers = framebuffer_map_[current_frame_];
+    for (auto& framebuffer : framebuffers) {
+        vkDestroyFramebuffer(device_.GetHandle(), framebuffer, nullptr);
+    }
+    framebuffers.clear();
 }
 
 void GraphicsContext::End() {
@@ -293,6 +305,7 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     }
 
     if (desc.render_pass_ == VK_NULL_HANDLE) {
+        // TODO: store all the render passes in Device
         OUTCOME_TRY(render_pass,
                     utils::CreateRenderPass(device_.GetHandle(), desc));
         desc.render_pass_ = render_pass;
@@ -349,7 +362,7 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VK_CHECK(vkCreateFramebuffer(device_.GetHandle(), &fb_info, nullptr,
                                  &framebuffer));
-    framebuffers_.push_back(framebuffer);
+    framebuffer_map_[current_frame_].push_back(framebuffer);
 
     VkViewport viewport = {};
     viewport.width = static_cast<float>(fb_size.width);

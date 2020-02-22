@@ -13,6 +13,17 @@ struct FramebufferDesc;
 class Context;
 class Platform;
 
+template <typename T>
+struct VectorHash {
+    size_t operator()(const std::vector<T>& vec) const {
+        size_t seed = 0;
+        for (auto& element : vec) {
+            ::hash_combine(seed, std::hash<T>()(element));
+        }
+        return seed;
+    }
+};
+
 struct Receipt {
     size_t submission_id;
     VkDevice device = VK_NULL_HANDLE;

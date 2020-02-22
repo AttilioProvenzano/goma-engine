@@ -16,6 +16,7 @@ CommandBufferManager::~CommandBufferManager() {
 
 void CommandBufferManager::Reset() {
     for (auto& pool : pools_) {
+        vkResetCommandPool(device_.GetHandle(), pool.second.pool, 0);
         pool.second.active_primary_count = 0;
         pool.second.active_secondary_count = 0;
     }

@@ -16,7 +16,12 @@ void Shader::ClearPreamble() { desc_.preamble.clear(); }
 void Shader::SetHandle(VkShaderModule shader) { api_handles_.shader = shader; }
 VkShaderModule Shader::GetHandle() { return api_handles_.shader; }
 
-void Shader::SetInputs(ShaderInputs si) { inputs_ = std::move(si); }
+void Shader::SetInputs(ShaderInputs si) {
+    inputs_ = std::move(si);
+    std::sort(inputs_.begin(), inputs_.end(), [](const auto& a, const auto& b) {
+        return a.location < b.location;
+    });
+}
 const ShaderInputs& Shader::GetInputs() { return inputs_; }
 
 void Shader::SetBindings(ShaderBindings sb) { bindings_ = std::move(sb); }

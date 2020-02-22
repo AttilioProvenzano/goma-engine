@@ -30,18 +30,32 @@ struct PipelineDesc {
     bool suppress_fragment = false;
 };
 
+using PipelineBindings = std::vector<VkDescriptorSetLayoutBinding>;
+
 class Pipeline {
   public:
     Pipeline(const PipelineDesc&);
 
     void SetHandle(VkPipeline);
-    VkPipeline GetHandle();
+    VkPipeline GetHandle() const;
+
+    void SetLayout(VkPipelineLayout);
+    VkPipelineLayout GetLayout() const;
+
+    void SetDescriptorSetLayout(VkDescriptorSetLayout);
+    VkDescriptorSetLayout GetDescriptorSetLayout() const;
+
+    void SetBindings(PipelineBindings);
+    const PipelineBindings& GetBindings() const;
 
   private:
     PipelineDesc desc_;
 
     struct {
         VkPipeline pipeline = VK_NULL_HANDLE;
+        VkPipelineLayout layout = VK_NULL_HANDLE;
+        VkDescriptorSetLayout desc_set_layout = VK_NULL_HANDLE;
+        PipelineBindings bindings;
     } api_handles_;
 };
 

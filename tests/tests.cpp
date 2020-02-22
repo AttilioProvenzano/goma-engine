@@ -291,8 +291,30 @@ TEST_F(RendererTest, CanCreateColorAttachment) {
 }
 
 TEST_F(RendererTest, CanCreateTexture) {
+    auto width = 64U;
+    auto height = 64U;
+
     auto desc = ImageDesc::TextureDesc;
-    desc.size = {64, 64, 1};
+    desc.size = {width, height, 1};
+
+    std::vector<uint8_t> image_data(width * height *
+                                    utils::GetFormatInfo(desc.format).size);
+    std::generate(image_data.begin(), image_data.end(),
+                  [n = 0, size = 4 * width * height]() mutable {
+                      auto mix = 0xFF * n / size;
+                      auto ch = n++ % 4;
+                      switch (ch) {
+                          case 0:
+                              return mix;
+                          case 1:
+                              return 0x00U;
+                          case 2:
+                              return 0xFFU - mix;
+                          case 3:
+                              return 0xFFU;
+                      }
+                      return 0x00U;
+                  });
 
     GOMA_TEST_TRY(image, device->CreateImage(desc));
 
@@ -300,7 +322,15 @@ TEST_F(RendererTest, CanCreateTexture) {
     ASSERT_NE(image->GetView(), VkImageView{VK_NULL_HANDLE});
     ASSERT_NE(image->GetAllocation().allocation, VmaAllocation{VK_NULL_HANDLE});
 
-    // TODO: upload data
+    UploadContext ctx(*device);
+    GOMA_TEST_TRYV(ctx.Begin());
+
+    ImageData d = {{{0, image_data.data()}}};
+    GOMA_TEST_TRYV(ctx.UploadImage(*image, std::move(d)));
+    ctx.End();
+
+    GOMA_TEST_TRY(receipt, device->Submit(ctx));
+    GOMA_TEST_TRYV(device->WaitOnWork(std::move(receipt)));
 }
 
 TEST_F(RendererTest, CanCreateShaderAndPipeline) {

@@ -7,6 +7,7 @@
 #include "platform/win32_platform.hpp"
 #include "renderer/context.hpp"
 #include "renderer/device.hpp"
+#include "renderer/vulkan/utils.hpp"
 
 using namespace goma;
 
@@ -184,21 +185,27 @@ TEST(GlslangTest, CanCompileShader) {
     vtx_shader.parse(&builtin_resources, 0, false, EShMsgDefault);
 
     auto info_log = vtx_shader.getInfoLog();
-    spdlog::info("Shader compilation log: {}", info_log);
+    if (strlen(info_log) > 0) {
+        spdlog::info("Shader compilation log: {}", info_log);
+    }
 
     TProgram program;
     program.addShader(&vtx_shader);
     program.link(EShMsgDefault);
 
     info_log = program.getInfoLog();
-    spdlog::info("Shader linking log: {}", info_log);
+    if (strlen(info_log) > 0) {
+        spdlog::info("Shader linking log: {}", info_log);
+    }
 
     std::vector<unsigned int> spirv;
     spv::SpvBuildLogger logger;
     SpvOptions spvOptions = {};
     GlslangToSpv(*program.getIntermediate(EShLangVertex), spirv, &logger,
                  &spvOptions);
-    spdlog::info("SPIR-V conversion log: {}", logger.getAllMessages());
+    if (!logger.getAllMessages().empty()) {
+        spdlog::info("SPIR-V conversion log: {}", logger.getAllMessages());
+    }
 
     FinalizeProcess();
     ASSERT_GT(spirv.size(), 0U);
@@ -262,7 +269,9 @@ TEST_F(RendererTest, CanCreateCPUBuffer) {
 
     // Let's check that the data was properly copied.
     GOMA_TEST_TRY(data, device->MapBuffer(*buffer));
-    ASSERT_EQ(*static_cast<float*>(data), 1.0f);
+    auto buf_data = static_cast<Vertex*>(data);
+    ASSERT_EQ(buf_data[2].pos[2], cube_vtx_data[2].pos[2]);
+    ASSERT_EQ(buf_data[5].color[1], cube_vtx_data[5].color[1]);
     device->UnmapBuffer(*buffer);
 }
 
@@ -303,7 +312,7 @@ TEST_F(RendererTest, CanCreateShaderAndPipeline) {
     GOMA_TEST_TRY(shader, device->CreateShader(std::move(shader_desc)));
     ASSERT_NE(shader->GetHandle(), VkShaderModule{VK_NULL_HANDLE});
 
-    auto& uv_resource = shader->GetInputs().at(1);
+    auto& uv_resource = shader->GetInputs().at(2);
     ASSERT_EQ(uv_resource.name, "inUVs");
 
     auto& uniform_buffer = shader->GetBindings().at(0);
@@ -358,7 +367,7 @@ TEST_F(RendererTest, CanCreateGraphicsContext) {
     context.End();
 }
 
-void HelloTriangle(Device* device, bool offscreen) {
+void HelloTriangle(Device* device, bool offscreen = false) {
     ShaderDesc vtx_desc = {"triangle_vtx", VK_SHADER_STAGE_VERTEX_BIT,
                            triangle_vtx};
     ShaderDesc frag_desc = {"triangle_frag", VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -432,7 +441,7 @@ TEST_F(RendererGraphicalTest, CanCreateWindow) {
 }
 
 TEST_F(RendererGraphicalTest, HelloTriangle) {
-    HelloTriangle(device.get(), false);
+    HelloTriangle(device.get());
     Sleep(kTimeoutSeconds * 1000);
 }
 
@@ -485,9 +494,16 @@ TEST_F(RendererGraphicalTest, SpinningCube) {
 
     GraphicsContext context(*device);
     auto start_time = std::chrono::steady_clock::now();
+    auto elapsed_time = std::chrono::steady_clock::now() - start_time;
 
+    int frame = 0;
     const int kMaxFrames = 5000;
-    for (int frame = 0; frame < kMaxFrames; frame++) {
+    for (frame = 0; frame < kMaxFrames; frame++) {
+        elapsed_time = std::chrono::steady_clock::now() - start_time;
+        if (elapsed_time > std::chrono::seconds(kTimeoutSeconds)) {
+            break;
+        }
+
         frame_index = frame % 3;
 
         if (mvp_bufs.size() <= frame_index) {
@@ -563,9 +579,7 @@ TEST_F(RendererGraphicalTest, SpinningCube) {
         GOMA_TEST_TRYV(device->Present());
     }
 
-    auto elapsed_time = std::chrono::steady_clock::now() - start_time;
-
-    spdlog::info("Average FPS: {}", (1e9 * kMaxFrames) / elapsed_time.count());
+    spdlog::info("Average FPS: {}", (1e9 * frame) / elapsed_time.count());
 
     for (auto& receipt : receipts) {
         if (receipt) {

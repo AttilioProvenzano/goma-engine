@@ -1356,6 +1356,7 @@ result<void> Device::WaitOnWork(ReceiptPtr&& receipt) {
         if (fence) {
             VK_CHECK(vkWaitForFences(api_handles_.device, 1, &fence, VK_TRUE,
                                      UINT64_MAX));
+            VK_CHECK(vkResetFences(api_handles_.device, 1, &fence));
             recycled_fences_.push_back(fence);
         }
 

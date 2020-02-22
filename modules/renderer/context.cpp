@@ -575,4 +575,73 @@ result<void> UploadContext::UploadBuffer(Buffer& buffer, BufferData data) {
     return outcome::success();
 }
 
+result<void> UploadContext::UploadImage(Image& image, ImageData data) {
+    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
+           "Context is not in a recording state");
+
+    auto& mip_data = data.mip_data;
+    if (mip_data.empty()) {
+        // Nothing to upload
+        return outcome::success();
+    }
+
+    // TODO: restrict barrier to relevant array layers
+    VkImageMemoryBarrier image_barrier = {
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    image_barrier.srcAccessMask = 0;
+    image_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    image_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    image_barrier.image = image.GetHandle();
+    image_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0,
+                                      VK_REMAINING_MIP_LEVELS, 0,
+                                      VK_REMAINING_ARRAY_LAYERS};
+
+    vkCmdPipelineBarrier(active_cmd_buf_, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1,
+                         &image_barrier);
+
+    auto extent = image.GetSize();
+    auto format_info = utils::GetFormatInfo(image.GetFormat());
+
+    for (auto& mip : mip_data) {
+        auto mip_extent =
+            VkExtent3D{std::max(extent.width >> mip.first, 1U),
+                       std::max(extent.height >> mip.first, 1U), 1};
+
+        // We create staging buffers, then we copy the image from there
+        BufferDesc staging_desc = {};
+        staging_desc.size =
+            mip_extent.width * mip_extent.height * format_info.size;
+        staging_desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+        staging_desc.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+        OUTCOME_TRY(staging_buffer, device_.CreateBuffer(staging_desc));
+        OUTCOME_TRY(CopyBufferData(device_, *staging_buffer,
+                                   {staging_desc.size, mip.second}));
+        staging_buffers_[current_frame_].push_back(staging_buffer);
+
+        VkBufferImageCopy region = {};
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip.first, 0, 1};
+        region.imageExtent = mip_extent;
+
+        vkCmdCopyBufferToImage(
+            active_cmd_buf_, staging_buffer->GetHandle(), image.GetHandle(),
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    }
+
+    image_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    image_barrier.dstAccessMask = 0;
+    image_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    image_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    vkCmdPipelineBarrier(active_cmd_buf_, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1,
+                         &image_barrier);
+
+    return outcome::success();
+}
+
 }  // namespace goma

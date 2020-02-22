@@ -168,7 +168,13 @@ struct BufferData {
 };
 
 struct ImageData {
-    const void* data;
+    using MipLevel = uint32_t;
+    std::map<MipLevel, const void*> mip_data;
+};
+
+struct ImageArrayData {
+    using ArrayLayer = uint32_t;
+    std::map<ArrayLayer, ImageData> array_data;
 };
 
 class UploadContext : public Context {
@@ -178,6 +184,7 @@ class UploadContext : public Context {
 
     result<void> UploadBuffer(Buffer&, BufferData);
     result<void> UploadImage(Image&, ImageData);
+    result<void> UploadImageArray(Image&, ImageArrayData);
 
   private:
     std::unordered_map<size_t, std::vector<Buffer*>> staging_buffers_;

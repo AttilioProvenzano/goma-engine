@@ -1076,7 +1076,7 @@ result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
 result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
                                          FramebufferDesc& fb_desc) {
     // FIXME: cache based on other parameters as well!
-    auto pipe_res = pipeline_map_.find(pipeline_desc.shaders);
+    auto pipe_res = pipeline_map_.find(pipeline_desc);
     if (pipe_res != pipeline_map_.end()) {
         return pipe_res->second.get();
     }
@@ -1287,14 +1287,14 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
     name_info.pObjectName = "HelloTriangle";
     VK_CHECK(vkSetDebugUtilsObjectNameEXT(api_handles_.device, &name_info));
 
-    auto pipeline_ptr = std::make_unique<Pipeline>(std::move(pipeline_desc));
+    auto pipeline_ptr = std::make_unique<Pipeline>(pipeline_desc);
     pipeline_ptr->SetHandle(pipeline);
     pipeline_ptr->SetLayout(pipeline_layout);
     pipeline_ptr->SetDescriptorSetLayout(set_layout);
     pipeline_ptr->SetBindings(std::move(bindings));
 
-    pipeline_map_[pipeline_desc.shaders] = std::move(pipeline_ptr);
-    return pipeline_map_[pipeline_desc.shaders].get();
+    pipeline_map_[pipeline_desc] = std::move(pipeline_ptr);
+    return pipeline_map_[pipeline_desc].get();
 }
 
 VkSemaphore Device::GetSemaphore() {

@@ -123,8 +123,7 @@ class Device {
     std::vector<std::unique_ptr<Shader>> shaders_;
 
     using PipelineMap =
-        std::unordered_map<std::vector<Shader*>, std::unique_ptr<Pipeline>,
-                           VectorHash<Shader*>>;
+        std::unordered_map<PipelineDesc, std::unique_ptr<Pipeline>>;
     PipelineMap pipeline_map_;
 
     std::vector<VkSemaphore> recycled_semaphores_;

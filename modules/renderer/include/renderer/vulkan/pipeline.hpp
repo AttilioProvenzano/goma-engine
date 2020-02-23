@@ -28,6 +28,8 @@ struct PipelineDesc {
     std::vector<VkPipelineColorBlendAttachmentState> blend_attachments = {};
 
     bool suppress_fragment = false;
+
+    bool operator==(const PipelineDesc& rhs) const;
 };
 
 using PipelineBindings = std::vector<VkDescriptorSetLayoutBinding>;

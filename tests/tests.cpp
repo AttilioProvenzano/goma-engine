@@ -341,6 +341,27 @@ TEST_F(RendererTest, CanCreateTexture) {
     GOMA_TEST_TRYV(device->WaitOnWork(std::move(receipt)));
 }
 
+TEST_F(RendererTest, FramebufferCompatibility) {
+    auto desc = ImageDesc::ColorAttachmentDesc;
+    desc.size = {64, 64, 1};
+    GOMA_TEST_TRY(image, device->CreateImage(desc));
+    GOMA_TEST_TRY(other_image, device->CreateImage(desc));
+
+    desc.samples = VK_SAMPLE_COUNT_4_BIT;
+    GOMA_TEST_TRY(ms_image, device->CreateImage(desc));
+
+    FramebufferDesc fb_1 = {};
+    FramebufferDesc fb_2 = {};
+    FramebufferDesc fb_3 = {};
+
+    fb_1.color_attachments = {{image}, {other_image}};
+    fb_2.color_attachments = {{other_image}, {image}};
+    fb_3.color_attachments = {{image}, {ms_image}};
+
+    ASSERT_TRUE(IsCompatible(fb_1, fb_2));
+    ASSERT_FALSE(IsCompatible(fb_1, fb_3));
+}
+
 TEST_F(RendererTest, CanCreateShaderAndPipeline) {
     ShaderDesc shader_desc = {};
     shader_desc.name = "vtx";
@@ -357,7 +378,7 @@ TEST_F(RendererTest, CanCreateShaderAndPipeline) {
     ASSERT_EQ(uniform_buffer.name, "UBO");
 
     GOMA_TEST_TRY(pipeline,
-                  device->CreatePipeline({{shader}}, FramebufferDesc{}));
+                  device->CreatePipeline({{shader}, FramebufferDesc{}}));
     ASSERT_NE(pipeline->GetHandle(), VkPipeline{VK_NULL_HANDLE});
 }
 
@@ -390,7 +411,7 @@ TEST_F(RendererTest, CanBindDescriptorSet) {
 
     GOMA_TEST_TRY(shader, device->CreateShader(std::move(shader_desc)));
     GOMA_TEST_TRY(pipeline,
-                  device->CreatePipeline({{shader}}, FramebufferDesc{}));
+                  device->CreatePipeline({{shader}, FramebufferDesc{}}));
 
     GraphicsContext context(*device);
     GOMA_TEST_TRYV(context.Begin());
@@ -429,7 +450,7 @@ void HelloTriangle(Device* device, bool offscreen = false) {
     FramebufferDesc fb_desc = {};
     fb_desc.color_attachments.push_back({render_target});
 
-    GOMA_TEST_TRY(pipeline, device->CreatePipeline({{vtx, frag}}, fb_desc));
+    GOMA_TEST_TRY(pipeline, device->CreatePipeline({{vtx, frag}, fb_desc}));
 
     GraphicsContext context(*device);
 
@@ -570,11 +591,10 @@ TEST_F(RendererGraphicalTest, SpinningCube) {
             fb_res = fb_desc.find(swapchain_image);
         }
 
-        PipelineDesc pipe_desc = {{vtx, frag}};
+        PipelineDesc pipe_desc = {{vtx, frag}, fb_res->second};
         pipe_desc.depth_test = true;
         pipe_desc.cull_mode = VK_CULL_MODE_BACK_BIT;
-        GOMA_TEST_TRY(pipeline, device->CreatePipeline(std::move(pipe_desc),
-                                                       fb_res->second));
+        GOMA_TEST_TRY(pipeline, device->CreatePipeline(std::move(pipe_desc)));
 
         auto eye = glm::vec3(0.0f, -5.0f, 0.0f);
         auto center = glm::vec3(0.0f);

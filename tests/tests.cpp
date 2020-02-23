@@ -525,8 +525,13 @@ TEST_F(RendererGraphicalTest, SpinningCube) {
     int frame_index;
     std::vector<ReceiptPtr> receipts(3);
 
-    // TODO: move to a single buffer, bind with offset
-    std::vector<Buffer*> mvp_bufs;
+    // Triple-buffered MVPs
+    desc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    desc.num_elements = 3;
+    desc.stride = sizeof(glm::mat4);
+    desc.size = 3 * sizeof(glm::mat4);
+    desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    GOMA_TEST_TRY(mvp_buf, device->CreateBuffer(desc));
 
     std::unordered_map<Image*, FramebufferDesc> fb_desc;
 
@@ -543,17 +548,6 @@ TEST_F(RendererGraphicalTest, SpinningCube) {
         }
 
         frame_index = frame % 3;
-
-        if (mvp_bufs.size() <= frame_index) {
-            desc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-            desc.num_elements = 1;
-            desc.stride = sizeof(glm::mat4);
-            desc.size = sizeof(glm::mat4);
-            desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-            GOMA_TEST_TRY(mvp_buf, device->CreateBuffer(desc));
-
-            mvp_bufs.push_back(mvp_buf);
-        }
 
         if (receipts[frame_index]) {
             GOMA_TEST_TRYV(
@@ -595,15 +589,17 @@ TEST_F(RendererGraphicalTest, SpinningCube) {
                                     0.1f, 100.0f) *
                    glm::lookAt(eye, center, up) * glm::mat4_cast(rot);
 
-        GOMA_TEST_TRY(mvp_data, device->MapBuffer(*mvp_bufs[frame_index]));
-        memcpy(mvp_data, &mvp, sizeof(mvp));
-        device->UnmapBuffer(*mvp_bufs[frame_index]);
+        GOMA_TEST_TRY(mvp_data, device->MapBuffer(*mvp_buf));
+        memcpy(static_cast<decltype(mvp)*>(mvp_data) + frame_index, &mvp,
+               sizeof(mvp));
+        device->UnmapBuffer(*mvp_buf);
 
         GOMA_TEST_TRYV(context.Begin());
         GOMA_TEST_TRYV(context.BindFramebuffer(fb_res->second));
 
         context.BindGraphicsPipeline(*pipeline);
-        context.BindDescriptorSet({{0, *mvp_bufs[frame_index]}});
+        context.BindDescriptorSet(
+            {{0, {*mvp_buf, frame_index * sizeof(mvp), sizeof(mvp)}}});
 
         context.BindVertexBuffer(*vtx_buf);
         context.BindIndexBuffer(*index_buf);

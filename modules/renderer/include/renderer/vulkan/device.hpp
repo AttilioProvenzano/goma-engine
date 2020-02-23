@@ -7,22 +7,49 @@
 #include "renderer/pipeline.hpp"
 #include "renderer/shader.hpp"
 
+namespace std {
+
+template <>
+struct hash<goma::PipelineDesc> {
+    union PackedDesc {
+        struct {
+            VkPrimitiveTopology primitive_topology : 4;
+            VkCullModeFlagBits cull_mode : 2;
+            VkFrontFace front_face : 1;
+            VkSampleCountFlagBits sample_count : 6;
+            bool depth_test : 1;
+            bool depth_write : 1;
+            VkCompareOp depth_compare_op : 3;
+            bool stencil_test : 1;
+            bool color_blend : 1;
+            bool suppress_fragment : 1;
+        };
+        uint32_t val;
+    };
+
+    // FIXME: this and operator== don't take FramebufferDesc into account
+
+    size_t operator()(const goma::PipelineDesc& desc) const {
+        size_t seed = vector_hash<goma::Shader*>()(desc.shaders);
+
+        auto packed_desc = PackedDesc{
+            desc.primitive_topology, desc.cull_mode,    desc.front_face,
+            desc.sample_count,       desc.depth_test,   desc.depth_write,
+            desc.depth_compare_op,   desc.stencil_test, desc.color_blend,
+            desc.suppress_fragment};
+        ::hash_combine(seed, packed_desc.val);
+
+        return seed;
+    };
+};
+
+}  // namespace std
+
 namespace goma {
 
 struct FramebufferDesc;
 class Context;
 class Platform;
-
-template <typename T>
-struct VectorHash {
-    size_t operator()(const std::vector<T>& vec) const {
-        size_t seed = 0;
-        for (auto& element : vec) {
-            ::hash_combine(seed, std::hash<T>()(element));
-        }
-        return seed;
-    }
-};
 
 struct Receipt {
     size_t submission_id;

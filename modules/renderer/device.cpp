@@ -1073,13 +1073,13 @@ result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
     return shaders_.back().get();
 }
 
-result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc,
-                                         FramebufferDesc& fb_desc) {
-    // FIXME: cache based on other parameters as well!
+result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc) {
     auto pipe_res = pipeline_map_.find(pipeline_desc);
     if (pipe_res != pipeline_map_.end()) {
         return pipe_res->second.get();
     }
+
+    auto& fb_desc = pipeline_desc.fb_desc;
 
     VkGraphicsPipelineCreateInfo pipeline_info = {
         VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};

@@ -1,5 +1,7 @@
 #include "renderer/vulkan/pipeline.hpp"
 
+#include "renderer/vulkan/context.hpp"
+
 bool operator==(const VkPipelineColorBlendAttachmentState& lhs,
                 const VkPipelineColorBlendAttachmentState& rhs) {
     return !memcmp(&lhs, &rhs, sizeof(lhs));
@@ -14,6 +16,7 @@ namespace goma {
 bool PipelineDesc::operator==(const goma::PipelineDesc& rhs) const {
     const auto& lhs = *this;
     return lhs.shaders == rhs.shaders &&
+           IsCompatible(lhs.fb_desc, rhs.fb_desc) &&
            lhs.primitive_topology == rhs.primitive_topology &&
            lhs.cull_mode == rhs.cull_mode && lhs.front_face == rhs.front_face &&
            lhs.sample_count == rhs.sample_count &&

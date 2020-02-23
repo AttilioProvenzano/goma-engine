@@ -5,10 +5,12 @@
 
 namespace goma {
 
+struct FramebufferDesc;
 class Shader;
 
 struct PipelineDesc {
     std::vector<Shader*> shaders;
+    FramebufferDesc& fb_desc;
 
     VkPrimitiveTopology primitive_topology =
         VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;

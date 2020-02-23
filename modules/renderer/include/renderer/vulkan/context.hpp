@@ -2,12 +2,12 @@
 
 #include "common/include.hpp"
 #include "common/vulkan.hpp"
+#include "renderer/vulkan/image.hpp"
 
 namespace goma {
 
 class Device;
 class Buffer;
-class Image;
 class Pipeline;
 
 class CommandBufferManager {
@@ -95,6 +95,7 @@ struct FramebufferDesc {
 
     VkRenderPass render_pass_ = VK_NULL_HANDLE;  // for internal use
 };
+bool IsCompatible(const FramebufferDesc& lhs, const FramebufferDesc& rhs);
 
 class Context {
   public:
@@ -193,3 +194,31 @@ class UploadContext : public Context {
 };
 
 }  // namespace goma
+
+namespace std {
+
+template <>
+struct hash<goma::FramebufferDesc::Attachment> {
+    size_t operator()(const goma::FramebufferDesc::Attachment& att) const {
+        size_t seed = 0;
+
+        if (att.image) {
+            ::hash_combine(seed, att.image->GetFormat());
+            ::hash_combine(seed, att.image->GetSampleCount());
+        }
+
+        return seed;
+    };
+};
+
+template <>
+struct hash<goma::FramebufferDesc> {
+    size_t operator()(const goma::FramebufferDesc& desc) const {
+        size_t seed = vector_hash<goma::FramebufferDesc::Attachment>()(
+            desc.color_attachments);
+        ::hash_combine(seed, desc.depth_attachment);
+        return seed;
+    };
+};
+
+}  // namespace std

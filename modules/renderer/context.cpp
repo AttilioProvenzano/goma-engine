@@ -6,6 +6,48 @@
 
 namespace goma {
 
+bool IsCompatible(const FramebufferDesc::Attachment& lhs,
+                  const FramebufferDesc::Attachment& rhs) {
+    if (lhs.image && !rhs.image || !lhs.image && rhs.image ||
+        lhs.resolve_to && !rhs.resolve_to ||
+        !lhs.resolve_to && rhs.resolve_to) {
+        return false;
+    }
+
+    if (lhs.image) {  // implies rhs.image
+        if (lhs.image->GetFormat() != rhs.image->GetFormat() ||
+            lhs.image->GetSampleCount() != rhs.image->GetSampleCount()) {
+            return false;
+        }
+    }
+
+    if (lhs.resolve_to) {  // implies rhs.resolve_to
+        if (lhs.resolve_to->GetFormat() != rhs.resolve_to->GetFormat() ||
+            lhs.resolve_to->GetSampleCount() !=
+                rhs.resolve_to->GetSampleCount()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool IsCompatible(const FramebufferDesc& lhs, const FramebufferDesc& rhs) {
+    if (!std::equal(lhs.color_attachments.begin(), lhs.color_attachments.end(),
+                    rhs.color_attachments.begin(), rhs.color_attachments.end(),
+                    [](const auto& lhs, const auto& rhs) {
+                        return IsCompatible(lhs, rhs);
+                    })) {
+        return false;
+    }
+
+    if (!IsCompatible(lhs.depth_attachment, rhs.depth_attachment)) {
+        return false;
+    }
+
+    return true;
+}
+
 CommandBufferManager::CommandBufferManager(Device& device) : device_(device) {}
 
 CommandBufferManager::~CommandBufferManager() {

@@ -27,8 +27,6 @@ struct hash<goma::PipelineDesc> {
         uint32_t val;
     };
 
-    // FIXME: this and operator== don't take FramebufferDesc into account
-
     size_t operator()(const goma::PipelineDesc& desc) const {
         size_t seed = vector_hash<goma::Shader*>()(desc.shaders);
 
@@ -82,7 +80,7 @@ class Device {
     result<Image*> CreateImage(const ImageDesc&);
 
     result<Shader*> CreateShader(ShaderDesc);
-    result<Pipeline*> CreatePipeline(PipelineDesc, FramebufferDesc&);
+    result<Pipeline*> CreatePipeline(PipelineDesc);
 
     result<ReceiptPtr> Submit(Context&);
     result<void> WaitOnWork(ReceiptPtr&&);

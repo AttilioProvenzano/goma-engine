@@ -37,16 +37,16 @@ class CommandBufferManager {
 };
 
 struct Descriptor {
-    VkDescriptorType type;
-    Buffer* buffer;
-    Image* image;
+    VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    Buffer* buffer = nullptr;
+    uint32_t buf_offset = 0;
+    uint32_t buf_range = 0;
+    Image* image = nullptr;
 
-    Descriptor()
-        : type(VK_DESCRIPTOR_TYPE_MAX_ENUM), buffer(nullptr), image(nullptr) {}
-    Descriptor(Buffer& b)
-        : type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER), buffer(&b), image(nullptr) {}
-    Descriptor(Image& i)
-        : type(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE), buffer(nullptr), image(&i) {}
+    Descriptor();
+    Descriptor(Buffer& b);
+    Descriptor(Buffer& b, uint32_t offset, uint32_t range);
+    Descriptor(Image& i);
 };
 
 using DescriptorSet = std::unordered_map<uint32_t, Descriptor>;

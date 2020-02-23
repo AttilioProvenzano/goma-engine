@@ -84,6 +84,22 @@ VkCommandBuffer CommandBufferManager::RequestSecondary(size_t thread_id) {
     return cmd_buf;
 }
 
+Descriptor::Descriptor() {}
+
+Descriptor::Descriptor(Buffer& b)
+    : type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER),
+      buffer(&b),
+      buf_range(static_cast<uint32_t>(b.GetSize())) {}
+
+Descriptor::Descriptor(Buffer& b, uint32_t offset, uint32_t range)
+    : type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER),
+      buffer(&b),
+      buf_offset(offset),
+      buf_range(range) {}
+
+Descriptor::Descriptor(Image& i)
+    : type(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE), image(&i) {}
+
 DescriptorSetManager::DescriptorSetManager(Device& device) : device_(device) {}
 
 DescriptorSetManager::~DescriptorSetManager() {
@@ -189,7 +205,8 @@ VkDescriptorSet DescriptorSetManager::RequestDescriptorSet(
             VkDescriptorBufferInfo buffer_info = {};
             if (descriptor.second.buffer) {
                 buffer_info.buffer = descriptor.second.buffer->GetHandle();
-                buffer_info.range = descriptor.second.buffer->GetSize();
+                buffer_info.offset = descriptor.second.buf_offset;
+                buffer_info.range = descriptor.second.buf_range;
                 set_write.pBufferInfo = &buffer_info;
             }
 

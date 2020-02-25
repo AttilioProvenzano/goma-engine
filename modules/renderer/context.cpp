@@ -142,6 +142,12 @@ Descriptor::Descriptor(Buffer& b, uint32_t offset, uint32_t range)
 Descriptor::Descriptor(Image& i)
     : type(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE), image(&i) {}
 
+Descriptor::Descriptor(Image& i, Sampler& s)
+    : type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER), image(&i), sampler(&s) {}
+
+Descriptor::Descriptor(Sampler& s)
+    : type(VK_DESCRIPTOR_TYPE_SAMPLER), sampler(&s) {}
+
 DescriptorSetManager::DescriptorSetManager(Device& device) : device_(device) {}
 
 DescriptorSetManager::~DescriptorSetManager() {
@@ -235,7 +241,15 @@ VkDescriptorSet DescriptorSetManager::RequestDescriptorSet(
     auto desc_set = pool->sets[pool_set.first_available_set++];
 
     if (!set.empty()) {
+        std::vector<VkDescriptorBufferInfo> buffer_infos;
+        std::vector<VkDescriptorImageInfo> image_infos;
+
+        // Reserve memory to avoid re-allocation afterwards
+        buffer_infos.reserve(set.size());
+        image_infos.reserve(set.size());
+
         std::vector<VkWriteDescriptorSet> set_writes;
+
         for (const auto& descriptor : set) {
             VkWriteDescriptorSet set_write = {
                 VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -244,21 +258,28 @@ VkDescriptorSet DescriptorSetManager::RequestDescriptorSet(
             set_write.descriptorType = descriptor.second.type;
             set_write.dstBinding = descriptor.first;
 
-            VkDescriptorBufferInfo buffer_info = {};
             if (descriptor.second.buffer) {
-                buffer_info.buffer = descriptor.second.buffer->GetHandle();
-                buffer_info.offset = descriptor.second.buf_offset;
-                buffer_info.range = descriptor.second.buf_range;
-                set_write.pBufferInfo = &buffer_info;
+                buffer_infos.push_back({descriptor.second.buffer->GetHandle(),
+                                        descriptor.second.buf_offset,
+                                        descriptor.second.buf_range});
+                set_write.pBufferInfo = &buffer_infos.back();
             }
 
-            VkDescriptorImageInfo image_info = {};
-            if (descriptor.second.image) {
-                image_info.imageLayout =
-                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                image_info.imageView = descriptor.second.image->GetView();
-                image_info.sampler = VK_NULL_HANDLE;
-                set_write.pImageInfo = &image_info;
+            if (descriptor.second.image || descriptor.second.sampler) {
+                VkDescriptorImageInfo image_info = {};
+
+                if (descriptor.second.image) {
+                    image_info.imageView = descriptor.second.image->GetView();
+                    image_info.imageLayout =
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                }
+
+                if (descriptor.second.sampler) {
+                    image_info.sampler = descriptor.second.sampler->GetHandle();
+                }
+
+                image_infos.push_back(image_info);
+                set_write.pImageInfo = &image_infos.back();
             }
 
             set_writes.push_back(std::move(set_write));

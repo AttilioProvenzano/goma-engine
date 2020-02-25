@@ -9,6 +9,7 @@ namespace goma {
 class Device;
 class Buffer;
 class Pipeline;
+class Sampler;
 
 class CommandBufferManager {
   public:
@@ -42,11 +43,14 @@ struct Descriptor {
     uint32_t buf_offset = 0;
     uint32_t buf_range = 0;
     Image* image = nullptr;
+    Sampler* sampler = nullptr;
 
     Descriptor();
     Descriptor(Buffer& b);
     Descriptor(Buffer& b, uint32_t offset, uint32_t range);
     Descriptor(Image& i);
+    Descriptor(Image& i, Sampler& s);
+    Descriptor(Sampler& s);
 };
 
 using DescriptorSet = std::unordered_map<uint32_t, Descriptor>;

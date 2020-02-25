@@ -3,6 +3,7 @@
 #include <glslang/Public/ShaderLang.h>
 #include <SPIRV/GlslangToSpv.h>
 #include <spirv_glsl.hpp>
+#include <stb/stb_image.h>
 
 #include "platform/win32_platform.hpp"
 #include "renderer/context.hpp"
@@ -90,8 +91,18 @@ layout(location = 1) in vec2 inUVs;
 
 layout(location = 0) out vec4 outColor;
 
+#ifdef HAS_DIFFUSE_TEXTURE
+layout(binding = 1) uniform texture2D diffuseTex;
+layout(binding = 2) uniform sampler linearSampler;
+#endif
+
 void main() {
+#ifdef HAS_DIFFUSE_TEXTURE
+    vec4 albedo = texture(sampler2D(diffuseTex, linearSampler), inUVs);
+    outColor = mix(albedo, vec4(inColor, 1.0), 0.5);
+#else
     outColor = vec4(inColor, 1.0);
+#endif
 }
 )";
 
@@ -122,38 +133,38 @@ const Color kPurple = {1.0f, 0.0f, 1.0f};
 std::vector<Vertex> cube_vtx_data = {
     // Front
     {kFrontTopLeft, kRed, {0.0f, 0.0f}},
-    {kFrontTopRight, kRed, {0.0f, 0.0f}},
-    {kFrontBottomLeft, kRed, {0.0f, 0.0f}},
-    {kFrontBottomRight, kRed, {0.0f, 0.0f}},
+    {kFrontTopRight, kRed, {1.0f, 0.0f}},
+    {kFrontBottomLeft, kRed, {0.0f, 1.0f}},
+    {kFrontBottomRight, kRed, {1.0f, 1.0f}},
 
     // Back
-    {kBackTopLeft, kGreen, {0.0f, 0.0f}},
+    {kBackTopLeft, kGreen, {1.0f, 0.0f}},
     {kBackTopRight, kGreen, {0.0f, 0.0f}},
-    {kBackBottomLeft, kGreen, {0.0f, 0.0f}},
-    {kBackBottomRight, kGreen, {0.0f, 0.0f}},
+    {kBackBottomLeft, kGreen, {1.0f, 1.0f}},
+    {kBackBottomRight, kGreen, {0.0f, 1.0f}},
 
     // Left
-    {kFrontTopLeft, kBlue, {0.0f, 0.0f}},
-    {kFrontBottomLeft, kBlue, {0.0f, 0.0f}},
+    {kFrontTopLeft, kBlue, {1.0f, 0.0f}},
+    {kFrontBottomLeft, kBlue, {1.0f, 1.0f}},
     {kBackTopLeft, kBlue, {0.0f, 0.0f}},
-    {kBackBottomLeft, kBlue, {0.0f, 0.0f}},
+    {kBackBottomLeft, kBlue, {0.0f, 1.0f}},
 
     // Right
     {kFrontTopRight, kYellow, {0.0f, 0.0f}},
-    {kFrontBottomRight, kYellow, {0.0f, 0.0f}},
-    {kBackTopRight, kYellow, {0.0f, 0.0f}},
-    {kBackBottomRight, kYellow, {0.0f, 0.0f}},
+    {kFrontBottomRight, kYellow, {0.0f, 1.0f}},
+    {kBackTopRight, kYellow, {1.0f, 0.0f}},
+    {kBackBottomRight, kYellow, {1.0f, 1.0f}},
 
     // Top
-    {kFrontTopLeft, kWhite, {0.0f, 0.0f}},
-    {kFrontTopRight, kWhite, {0.0f, 0.0f}},
+    {kFrontTopLeft, kWhite, {0.0f, 1.0f}},
+    {kFrontTopRight, kWhite, {1.0f, 1.0f}},
     {kBackTopLeft, kWhite, {0.0f, 0.0f}},
-    {kBackTopRight, kWhite, {0.0f, 0.0f}},
+    {kBackTopRight, kWhite, {1.0f, 0.0f}},
 
     // Bottom
-    {kFrontBottomLeft, kPurple, {0.0f, 0.0f}},
-    {kFrontBottomRight, kPurple, {0.0f, 0.0f}},
-    {kBackBottomLeft, kPurple, {0.0f, 0.0f}},
+    {kFrontBottomLeft, kPurple, {1.0f, 1.0f}},
+    {kFrontBottomRight, kPurple, {0.0f, 1.0f}},
+    {kBackBottomLeft, kPurple, {1.0f, 0.0f}},
     {kBackBottomRight, kPurple, {0.0f, 0.0f}},
 };
 
@@ -168,7 +179,7 @@ std::vector<uint32_t> cube_index_data = {
 
 constexpr int kWindowWidth = 1024;
 constexpr int kWindowHeight = 768;
-constexpr int kTimeoutSeconds = 1;
+constexpr int kTimeoutSeconds = 2;
 
 TEST(GlslangTest, CanCompileShader) {
     using namespace glslang;
@@ -294,15 +305,9 @@ TEST_F(RendererTest, CanCreateTexture) {
     auto width = 64U;
     auto height = 64U;
 
-    auto mip_levels = 1;
-    auto min_wh = std::min(width, height);
-    while (min_wh >> mip_levels) {
-        mip_levels++;
-    }
-
     auto desc = ImageDesc::TextureDesc;
     desc.size = {width, height, 1};
-    desc.mip_levels = mip_levels;
+    desc.mip_levels = utils::ComputeMipLevels(width, height);
 
     std::vector<uint8_t> image_data(width * height *
                                     utils::GetFormatInfo(desc.format).size);
@@ -504,7 +509,7 @@ TEST_F(RendererGraphicalTest, HelloTriangle) {
     Sleep(kTimeoutSeconds * 1000);
 }
 
-TEST_F(RendererGraphicalTest, SpinningCube) {
+void SpinningCube(Device* device, Platform* platform, bool textured = false) {
     BufferDesc desc = {};
     desc.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     desc.num_elements = static_cast<uint32_t>(cube_vtx_data.size());
@@ -528,6 +533,32 @@ TEST_F(RendererGraphicalTest, SpinningCube) {
     GOMA_TEST_TRYV(upload_ctx.UploadBuffer(
         *index_buf, {cube_index_data.size() * sizeof(cube_index_data[0]),
                      cube_index_data.data()}));
+
+    Image* diffuse_tex = nullptr;
+    Sampler* sampler = nullptr;
+    if (textured) {
+        int x, y, channels;
+        auto tex_data = stbi_load(GOMA_ASSETS_DIR "models/Duck/glTF/DuckCM.png",
+                                  &x, &y, &channels, 4);
+        ASSERT_NE(tex_data, nullptr) << stbi_failure_reason();
+
+        ImageDesc image_desc = ImageDesc::TextureDesc;
+        image_desc.size.width = static_cast<uint32_t>(x);
+        image_desc.size.height = static_cast<uint32_t>(y);
+        image_desc.mip_levels = utils::ComputeMipLevels(x, y);
+        GOMA_TEST_TRY(tex, device->CreateImage(image_desc));
+        diffuse_tex = tex;
+
+        ImageData d = {{{0, tex_data}}};
+        GOMA_TEST_TRYV(upload_ctx.UploadImage(*tex, std::move(d)));
+        upload_ctx.GenerateMipmaps(*tex);
+
+        stbi_image_free(tex_data);  // already copied in the staging buffer
+
+        GOMA_TEST_TRY(s, device->CreateSampler({}));
+        sampler = s;
+    }
+
     upload_ctx.End();
 
     GOMA_TEST_TRY(upload_receipt, device->Submit(upload_ctx));
@@ -535,6 +566,10 @@ TEST_F(RendererGraphicalTest, SpinningCube) {
 
     ShaderDesc vtx_desc = {"vtx", VK_SHADER_STAGE_VERTEX_BIT, vtx};
     ShaderDesc frag_desc = {"frag", VK_SHADER_STAGE_FRAGMENT_BIT, frag};
+
+    if (textured) {
+        frag_desc.preamble = "#define HAS_DIFFUSE_TEXTURE";
+    }
 
     GOMA_TEST_TRY(vtx, device->CreateShader(std::move(vtx_desc)));
     GOMA_TEST_TRY(frag, device->CreateShader(std::move(frag_desc)));
@@ -599,9 +634,10 @@ TEST_F(RendererGraphicalTest, SpinningCube) {
         auto eye = glm::vec3(0.0f, -5.0f, 0.0f);
         auto center = glm::vec3(0.0f);
         auto up = glm::vec3{0.0f, 0.0f, 1.0f};
-        auto rot = glm::quat(static_cast<float>(frame) *
-                             glm::vec3{glm::radians(0.1f), glm::radians(0.2f),
-                                       glm::radians(0.3f)});
+
+        auto rot_speed = glm::vec3{glm::radians(0.05f), glm::radians(0.1f),
+                                   glm::radians(0.15f)};
+        auto rot = glm::quat(static_cast<float>(frame) * rot_speed);
 
         auto mvp = glm::perspective(glm::radians(60.0f),
                                     static_cast<float>(platform->GetWidth()) /
@@ -617,9 +653,17 @@ TEST_F(RendererGraphicalTest, SpinningCube) {
         GOMA_TEST_TRYV(context.Begin());
         GOMA_TEST_TRYV(context.BindFramebuffer(fb_res->second));
 
+        auto ds = DescriptorSet{{
+            {0, {*mvp_buf, frame_index * sizeof(mvp), sizeof(mvp)}},
+        }};
+
+        if (textured) {
+            ds[1] = {*diffuse_tex};
+            ds[2] = {*sampler};
+        }
+
         context.BindGraphicsPipeline(*pipeline);
-        context.BindDescriptorSet(
-            {{0, {*mvp_buf, frame_index * sizeof(mvp), sizeof(mvp)}}});
+        context.BindDescriptorSet(std::move(ds));
 
         context.BindVertexBuffer(*vtx_buf);
         context.BindIndexBuffer(*index_buf);
@@ -633,13 +677,22 @@ TEST_F(RendererGraphicalTest, SpinningCube) {
         GOMA_TEST_TRYV(device->Present());
     }
 
-    spdlog::info("Average FPS: {}", (1e9 * frame) / elapsed_time.count());
+    spdlog::info("Average frame time: {} ms",
+                 elapsed_time.count() / (1e6 * frame));
 
     for (auto& receipt : receipts) {
         if (receipt) {
             GOMA_TEST_TRYV(device->WaitOnWork(std::move(receipt)));
         }
     }
+}
+
+TEST_F(RendererGraphicalTest, SpinningCube) {
+    SpinningCube(device.get(), platform.get());
+}
+
+TEST_F(RendererGraphicalTest, SpinningTexturedCube) {
+    SpinningCube(device.get(), platform.get(), true);
 }
 
 // TEST_F(RendererTest, GUI) {}

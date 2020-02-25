@@ -5,6 +5,7 @@
 #include "renderer/buffer.hpp"
 #include "renderer/image.hpp"
 #include "renderer/pipeline.hpp"
+#include "renderer/sampler.hpp"
 #include "renderer/shader.hpp"
 
 namespace std {
@@ -78,6 +79,7 @@ class Device {
 
     result<Image*> AcquireSwapchainImage();
     result<Image*> CreateImage(const ImageDesc&);
+    result<Sampler*> CreateSampler(const SamplerDesc&);
 
     result<Shader*> CreateShader(ShaderDesc);
     result<Pipeline*> CreatePipeline(PipelineDesc);
@@ -118,6 +120,7 @@ class Device {
     std::vector<std::unique_ptr<Buffer>> buffers_;
     std::vector<std::unique_ptr<Image>> images_;
     std::vector<std::unique_ptr<Image>> swapchain_images_;
+    std::vector<std::unique_ptr<Sampler>> samplers_;
     std::vector<std::unique_ptr<Shader>> shaders_;
 
     using PipelineMap =

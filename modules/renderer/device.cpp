@@ -482,6 +482,16 @@ Device::~Device() {
     }
     swapchain_images_.clear();
 
+    for (auto& sampler : samplers_) {
+        if (sampler->GetHandle() != VK_NULL_HANDLE) {
+            vkDestroySampler(api_handles_.device, sampler->GetHandle(),
+                             nullptr);
+        }
+
+        sampler->SetHandle(VK_NULL_HANDLE);
+    }
+    samplers_.clear();
+
     if (api_handles_.pipeline_cache) {
         size_t data_size;
         vkGetPipelineCacheData(api_handles_.device, api_handles_.pipeline_cache,
@@ -847,6 +857,30 @@ result<Image*> Device::CreateImage(const ImageDesc& image_desc) {
 
     images_.push_back(std::move(image_ptr));
     return images_.back().get();
+}
+
+result<Sampler*> Device::CreateSampler(const SamplerDesc& sampler_desc) {
+    VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    sampler_info.addressModeU = sampler_desc.address_mode;
+    sampler_info.addressModeV = sampler_desc.address_mode;
+    sampler_info.addressModeW = sampler_desc.address_mode;
+    sampler_info.anisotropyEnable = sampler_desc.max_anisotropy > 1.0f;
+    sampler_info.maxAnisotropy = sampler_desc.max_anisotropy;
+    sampler_info.borderColor = sampler_desc.border_color;
+    sampler_info.magFilter = sampler_desc.mag_filter;
+    sampler_info.minFilter = sampler_desc.min_filter;
+    sampler_info.minLod = sampler_desc.min_lod;
+    sampler_info.maxLod = sampler_desc.max_lod;
+
+    VkSampler sampler = VK_NULL_HANDLE;
+    VK_CHECK(
+        vkCreateSampler(api_handles_.device, &sampler_info, nullptr, &sampler));
+
+    auto sampler_ptr = std::make_unique<Sampler>(sampler_desc);
+    sampler_ptr->SetHandle(sampler);
+
+    samplers_.push_back(std::move(sampler_ptr));
+    return samplers_.back().get();
 }
 
 result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {

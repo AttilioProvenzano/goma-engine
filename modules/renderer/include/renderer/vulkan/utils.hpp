@@ -9,6 +9,8 @@ struct FramebufferDesc;
 
 namespace utils {
 
+uint32_t ComputeMipLevels(uint32_t width, uint32_t height);
+
 result<VkRenderPass> CreateRenderPass(VkDevice device,
                                       const FramebufferDesc& desc);
 

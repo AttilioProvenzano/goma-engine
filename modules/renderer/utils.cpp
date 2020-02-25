@@ -6,6 +6,15 @@
 namespace goma {
 namespace utils {
 
+uint32_t ComputeMipLevels(uint32_t width, uint32_t height) {
+    auto mip_levels = 1U;
+    auto min_wh = std::min(width, height);
+    while (min_wh >> mip_levels) {
+        mip_levels++;
+    }
+    return mip_levels;
+}
+
 result<VkRenderPass> CreateRenderPass(VkDevice device,
                                       const FramebufferDesc& desc) {
     std::vector<VkAttachmentDescription> attachments;

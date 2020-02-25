@@ -1314,11 +1314,21 @@ result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc) {
     vkCreateGraphicsPipelines(api_handles_.device, api_handles_.pipeline_cache,
                               1, &pipeline_info, nullptr, &pipeline);
 
+    std::stringstream str;
+    str << "Pipeline {";
+    for (const auto& shader : pipeline_desc.shaders) {
+        str << shader->GetName() << ",";
+    }
+    str.seekp(-1, std::ios_base::end);
+    str << "}";
+    std::string name = str.str();
+
+    // TODO: add a name in PipelineDesc
     VkDebugUtilsObjectNameInfoEXT name_info = {
         VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
     name_info.objectType = VK_OBJECT_TYPE_PIPELINE;
     name_info.objectHandle = reinterpret_cast<uint64_t>(pipeline);
-    name_info.pObjectName = "HelloTriangle";
+    name_info.pObjectName = name.c_str();
     VK_CHECK(vkSetDebugUtilsObjectNameEXT(api_handles_.device, &name_info));
 
     auto pipeline_ptr = std::make_unique<Pipeline>(pipeline_desc);

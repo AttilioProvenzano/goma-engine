@@ -20,6 +20,7 @@ struct ImageDesc {
     static const ImageDesc ColorAttachmentDesc;
     static const ImageDesc DepthAttachmentDesc;
     static const ImageDesc TextureDesc;
+    static const ImageDesc LinearTextureDesc;
 };
 
 class Image {

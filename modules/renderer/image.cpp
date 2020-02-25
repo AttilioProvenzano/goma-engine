@@ -3,18 +3,23 @@
 namespace goma {
 
 const ImageDesc ImageDesc::ColorAttachmentDesc = {
-    {},
+    {0, 0, 1},
     VK_FORMAT_R8G8B8A8_UNORM,
     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT};
 const ImageDesc ImageDesc::DepthAttachmentDesc = {
-    {},
+    {0, 0, 1},
     VK_FORMAT_D32_SFLOAT_S8_UINT,
     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT};
-const ImageDesc ImageDesc::TextureDesc = {{},
-                                          VK_FORMAT_R8G8B8A8_UNORM,
+const ImageDesc ImageDesc::TextureDesc = {{0, 0, 1},
+                                          VK_FORMAT_R8G8B8A8_SRGB,
                                           VK_IMAGE_USAGE_SAMPLED_BIT |
                                               VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                                               VK_IMAGE_USAGE_TRANSFER_DST_BIT};
+const ImageDesc ImageDesc::LinearTextureDesc = {
+    {0, 0, 1},
+    VK_FORMAT_R8G8B8A8_UNORM,
+    VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT};
 
 Image::Image(const ImageDesc& image_desc) : desc_(image_desc) {}
 

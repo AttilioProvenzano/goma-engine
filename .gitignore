@@ -1,4 +1,5 @@
 build/
+.vscode
 .tags
 .tags1
 pipeline_cache.data

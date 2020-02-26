@@ -10,6 +10,14 @@
 #include "renderer/device.hpp"
 #include "renderer/vulkan/utils.hpp"
 
+#include "scene/scene.hpp"
+#include "scene/attachments/texture.hpp"
+#include "scene/attachments/material.hpp"
+#include "scene/attachments/camera.hpp"
+#include "scene/attachments/light.hpp"
+#include "scene/attachments/mesh.hpp"
+#include "scene/loaders/assimp_loader.hpp"
+
 using namespace goma;
 
 #ifndef GOMA_ASSETS_DIR
@@ -180,6 +188,124 @@ std::vector<uint32_t> cube_index_data = {
 constexpr int kWindowWidth = 1024;
 constexpr int kWindowHeight = 768;
 constexpr int kTimeoutSeconds = 2;
+
+TEST(SceneTest, CanCreateScene) {
+    Scene s;
+    ASSERT_EQ(s.GetRootNode(), NodeIndex(0, 1));
+
+    int a = 3;
+    result<std::reference_wrapper<int>> res(std::ref(a));
+    ASSERT_EQ(res.value(), 3);
+
+    int& b = res.value();
+    b = 4;
+    ASSERT_EQ(res.value(), 4);
+
+    auto& c = res.value();
+    c.get() = 5;
+    ASSERT_EQ(res.value(), 5);
+}
+
+TEST(SceneTest, CanCreateNodes) {
+    Scene s;
+
+    auto node = s.CreateNode(s.GetRootNode()).value();
+    ASSERT_EQ(node, NodeIndex(1, 1));
+    ASSERT_EQ(s.GetParent(node).value(), s.GetRootNode());
+    ASSERT_EQ(s.GetChildren(node).value(), std::set<NodeIndex>{});
+
+    auto child_node = s.CreateNode(node).value();
+    ASSERT_EQ(child_node, NodeIndex(2, 1));
+    ASSERT_EQ(s.GetParent(child_node).value(), NodeIndex(1, 1));
+}
+
+TEST(SceneTest, CanDeleteNodes) {
+    Scene s;
+
+    auto node = s.CreateNode(s.GetRootNode()).value();
+    ASSERT_EQ(s.GetChildren(s.GetRootNode()).value(),
+              std::set<NodeIndex>{node});
+
+    s.DeleteNode(node);
+
+    ASSERT_EQ(s.GetChildren(s.GetRootNode()).value(), std::set<NodeIndex>{});
+    ASSERT_FALSE(s.GetParent(node));
+}
+
+TEST(SceneTest, CanDeleteAndRecreateNodes) {
+    Scene s;
+
+    auto node = s.CreateNode(s.GetRootNode()).value();
+    auto child_node = s.CreateNode(node).value();
+    s.DeleteNode(node);
+
+    EXPECT_EQ(s.GetParent(child_node).value(), s.GetRootNode())
+        << "Child node was not updated when parent node was deleted";
+
+    auto new_node = s.CreateNode(s.GetRootNode()).value();
+    ASSERT_EQ(new_node, NodeIndex(1, 2)) << "New generation not set properly";
+    ASSERT_EQ(s.GetParent(new_node).value(), s.GetRootNode());
+}
+
+TEST(SceneTest, CanCreateAttachments) {
+    Scene s;
+
+    auto node = s.CreateNode(s.GetRootNode()).value();
+    auto other_node = s.CreateNode(s.GetRootNode()).value();
+
+    auto texture_result = s.CreateAttachment<Texture>({node}, {});
+    ASSERT_TRUE(texture_result);
+
+    auto texture = texture_result.value();
+    auto& attached_nodes = s.GetAttachedNodes<Texture>(texture).value().get();
+    ASSERT_EQ(attached_nodes, std::set<NodeIndex>({node}));
+
+    ASSERT_TRUE(s.Attach<Texture>(texture, other_node));
+    ASSERT_EQ(attached_nodes, std::set<NodeIndex>({node, other_node}));
+
+    ASSERT_TRUE(s.Detach<Texture>(texture, node));
+    ASSERT_EQ(attached_nodes, std::set<NodeIndex>({other_node}));
+
+    ASSERT_TRUE(s.Attach<Texture>(texture, node));
+    ASSERT_EQ(attached_nodes, std::set<NodeIndex>({node, other_node}));
+
+    ASSERT_TRUE(s.DetachAll<Texture>(texture));
+    ASSERT_EQ(attached_nodes, std::set<NodeIndex>());
+}
+
+TEST(SceneTest, CanCreateTexture) {
+    Scene s;
+    auto texture = s.CreateAttachment<Texture>(s.GetRootNode(), {});
+    ASSERT_TRUE(texture);
+}
+
+TEST(AssimpLoaderTest, CanLoadModel) {
+    AssimpLoader loader;
+    auto result =
+        loader.ReadSceneFromFile(GOMA_ASSETS_DIR "models/Duck/glTF/Duck.gltf");
+    ASSERT_TRUE(result) << result.error().message();
+
+    // Extract the unique_ptr from the result wrapper
+    auto scene = std::move(result.value());
+
+    EXPECT_EQ(scene->GetAttachmentCount<Texture>(), 1);
+    EXPECT_EQ(scene->GetAttachmentCount<Material>(), 1);
+    EXPECT_EQ(scene->GetAttachmentCount<Camera>(), 1);
+    EXPECT_EQ(scene->GetAttachmentCount<Light>(), 0);
+    EXPECT_EQ(scene->GetAttachmentCount<Mesh>(), 1);
+
+    auto& attached_nodes = scene->GetAttachedNodes<Mesh>({0}).value().get();
+    EXPECT_EQ(attached_nodes, std::set<NodeIndex>({2}));
+
+    auto children = scene->GetChildren(scene->GetRootNode());
+    ASSERT_TRUE(children);
+    ASSERT_EQ(children.value().size(), 1);
+
+    auto assimp_root_node = children.value().begin();
+    auto assimp_children = scene->GetChildren(*assimp_root_node);
+    ASSERT_TRUE(assimp_children);
+    ASSERT_EQ(assimp_children.value().size(), 2);
+}
 
 TEST(GlslangTest, CanCompileShader) {
     using namespace glslang;

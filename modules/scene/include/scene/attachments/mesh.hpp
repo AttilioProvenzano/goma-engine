@@ -1,26 +1,31 @@
 #pragma once
 
 #include "scene/gen_index.hpp"
-#include "renderer/handles.hpp"
 
 #include "common/include.hpp"
 
 namespace goma {
 
+class Buffer;
 struct Material;
 
+struct Box {
+    glm::vec3 min{glm::vec3(std::numeric_limits<float>::max())};
+    glm::vec3 max{glm::vec3(std::numeric_limits<float>::min())};
+};
+
 struct MeshBuffers {
-    std::shared_ptr<Buffer> vertex;
-    std::shared_ptr<Buffer> normal;
-    std::shared_ptr<Buffer> tangent;
-    std::shared_ptr<Buffer> bitangent;
-    std::shared_ptr<Buffer> color;
+    Buffer* vertex = nullptr;
+    Buffer* normal = nullptr;
+    Buffer* tangent = nullptr;
+    Buffer* bitangent = nullptr;
+    Buffer* color = nullptr;
 
-    std::shared_ptr<Buffer> index;
+    Buffer* index = nullptr;
 
-    std::shared_ptr<Buffer> uv0;
-    std::shared_ptr<Buffer> uv1;
-    std::shared_ptr<Buffer> uvw;
+    Buffer* uv0 = nullptr;
+    Buffer* uv1 = nullptr;
+    Buffer* uvw = nullptr;
 };
 
 struct Mesh {

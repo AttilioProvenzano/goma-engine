@@ -575,23 +575,15 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
         }
     }
 
-    static const std::map<aiTextureMapMode, TextureWrappingMode>
+    static const std::map<aiTextureMapMode, VkSamplerAddressMode>
         texture_wrap_modes{
-            {aiTextureMapMode_Wrap, TextureWrappingMode::Repeat},
-            {aiTextureMapMode_Clamp, TextureWrappingMode::ClampToEdge},
-            {aiTextureMapMode_Mirror, TextureWrappingMode::MirroredRepeat},
-            {aiTextureMapMode_Decal, TextureWrappingMode::Decal}};
+            {aiTextureMapMode_Wrap, VK_SAMPLER_ADDRESS_MODE_REPEAT},
+            {aiTextureMapMode_Clamp, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE},
+            {aiTextureMapMode_Mirror, VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT},
+            {aiTextureMapMode_Decal, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER}};
 
-    TextureBinding tex_binding = {texture, uvindex, blend};
-    if (mapmode) {
-        for (size_t k = 0; k < 3; k++) {
-            auto m = texture_wrap_modes.find(mapmode[k]);
-            if (m != texture_wrap_modes.end()) {
-                tex_binding.wrapping[k] = m->second;
-            }
-        }
-    }
-
+    TextureBinding tex_binding = {texture, texture_wrap_modes.at(mapmode[0]),
+                                  uvindex, blend};
     return tex_binding;
 }
 

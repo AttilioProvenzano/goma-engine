@@ -68,17 +68,17 @@ class AttachmentManager : public AttachmentManagerBase {
         return Create({}, std::forward<T>(data));
     }
 
-    result<void> Register(AttachmentIndex<T> attachment,
-                          const std::string& name, bool overwrite = true) {
+    bool Register(AttachmentIndex<T> attachment, const std::string& name,
+                  bool overwrite = true) {
         if (!overwrite) {
             auto result = attachment_map_.find(name);
             if (result != attachment_map_.end()) {
-                return Error::KeyAlreadyExists;
+                return false;
             }
         }
 
         attachment_map_[name] = attachment;
-        return outcome::success();
+        return true;
     }
 
     void ForEach(std::function<void(const AttachmentIndex<T>&,
@@ -121,20 +121,20 @@ class AttachmentManager : public AttachmentManagerBase {
         return std::make_pair(result->second, data);
     }
 
-    result<void> Attach(AttachmentIndex<T> id, NodeIndex node) {
+    bool Attach(AttachmentIndex<T> id, NodeIndex node) {
         if (!Validate(id)) {
-            return Error::InvalidAttachment;
+            return false;
         }
         attachments_[id.id].nodes.insert(node);
-        return outcome::success();
+        return true;
     }
 
-    result<void> Detach(AttachmentIndex<T> id, NodeIndex node) {
+    bool Detach(AttachmentIndex<T> id, NodeIndex node) {
         if (!Validate(id)) {
-            return Error::InvalidAttachment;
+            return false;
         }
         attachments_[id.id].nodes.erase(node);
-        return outcome::success();
+        return true;
     }
 
     result<void> DetachAll(AttachmentIndex<T> id) {

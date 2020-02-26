@@ -89,14 +89,14 @@ result<Transform> Scene::GetTransform(NodeIndex id) {
     return nodes_[id.id].transform;
 }
 
-result<void> Scene::SetTransform(NodeIndex id, const Transform& transform) {
+bool Scene::SetTransform(NodeIndex id, const Transform& transform) {
     if (!ValidateNode(id)) {
-        return Error::InvalidNode;
+        return false;
     }
 
     nodes_[id.id].transform = transform;
     nodes_[id.id].cached_model.reset();
-    return outcome::success();
+    return true;
 }
 
 result<glm::mat4> Scene::GetTransformMatrix(NodeIndex id) {
@@ -160,15 +160,15 @@ result<void> Scene::ComputeTransformMatrix(NodeIndex id) {
     return outcome::success();
 }
 
-result<void> Scene::DeleteNode(NodeIndex id) {
+void Scene::DeleteNode(NodeIndex id) {
     // Root node cannot be deleted
     if (id.id == 0) {
-        return Error::RootNodeCannotBeDeleted;
+        return;
     }
 
     // Validate id
     if (!ValidateNode(id)) {
-        return Error::InvalidNode;
+        return;
     }
 
     // Fix parent for any child node(s)
@@ -188,8 +188,6 @@ result<void> Scene::DeleteNode(NodeIndex id) {
     // invalid and store the last valid generation into the node's id
     // (which is unused while the node is invalid)
     nodes_[id.id].id = {nodes_[id.id].id.gen, 0};
-
-    return outcome::success();
 }
 
 bool Scene::ValidateNode(NodeIndex id) {

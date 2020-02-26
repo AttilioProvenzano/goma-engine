@@ -18,13 +18,13 @@ class Scene {
     result<NodeIndex> CreateNode(const NodeIndex parent,
                                  const Transform& transform = Transform());
     NodeIndex GetRootNode() { return nodes_[0].id; }
-    result<void> DeleteNode(NodeIndex id);
+    void DeleteNode(NodeIndex id);
 
     result<NodeIndex> GetParent(NodeIndex id);
     result<std::set<NodeIndex>> GetChildren(NodeIndex id);
     result<Transform> GetTransform(NodeIndex id);
     result<glm::mat4> GetTransformMatrix(NodeIndex id);
-    result<void> SetTransform(NodeIndex id, const Transform& transform);
+    bool SetTransform(NodeIndex id, const Transform& transform);
 
     template <typename T>
     result<AttachmentIndex<T>> CreateAttachment(const NodeIndex& node_id,
@@ -39,9 +39,8 @@ class Scene {
     }
 
     template <typename T>
-    result<void> RegisterAttachment(AttachmentIndex<T> attachment,
-                                    const std::string& name,
-                                    bool overwrite = true) {
+    bool RegisterAttachment(AttachmentIndex<T> attachment,
+                            const std::string& name, bool overwrite = true) {
         return GetAttachmentManager<T>()->Register(attachment, name, overwrite);
     }
 
@@ -79,12 +78,12 @@ class Scene {
     }
 
     template <typename T>
-    result<void> Attach(AttachmentIndex<T> id, NodeIndex node) {
+    bool Attach(AttachmentIndex<T> id, NodeIndex node) {
         return GetAttachmentManager<T>()->Attach(id, node);
     }
 
     template <typename T>
-    result<void> Detach(AttachmentIndex<T> id, NodeIndex node) {
+    bool Detach(AttachmentIndex<T> id, NodeIndex node) {
         return GetAttachmentManager<T>()->Detach(id, node);
     }
 

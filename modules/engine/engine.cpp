@@ -92,8 +92,6 @@ result<AttachmentIndex<Camera>> Engine::CreateDefaultCamera() {
 
 result<AttachmentIndex<Light>> Engine::CreateDefaultLight() {
     Light light{"default_light"};
-    // light.direction = glm::normalize(glm::vec3{-0.25f, -1.0f, -0.25f});
-    // light.up = glm::normalize(glm::vec3{-1.0f, 0.25f, -0.25f});
 
     // Light facing down
     light.direction = {0.0f, -1.0f, 0.0f};

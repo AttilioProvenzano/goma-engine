@@ -1,11 +1,11 @@
 function(add_module) # optional argument: list of dependencies
     get_filename_component(module_name ${CMAKE_CURRENT_LIST_DIR} NAME)
 
-    file(GLOB HEADERS
+    file(GLOB_RECURSE HEADERS
         include/${module_name}/*.hpp
     )
 
-    file(GLOB SOURCES
+    file(GLOB_RECURSE SOURCES
         *.cpp
     )
 

@@ -21,6 +21,9 @@ add_subdirectory(modules)
 add_subdirectory(third_party)
 
 add_executable(goma-tests
-	tests/tests.cpp
+  tests/goma_tests.hpp
+	tests/rendering_abstraction_tests.cpp
+	tests/scene_tests.cpp
+	tests/test_main.cpp
 )
-target_link_libraries(goma-tests PUBLIC gtest renderer)
+target_link_libraries(goma-tests PUBLIC catch2 renderer)

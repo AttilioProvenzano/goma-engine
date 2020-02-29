@@ -1,5 +1,3 @@
-#include "goma_tests.hpp"
-
 #include <glslang/Public/ShaderLang.h>
 #include <SPIRV/GlslangToSpv.h>
 #include <spirv_glsl.hpp>
@@ -9,6 +7,8 @@
 #include "renderer/context.hpp"
 #include "renderer/device.hpp"
 #include "renderer/vulkan/utils.hpp"
+
+#include "goma_tests.hpp"
 
 using namespace goma;
 

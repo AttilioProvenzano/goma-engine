@@ -88,7 +88,7 @@ class Scene {
     }
 
     template <typename T>
-    result<void> DetachAll(AttachmentIndex<T> id) {
+    bool DetachAll(AttachmentIndex<T> id) {
         return GetAttachmentManager<T>()->DetachAll(id);
     }
 

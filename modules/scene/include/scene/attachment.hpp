@@ -137,12 +137,12 @@ class AttachmentManager : public AttachmentManagerBase {
         return true;
     }
 
-    result<void> DetachAll(AttachmentIndex<T> id) {
+    bool DetachAll(AttachmentIndex<T> id) {
         if (!Validate(id)) {
-            return Error::InvalidAttachment;
+            return false;
         }
         attachments_[id.id].nodes.clear();
-        return outcome::success();
+        return true;
     }
 
     result<std::reference_wrapper<std::set<NodeIndex>>> GetNodes(

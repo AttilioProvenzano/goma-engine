@@ -20,10 +20,19 @@ add_compile_definitions(VK_USE_PLATFORM_WIN32_KHR)
 add_subdirectory(modules)
 add_subdirectory(third_party)
 
+if(MSVC)
+	target_compile_options(engine PRIVATE /W3)
+else()
+	target_compile_options(engine -Wall -Wextra -pedantic)
+endif()
+
+target_compile_definitions(engine PUBLIC
+	GOMA_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets/")
+
 add_executable(goma-tests
   tests/goma_tests.hpp
 	tests/rendering_abstraction_tests.cpp
 	tests/scene_tests.cpp
 	tests/test_main.cpp
 )
-target_link_libraries(goma-tests PUBLIC catch2 renderer)
+target_link_libraries(goma-tests PUBLIC catch2 engine)

@@ -140,8 +140,8 @@ result<VkPhysicalDevice> CreatePhysicalDevice(VkInstance instance) {
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(physical_devices[0], &properties);
 
-    spdlog::info("Physical device: {}, driver version: {}",
-                 properties.deviceName, properties.driverVersion);
+    spdlog::debug("Physical device: {}, driver version: {}",
+                  properties.deviceName, properties.driverVersion);
 
     return physical_devices[0];
 }

@@ -1,6 +1,7 @@
 # - Assimp
 
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 
 # Disable all importers except OBJ, FBX and GLTF
 set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
@@ -8,12 +9,20 @@ foreach(name OBJ FBX GLTF)
   set(ASSIMP_BUILD_${name}_IMPORTER ON CACHE BOOL "" FORCE)
 endforeach()
 
+# Disable all exporters
+set(ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+
 add_subdirectory(assimp)
-foreach(target assimp assimp_cmd IrrXML uninstall UpdateAssimpLibsDebugSymbolsAndDLLs zlib zlibstatic)
+foreach(target assimp IrrXML uninstall UpdateAssimpLibsDebugSymbolsAndDLLs zlib zlibstatic)
   if(TARGET ${target})
 	set_property(TARGET ${target} PROPERTY FOLDER ThirdParty/Assimp)
   endif()
 endforeach()
+
+# - Catch2
+
+add_library(catch2 INTERFACE)
+target_include_directories(catch2 INTERFACE catch2)
 
 # - GLFW
 
@@ -41,17 +50,6 @@ add_subdirectory(glslang)
 foreach(target glslang OGLCompiler OSDependent SPIRV)
   if(TARGET ${target})
     set_property(TARGET ${target} PROPERTY FOLDER ThirdParty/glslang)
-  endif()
-endforeach()
-
-# - GoogleTest
-
-set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-add_subdirectory(googletest)
-foreach(target gtest gtest_main)
-  if(TARGET ${target})
-    set_property(TARGET ${target} PROPERTY FOLDER ThirdParty/GoogleTest)
   endif()
 endforeach()
 

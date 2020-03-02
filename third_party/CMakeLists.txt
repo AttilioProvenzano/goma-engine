@@ -24,6 +24,11 @@ endforeach()
 add_library(catch2 INTERFACE)
 target_include_directories(catch2 INTERFACE catch2)
 
+# - Dear imgui
+
+add_subdirectory(imgui)
+set_property(TARGET imgui PROPERTY FOLDER ThirdParty)
+
 # - GLFW
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)

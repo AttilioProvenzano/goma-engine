@@ -7,7 +7,7 @@
 
 namespace goma {
 
-using MainLoopFn = std::function<bool(void)>;
+using MainLoopFn = std::function<result<bool>(void)>;
 
 class Platform {
   public:

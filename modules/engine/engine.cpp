@@ -17,7 +17,7 @@ Engine::Engine()
 
 result<void> Engine::MainLoop(MainLoopFn inner_loop) {
     if (platform_) {
-        platform_->MainLoop([&]() {
+        platform_->MainLoop([&]() -> result<bool> {
             if (fps_cap > 0) {
                 // Limit FPS
                 std::chrono::duration<float> elapsed =
@@ -42,7 +42,7 @@ result<void> Engine::MainLoop(MainLoopFn inner_loop) {
             bool res = false;
             if (inner_loop) {
                 // Inner loop allows for conditional termination
-                res = inner_loop();
+                OUTCOME_TRY(res, inner_loop());
             }
 
             frame_count_++;

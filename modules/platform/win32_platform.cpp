@@ -24,7 +24,7 @@ result<void> Win32Platform::MainLoop(MainLoopFn inner_loop) {
         glfwPollEvents();
 
         if (inner_loop) {
-            auto should_terminate = inner_loop();
+            OUTCOME_TRY(should_terminate, inner_loop());
             if (should_terminate) {
                 break;
             }

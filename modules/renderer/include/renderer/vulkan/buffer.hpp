@@ -7,7 +7,7 @@ namespace goma {
 
 struct BufferDesc {
     VkDeviceSize size;
-    uint32_t num_elements;
+    size_t num_elements;
     uint32_t stride;
 
     VkBufferUsageFlags usage;
@@ -20,7 +20,7 @@ class Buffer {
 
     VkDeviceSize GetSize();
     uint32_t GetStride();
-    uint32_t GetNumElements();
+    size_t GetNumElements();
 
     VkBufferUsageFlags GetUsage();
     VmaMemoryUsage GetStorage();

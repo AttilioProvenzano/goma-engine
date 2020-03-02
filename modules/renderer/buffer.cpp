@@ -6,7 +6,7 @@ Buffer::Buffer(const BufferDesc& buffer_desc) : desc_(buffer_desc) {}
 
 VkDeviceSize Buffer::GetSize() { return desc_.size; }
 uint32_t Buffer::GetStride() { return desc_.stride; }
-uint32_t Buffer::GetNumElements() { return desc_.num_elements; }
+size_t Buffer::GetNumElements() { return desc_.num_elements; }
 
 VkBufferUsageFlags Buffer::GetUsage() { return desc_.usage; }
 VmaMemoryUsage Buffer::GetStorage() { return desc_.storage; }

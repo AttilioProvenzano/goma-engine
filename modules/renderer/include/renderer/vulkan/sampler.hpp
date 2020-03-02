@@ -8,7 +8,8 @@ namespace goma {
 struct SamplerDesc {
     VkSamplerAddressMode address_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     VkFilter mag_filter = VK_FILTER_LINEAR;
-    VkFilter min_filter : VK_FILTER_LINEAR;
+    VkFilter min_filter = VK_FILTER_LINEAR;
+    VkSamplerMipmapMode mipmap_mode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     float max_anisotropy = 1.0f;
     VkBorderColor border_color = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
     float min_lod = 0.0f;
@@ -30,4 +31,4 @@ class Sampler {
     } api_handles_;
 };
 
-}  // namma
+}  // namespace goma

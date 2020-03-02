@@ -869,6 +869,7 @@ result<Sampler*> Device::CreateSampler(const SamplerDesc& sampler_desc) {
     sampler_info.borderColor = sampler_desc.border_color;
     sampler_info.magFilter = sampler_desc.mag_filter;
     sampler_info.minFilter = sampler_desc.min_filter;
+    sampler_info.mipmapMode = sampler_desc.mipmap_mode;
     sampler_info.minLod = sampler_desc.min_lod;
     sampler_info.maxLod = sampler_desc.max_lod;
 

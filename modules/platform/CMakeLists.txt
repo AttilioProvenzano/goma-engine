@@ -1,2 +1,2 @@
 include(${CMAKE_SOURCE_DIR}/scripts/cmake/add_module.cmake)
-add_module(common glfw input)
+add_module(common input glfw imgui)

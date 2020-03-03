@@ -1058,12 +1058,25 @@ result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
     spirv_cross::CompilerGLSL spirv_glsl{std::move(spirv)};
     auto resources = spirv_glsl.get_shader_resources();
 
+    static const std::vector<VkFormat> formats = {
+        VK_FORMAT_UNDEFINED, VK_FORMAT_R32_SFLOAT, VK_FORMAT_R32G32_SFLOAT,
+        VK_FORMAT_R32G32B32_SFLOAT, VK_FORMAT_R32G32B32A32_SFLOAT};
+
     ShaderInputs inputs;
     for (const auto& stage_input : resources.stage_inputs) {
         ShaderInput input = {stage_input.name};
         input.location =
             spirv_glsl.get_decoration(stage_input.id, spv::DecorationLocation);
-        input.vecsize = spirv_glsl.get_type(stage_input.type_id).vecsize;
+
+        auto format_index = spirv_glsl.get_type(stage_input.type_id).vecsize;
+        if (format_index >= formats.size()) {
+            spdlog::warn(
+                "Shader resource \"{}\" has vector size {}, larger than the "
+                "maximum supported ({}).",
+                input.name, format_index, formats.size() - 1);
+            format_index = static_cast<uint32_t>(formats.size()) - 1;
+        }
+        input.format = formats[format_index];
 
         inputs.push_back(input);
     };
@@ -1211,29 +1224,14 @@ result<Pipeline*> Device::GetPipeline(PipelineDesc pipeline_desc) {
     VkPipelineVertexInputStateCreateInfo vtx_input_state = {
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
 
-    // TODO pick SFLOAT / UNORM? How?
-    static const std::vector<VkFormat> formats = {
-        VK_FORMAT_UNDEFINED, VK_FORMAT_R32_SFLOAT, VK_FORMAT_R32G32_SFLOAT,
-        VK_FORMAT_R32G32B32_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM};
-
     uint32_t current_offset = 0;
     std::vector<VkVertexInputAttributeDescription> attributes;
 
     for (const auto& input : pipeline_desc.shaders[0]->GetInputs()) {
         VkVertexInputAttributeDescription desc = {};
 
-        auto format_index = input.vecsize;
-
-        if (format_index >= formats.size()) {
-            spdlog::warn(
-                "Shader resource \"{}\" has vector size {}, larger than the "
-                "maximum supported ({}).",
-                input.name, input.vecsize, formats.size() - 1);
-            format_index = static_cast<uint32_t>(formats.size()) - 1;
-        }
-
         desc.location = input.location;
-        desc.format = formats[format_index];
+        desc.format = input.format;
         desc.binding = 0;
         desc.offset = current_offset;
 

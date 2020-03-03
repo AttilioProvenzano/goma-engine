@@ -8,7 +8,7 @@ namespace goma {
 struct ShaderInput {
     std::string name;
     uint32_t location;
-    uint32_t vecsize;
+    VkFormat format;
 };
 using ShaderInputs = std::vector<ShaderInput>;
 

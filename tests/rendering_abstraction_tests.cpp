@@ -284,7 +284,7 @@ void HelloTriangle(Device& device, bool offscreen = false) {
     FramebufferDesc fb_desc = {};
     fb_desc.color_attachments.push_back({render_target});
 
-    GOMA_TEST_TRY(pipeline, device.CreatePipeline({{vtx, frag}, fb_desc}));
+    GOMA_TEST_TRY(pipeline, device.GetPipeline({{vtx, frag}, fb_desc}));
 
     GraphicsContext context(device);
 
@@ -442,7 +442,7 @@ SCENARIO("the rendering abstraction can create objects and submit commands",
             }
 
             AND_WHEN("a pipeline using that shader is created") {
-                GOMA_TEST_TRY(pipeline, device.CreatePipeline(
+                GOMA_TEST_TRY(pipeline, device.GetPipeline(
                                             {{shader}, FramebufferDesc{}}));
 
                 THEN("handles are set correctly") {
@@ -480,7 +480,7 @@ SCENARIO("the rendering abstraction can create objects and submit commands",
 
             GOMA_TEST_TRY(shader, device.CreateShader(std::move(shader_desc)));
             GOMA_TEST_TRY(pipeline,
-                          device.CreatePipeline({{shader}, FramebufferDesc{}}));
+                          device.GetPipeline({{shader}, FramebufferDesc{}}));
 
             THEN("a descriptor set can be bound") {
                 GraphicsContext context(device);
@@ -509,11 +509,8 @@ SCENARIO("the rendering abstraction can render a triangle",
         GOMA_TEST_TRYV(platform.InitWindow(kWindowWidth, kWindowHeight));
         GOMA_TEST_TRYV(device.InitWindow(platform));
 
-        WHEN("a triangle is rendered to the screen") {
+        THEN("a triangle can be rendered to the screen") {
             HelloTriangle(device);
-            Sleep(kTimeoutSeconds * 1000);
-
-            THEN("no errors are reported") {}
         }
     }
 }
@@ -631,7 +628,7 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
         PipelineDesc pipe_desc = {{vtx, frag}, fb_res->second};
         pipe_desc.depth_test = true;
         pipe_desc.cull_mode = VK_CULL_MODE_BACK_BIT;
-        OUTCOME_TRY(pipeline, device.CreatePipeline(std::move(pipe_desc)));
+        OUTCOME_TRY(pipeline, device.GetPipeline(std::move(pipe_desc)));
 
         auto eye = glm::vec3(0.0f, -5.0f, 0.0f);
         auto center = glm::vec3(0.0f);
@@ -681,25 +678,21 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
         return outcome::success();
     };
 
-    auto render_frames = [&](int max_frames) -> result<int> {
         int frame = 0;
-        for (frame = 0; frame < max_frames; frame++) {
+    GOMA_TEST_TRYV(platform.MainLoop([&]() -> result<bool> {
+        frame++;
             elapsed_time = std::chrono::steady_clock::now() - start_time;
             if (elapsed_time > std::chrono::seconds(kTimeoutSeconds)) {
-                break;
+            return true;
             }
 
             OUTCOME_TRY(render_frame(frame));
-        }
-        return frame;
-    };
-
-    const int kMaxFrames = 5000;
-    GOMA_TEST_TRY(last_frame, render_frames(kMaxFrames));
+        return false;
+    }));
 
     char* test_name = textured ? "Spinning textured cube" : "Spinning cube";
     spdlog::info("{} - Average frame time: {} ms", test_name,
-                 elapsed_time.count() / (1e6 * last_frame));
+                 elapsed_time.count() / (1e6 * frame));
 
     for (auto& receipt : receipts) {
         if (receipt) {

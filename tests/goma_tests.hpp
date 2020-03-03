@@ -19,12 +19,15 @@
 #endif
 
 #ifndef GOMA_TEST_TRY
-#define GOMA_TEST_TRY(handle, fn)                 \
-    auto handle##_res = fn;                       \
-    if (handle##_res.has_error()) {               \
-        auto handle##_err = handle##_res.error(); \
-        UNSCOPED_INFO(handle##_err.message());    \
-    }                                             \
-    REQUIRE(!handle##_res.has_error());           \
+#define GOMA_TEST_TRY(handle, fn)                         \
+    auto handle##_res = fn;                               \
+    {                                                     \
+        bool handle##_has_err = handle##_res.has_error(); \
+        if (handle##_has_err) {                           \
+            auto handle##_err = handle##_res.error();     \
+            UNSCOPED_INFO(handle##_err.message());        \
+        }                                                 \
+        REQUIRE(!handle##_has_err);                       \
+    }                                                     \
     auto& handle = handle##_res.value();
 #endif

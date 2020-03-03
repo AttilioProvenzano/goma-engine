@@ -2,6 +2,7 @@
 #include <SPIRV/GlslangToSpv.h>
 #include <spirv_glsl.hpp>
 #include <stb/stb_image.h>
+#include <imgui.h>
 
 #include "platform/win32_platform.hpp"
 #include "renderer/context.hpp"
@@ -678,15 +679,15 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
         return outcome::success();
     };
 
-        int frame = 0;
+    int frame = 0;
     GOMA_TEST_TRYV(platform.MainLoop([&]() -> result<bool> {
         frame++;
-            elapsed_time = std::chrono::steady_clock::now() - start_time;
-            if (elapsed_time > std::chrono::seconds(kTimeoutSeconds)) {
+        elapsed_time = std::chrono::steady_clock::now() - start_time;
+        if (elapsed_time > std::chrono::seconds(kTimeoutSeconds)) {
             return true;
-            }
+        }
 
-            OUTCOME_TRY(render_frame(frame));
+        OUTCOME_TRY(render_frame(frame));
         return false;
     }));
 
@@ -723,6 +724,304 @@ SCENARIO("the rendering abstraction can render a spinning cube",
             SpinningCube(device, platform, true);
 
             THEN("no errors are reported") {}
+        }
+    }
+}
+
+SCENARIO("can set up imgui", "[rendering-abstraction][gui][imgui]") {
+    Device device;
+
+    std::unique_ptr<Platform> platform_ptr = std::make_unique<Win32Platform>();
+    Platform& platform = *platform_ptr.get();
+
+    GOMA_TEST_TRYV(platform.InitWindow(kWindowWidth, kWindowHeight));
+    GOMA_TEST_TRYV(device.InitWindow(platform));
+
+    ImGuiIO& io = ImGui::GetIO();
+    // io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable
+    // Keyboard Controls
+    // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable
+    // Gamepad Controls
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+    io.DisplaySize =
+        ImVec2{float(platform.GetWidth()), float(platform.GetHeight())};
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+    // ImGui::StyleColorsClassic();
+
+    io.Fonts->AddFontFromFileTTF(GOMA_ASSETS_DIR "fonts/Roboto-Medium.ttf",
+                                 16.0f);
+
+    unsigned char* pixels;
+    int width, height;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+
+    auto desc = ImageDesc::TextureDesc;
+    desc.size.width = static_cast<uint32_t>(width);
+    desc.size.height = static_cast<uint32_t>(height);
+
+    GOMA_TEST_TRY(font_tex, device.CreateImage(desc));
+    GOMA_TEST_TRY(font_sampler, device.CreateSampler({}));
+    io.Fonts->TexID = font_tex->GetHandle();
+
+    UploadContext ctx(device);
+    GOMA_TEST_TRYV(ctx.Begin());
+
+    ImageData d = {{{0, pixels}}};
+    GOMA_TEST_TRYV(ctx.UploadImage(*font_tex, std::move(d)));
+    ctx.End();
+
+    {
+        GOMA_TEST_TRY(receipt, device.Submit(ctx));
+        GOMA_TEST_TRYV(device.WaitOnWork(std::move(receipt)));
+    }
+
+    GOMA_TEST_TRY(gui_vtx, platform.ReadFileToString(GOMA_ASSETS_DIR
+                                                     "shaders/imgui.vert"));
+    GOMA_TEST_TRY(gui_frag, platform.ReadFileToString(GOMA_ASSETS_DIR
+                                                      "shaders/imgui.frag"));
+
+    ShaderDesc vtx_desc = {"gui_vtx", VK_SHADER_STAGE_VERTEX_BIT,
+                           std::move(gui_vtx)};
+    ShaderDesc frag_desc = {"gui_frag", VK_SHADER_STAGE_FRAGMENT_BIT,
+                            std::move(gui_frag)};
+
+    GOMA_TEST_TRY(vtx, device.CreateShader(std::move(vtx_desc)));
+    GOMA_TEST_TRY(frag, device.CreateShader(std::move(frag_desc)));
+
+    GraphicsContext context(device);
+    auto start_time = std::chrono::steady_clock::now();
+    auto elapsed_time = std::chrono::steady_clock::now() - start_time;
+
+    std::vector<ReceiptPtr> receipts(3);
+    std::vector<Buffer*> vtx_bufs(3, nullptr);
+    std::vector<Buffer*> idx_bufs(3, nullptr);
+    std::vector<Buffer*> gui_ubos(3, nullptr);
+
+    const auto render_frame = [&](int frame) -> result<void> {
+        auto frame_index = frame % 3;
+
+        if (receipts[frame_index]) {
+            OUTCOME_TRY(device.WaitOnWork(std::move(receipts[frame_index])));
+        }
+        context.NextFrame();
+
+        ImGui::NewFrame();
+
+        // Dummy window to override defaults in ShowDemoWindow()
+        ImGui::SetNextWindowPos({100, 100});
+        ImGui::SetNextWindowSize({300, 600});
+        ImGui::Begin("Dear ImGui Demo");
+        ImGui::End();
+
+        ImGui::ShowDemoWindow();
+        ImGui::Render();
+
+        auto draw_data = ImGui::GetDrawData();
+
+        // Create or resize the vertex/index buffers
+        size_t vtx_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
+        size_t idx_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+
+        if (!vtx_bufs[frame_index] ||
+            vtx_bufs[frame_index]->GetSize() < vtx_size) {
+            if (vtx_bufs[frame_index]) {
+                // TODO: device.DestroyBuffer(*vtx_bufs[frame_index]);
+            }
+
+            BufferDesc vtx_buf_desc = {};
+            vtx_buf_desc.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            vtx_buf_desc.num_elements = draw_data->TotalVtxCount;
+            vtx_buf_desc.stride = sizeof(ImDrawVert);
+            vtx_buf_desc.size = vtx_size;
+            vtx_buf_desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+            OUTCOME_TRY(vtx_buf, device.CreateBuffer(vtx_buf_desc));
+            vtx_bufs[frame_index] = vtx_buf;
+        }
+
+        if (!idx_bufs[frame_index] ||
+            idx_bufs[frame_index]->GetSize() < idx_size) {
+            if (idx_bufs[frame_index]) {
+                // TODO: device.DestroyBuffer(*idx_bufs[frame_index]);
+            }
+
+            BufferDesc idx_buf_desc = {};
+            idx_buf_desc.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+            idx_buf_desc.num_elements = draw_data->TotalIdxCount;
+            idx_buf_desc.stride = sizeof(ImDrawIdx);
+            idx_buf_desc.size = idx_size;
+            idx_buf_desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+            OUTCOME_TRY(idx_buf, device.CreateBuffer(idx_buf_desc));
+            idx_bufs[frame_index] = idx_buf;
+        }
+
+        // GUI uniform buffer
+        struct GUIScaleTranslate {
+            glm::vec2 scale;
+            glm::vec2 translate;
+        };
+
+        if (!gui_ubos[frame_index]) {
+            BufferDesc gui_ubo_desc = {};
+            gui_ubo_desc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+            gui_ubo_desc.num_elements = 1;
+            gui_ubo_desc.stride = sizeof(GUIScaleTranslate);
+            gui_ubo_desc.size = gui_ubo_desc.num_elements * gui_ubo_desc.stride;
+            gui_ubo_desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+            OUTCOME_TRY(gui_ubo, device.CreateBuffer(gui_ubo_desc));
+            gui_ubos[frame_index] = gui_ubo;
+        }
+
+        // Upload vertex/index data into a single contiguous GPU buffer
+        {
+            OUTCOME_TRY(vtx_dst_raw, device.MapBuffer(*vtx_bufs[frame_index]));
+            OUTCOME_TRY(idx_dst_raw, device.MapBuffer(*idx_bufs[frame_index]));
+
+            auto vtx_dst = reinterpret_cast<ImDrawVert*>(vtx_dst_raw);
+            auto idx_dst = reinterpret_cast<ImDrawIdx*>(idx_dst_raw);
+
+            for (int n = 0; n < draw_data->CmdListsCount; n++) {
+                const ImDrawList* cmd_list = draw_data->CmdLists[n];
+                memcpy(vtx_dst, cmd_list->VtxBuffer.Data,
+                       cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
+                memcpy(idx_dst, cmd_list->IdxBuffer.Data,
+                       cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+                vtx_dst += cmd_list->VtxBuffer.Size;
+                idx_dst += cmd_list->IdxBuffer.Size;
+            }
+
+            device.UnmapBuffer(*vtx_bufs[frame_index]);
+            device.UnmapBuffer(*idx_bufs[frame_index]);
+        }
+
+        OUTCOME_TRY(gui_ubo_data, device.MapBuffer(*gui_ubos[frame_index]));
+        GUIScaleTranslate gui_scale_translate;
+
+        gui_scale_translate.scale = {2.0f / draw_data->DisplaySize.x,
+                                     2.0f / draw_data->DisplaySize.y};
+        gui_scale_translate.translate = {
+            -1.0f - draw_data->DisplayPos.x * gui_scale_translate.scale[0],
+            -1.0f - draw_data->DisplayPos.y * gui_scale_translate.scale[1]};
+
+        memcpy(gui_ubo_data, &gui_scale_translate, sizeof(gui_scale_translate));
+        device.UnmapBuffer(*gui_ubos[frame_index]);
+
+        OUTCOME_TRY(swapchain_image, device.AcquireSwapchainImage());
+
+        FramebufferDesc fb_desc = {};
+        fb_desc.color_attachments.push_back({swapchain_image});
+
+        auto pipe_desc = PipelineDesc{{vtx, frag}, fb_desc};
+        pipe_desc.color_blend = true;
+        OUTCOME_TRY(pipeline, device.GetPipeline(std::move(pipe_desc)));
+
+        OUTCOME_TRYV(context.Begin());
+        OUTCOME_TRYV(context.BindFramebuffer(fb_desc));
+
+        context.BindGraphicsPipeline(*pipeline);
+        context.BindDescriptorSet({
+            {0, Descriptor{*font_tex, *font_sampler}},
+            {1, Descriptor{*gui_ubos[frame_index]}},
+        });
+
+        context.BindVertexBuffer(*vtx_bufs[frame_index]);
+        context.BindIndexBuffer(*idx_bufs[frame_index], 0,
+                                sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16
+                                                       : VK_INDEX_TYPE_UINT32);
+
+        // Render command lists
+        // (Because we merged all buffers into a single one, we maintain our own
+        // offset into them)
+        int global_vtx_offset = 0;
+        int global_idx_offset = 0;
+        for (int n = 0; n < draw_data->CmdListsCount; n++) {
+            const ImDrawList* cmd_list = draw_data->CmdLists[n];
+            for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
+                const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
+                if (pcmd->UserCallback != NULL) {
+                    // User callback, registered via ImDrawList::AddCallback()
+                    // (ImDrawCallback_ResetRenderState is a special callback
+                    // value used by the user to request the renderer to reset
+                    // render state.)
+                    if (pcmd->UserCallback == ImDrawCallback_ResetRenderState) {
+                    } else {
+                        pcmd->UserCallback(cmd_list, pcmd);
+                    }
+                } else {
+                    ImVec2 clip_off = {0, 0};    // except multiview
+                    ImVec2 clip_scale = {1, 1};  // except retina displays
+
+                    // Project scissor/clipping rectangles into framebuffer
+                    // space
+                    ImVec4 clip_rect;
+                    clip_rect.x =
+                        (pcmd->ClipRect.x - clip_off.x) * clip_scale.x;
+                    clip_rect.y =
+                        (pcmd->ClipRect.y - clip_off.y) * clip_scale.y;
+                    clip_rect.z =
+                        (pcmd->ClipRect.z - clip_off.x) * clip_scale.x;
+                    clip_rect.w =
+                        (pcmd->ClipRect.w - clip_off.y) * clip_scale.y;
+
+                    if (clip_rect.x < platform.GetWidth() &&
+                        clip_rect.y < platform.GetHeight() &&
+                        clip_rect.z >= 0.0f && clip_rect.w >= 0.0f) {
+                        // Negative offsets are illegal for vkCmdSetScissor
+                        if (clip_rect.x < 0.0f) clip_rect.x = 0.0f;
+                        if (clip_rect.y < 0.0f) clip_rect.y = 0.0f;
+
+                        // Apply scissor/clipping rectangle
+                        VkRect2D scissor;
+                        scissor.offset.x = (int32_t)(clip_rect.x);
+                        scissor.offset.y = (int32_t)(clip_rect.y);
+                        scissor.extent.width =
+                            (uint32_t)(clip_rect.z - clip_rect.x);
+                        scissor.extent.height =
+                            (uint32_t)(clip_rect.w - clip_rect.y);
+                        context.SetScissor(scissor);
+
+                        context.DrawIndexed(
+                            pcmd->ElemCount, 1,
+                            pcmd->IdxOffset + global_idx_offset,
+                            pcmd->VtxOffset + global_vtx_offset);
+                    }
+                }
+            }
+            global_idx_offset += cmd_list->IdxBuffer.Size;
+            global_vtx_offset += cmd_list->VtxBuffer.Size;
+        }
+
+        OUTCOME_TRY(receipt, device.Submit(context));
+        receipts[frame_index] = std::move(receipt);
+
+        OUTCOME_TRY(device.Present());
+
+        return outcome::success();
+    };
+
+    int frame = 0;
+    GOMA_TEST_TRYV(platform.MainLoop([&]() -> result<bool> {
+        frame++;
+        elapsed_time = std::chrono::steady_clock::now() - start_time;
+        if (elapsed_time > std::chrono::seconds(kTimeoutSeconds)) {
+            return true;
+        }
+
+        OUTCOME_TRY(render_frame(frame));
+        return false;
+    }));
+
+    char* test_name = "GUI test";
+    spdlog::info("{} - Average frame time: {} ms", test_name,
+                 elapsed_time.count() / (1e6 * frame));
+
+    for (auto& receipt : receipts) {
+        if (receipt) {
+            GOMA_TEST_TRYV(device.WaitOnWork(std::move(receipt)));
         }
     }
 }

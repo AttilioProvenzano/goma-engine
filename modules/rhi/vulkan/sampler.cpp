@@ -1,4 +1,4 @@
-#include "renderer/vulkan/sampler.hpp"
+#include "rhi/vulkan/sampler.hpp"
 
 namespace goma {
 

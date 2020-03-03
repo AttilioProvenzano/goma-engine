@@ -1,4 +1,4 @@
-#include "renderer/vulkan/device.hpp"
+#include "rhi/vulkan/device.hpp"
 
 #include <glslang/Public/ShaderLang.h>
 #include <SPIRV/GlslangToSpv.h>
@@ -6,8 +6,8 @@
 
 #include "common/error_codes.hpp"
 #include "platform/platform.hpp"
-#include "renderer/vulkan/context.hpp"
-#include "renderer/vulkan/utils.hpp"
+#include "rhi/vulkan/context.hpp"
+#include "rhi/vulkan/utils.hpp"
 
 namespace goma {
 

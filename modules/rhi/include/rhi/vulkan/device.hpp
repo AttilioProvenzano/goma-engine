@@ -2,11 +2,11 @@
 
 #include "common/include.hpp"
 #include "common/vulkan.hpp"
-#include "renderer/buffer.hpp"
-#include "renderer/image.hpp"
-#include "renderer/pipeline.hpp"
-#include "renderer/sampler.hpp"
-#include "renderer/shader.hpp"
+#include "rhi/buffer.hpp"
+#include "rhi/image.hpp"
+#include "rhi/pipeline.hpp"
+#include "rhi/sampler.hpp"
+#include "rhi/shader.hpp"
 
 namespace std {
 

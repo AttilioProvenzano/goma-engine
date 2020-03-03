@@ -2,7 +2,7 @@
 
 #include "common/include.hpp"
 #include "common/vulkan.hpp"
-#include "renderer/vulkan/image.hpp"
+#include "rhi/vulkan/image.hpp"
 
 namespace goma {
 

@@ -1,7 +1,7 @@
-#include "renderer/vulkan/utils.hpp"
+#include "rhi/vulkan/utils.hpp"
 
-#include "renderer/vulkan/context.hpp"
-#include "renderer/vulkan/image.hpp"
+#include "rhi/vulkan/context.hpp"
+#include "rhi/vulkan/image.hpp"
 
 namespace goma {
 namespace utils {

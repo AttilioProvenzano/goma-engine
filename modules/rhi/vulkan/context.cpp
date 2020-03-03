@@ -1,8 +1,8 @@
-#include "renderer/vulkan/context.hpp"
+#include "rhi/vulkan/context.hpp"
 
-#include "renderer/vulkan/device.hpp"
-#include "renderer/vulkan/image.hpp"
-#include "renderer/vulkan/utils.hpp"
+#include "rhi/vulkan/device.hpp"
+#include "rhi/vulkan/image.hpp"
+#include "rhi/vulkan/utils.hpp"
 
 namespace goma {
 

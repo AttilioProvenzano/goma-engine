@@ -1,6 +1,6 @@
-#include "renderer/vulkan/pipeline.hpp"
+#include "rhi/vulkan/pipeline.hpp"
 
-#include "renderer/vulkan/context.hpp"
+#include "rhi/vulkan/context.hpp"
 
 bool operator==(const VkPipelineColorBlendAttachmentState& lhs,
                 const VkPipelineColorBlendAttachmentState& rhs) {

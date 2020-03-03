@@ -1,4 +1,4 @@
-#include "renderer/vulkan/shader.hpp"
+#include "rhi/vulkan/shader.hpp"
 
 namespace goma {
 

@@ -1,4 +1,4 @@
-#include "renderer/vulkan/image.hpp"
+#include "rhi/vulkan/image.hpp"
 
 namespace goma {
 

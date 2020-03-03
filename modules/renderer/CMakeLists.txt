@@ -1,2 +1,2 @@
 include(${CMAKE_SOURCE_DIR}/scripts/cmake/add_module.cmake)
-add_module(common platform scene vulkan glslang imgui SPIRV spirv-cross-glsl)
+add_module(common platform scene rhi imgui)

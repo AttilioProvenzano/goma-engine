@@ -33,7 +33,7 @@ add_subdirectory(apps)
 
 add_executable(goma-tests
   tests/goma_tests.hpp
-	tests/rendering_abstraction_tests.cpp
+	tests/rhi_tests.cpp
 	tests/scene_tests.cpp
 	tests/test_main.cpp
 )

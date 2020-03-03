@@ -5,9 +5,9 @@
 #include <imgui.h>
 
 #include "platform/win32_platform.hpp"
-#include "renderer/context.hpp"
-#include "renderer/device.hpp"
-#include "renderer/vulkan/utils.hpp"
+#include "rhi/context.hpp"
+#include "rhi/device.hpp"
+#include "rhi/vulkan/utils.hpp"
 
 #include "goma_tests.hpp"
 

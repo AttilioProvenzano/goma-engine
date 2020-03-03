@@ -31,8 +31,8 @@ build_script:
 test_script:
   - cmd: cp ..\vk_swiftshader.dll ..\vk_swiftshader_icd.json .
   - cmd: dir
-  - cmd: appveyor PushArtifact .\bin
-  - cmd: appveyor PushArtifact .\lib
+  - cmd: 7z a goma-binaries.zip bin\ lib\
+  - cmd: appveyor PushArtifact goma-binaries.zip
   - cmd: .\bin\%configuration%\goma-tests.exe -s
 
 cache:

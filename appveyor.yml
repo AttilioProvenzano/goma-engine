@@ -32,9 +32,9 @@ test_script:
   - cmd: cp ..\vk_swiftshader.dll ..\vk_swiftshader_icd.json .
   - cmd: dir
   - cmd: appveyor PushArtifact .\bin\%configuration%\goma-tests.exe
-  - cmd: .\bin\%configuration%\goma-tests.exe -s
+#  - cmd: .\bin\%configuration%\goma-tests.exe -s
 
 cache:
-  - VulkanSDK.exe -> appveyor.yml
-  - vk_swiftshader.dll -> appveyor.yml
-  - vk_swiftshader_icd.json -> appveyor.yml
+  - VulkanSDK.exe
+  - vk_swiftshader.dll
+  - vk_swiftshader_icd.json

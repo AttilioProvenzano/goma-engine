@@ -512,6 +512,7 @@ SCENARIO("the rendering abstraction can render a triangle",
 
         THEN("a triangle can be rendered to the screen") {
             HelloTriangle(device);
+            platform.Sleep(kTimeoutSeconds * 1000000);
         }
     }
 }
@@ -789,6 +790,17 @@ SCENARIO("can set up imgui", "[rendering-abstraction][gui][imgui]") {
 
     GOMA_TEST_TRY(vtx, device.CreateShader(std::move(vtx_desc)));
     GOMA_TEST_TRY(frag, device.CreateShader(std::move(frag_desc)));
+
+    // ImGui passes vertex color data as RGBA8, so we override the corresponding
+    // format in shader inputs
+    auto inputs = vtx->GetInputs();
+    auto color_input =
+        std::find_if(inputs.begin(), inputs.end(),
+                     [](const auto& i) { return i.name == "aColor"; });
+    if (color_input != inputs.end()) {
+        color_input->format = VK_FORMAT_R8G8B8A8_UNORM;
+        vtx->SetInputs(inputs);
+    }
 
     GraphicsContext context(device);
     auto start_time = std::chrono::steady_clock::now();

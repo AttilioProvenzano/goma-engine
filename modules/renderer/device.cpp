@@ -1211,9 +1211,10 @@ result<Pipeline*> Device::GetPipeline(PipelineDesc pipeline_desc) {
     VkPipelineVertexInputStateCreateInfo vtx_input_state = {
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
 
+    // TODO pick SFLOAT / UNORM? How?
     static const std::vector<VkFormat> formats = {
         VK_FORMAT_UNDEFINED, VK_FORMAT_R32_SFLOAT, VK_FORMAT_R32G32_SFLOAT,
-        VK_FORMAT_R32G32B32_SFLOAT, VK_FORMAT_R32G32B32A32_SFLOAT};
+        VK_FORMAT_R32G32B32_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM};
 
     uint32_t current_offset = 0;
     std::vector<VkVertexInputAttributeDescription> attributes;
@@ -1237,7 +1238,7 @@ result<Pipeline*> Device::GetPipeline(PipelineDesc pipeline_desc) {
         desc.offset = current_offset;
 
         attributes.push_back(desc);
-        current_offset += sizeof(float) * input.vecsize;
+        current_offset += utils::GetFormatInfo(desc.format).size;
     }
 
     VkVertexInputBindingDescription binding = {};
@@ -1302,7 +1303,7 @@ result<Pipeline*> Device::GetPipeline(PipelineDesc pipeline_desc) {
             static_cast<uint32_t>(pipeline_desc.blend_attachments.size());
         blend_state.pAttachments = pipeline_desc.blend_attachments.data();
     } else {
-        VkPipelineColorBlendAttachmentState blend_att{VK_FALSE};
+        VkPipelineColorBlendAttachmentState blend_att = {};
         blend_att.colorWriteMask =
             VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;

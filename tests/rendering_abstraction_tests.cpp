@@ -549,7 +549,7 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
         auto tex_data = stbi_load(GOMA_ASSETS_DIR "models/Duck/glTF/DuckCM.png",
                                   &x, &y, &channels, 4);
 
-        INFO("Stbi failure: " << stbi_failure_reason());
+        CAPTURE(stbi_failure_reason());
         REQUIRE(tex_data != nullptr);
 
         ImageDesc image_desc = ImageDesc::TextureDesc;

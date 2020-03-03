@@ -589,12 +589,7 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
     GOMA_TEST_TRY(depth_image, device.CreateImage(depth_desc));
 
     // Triple-buffered MVPs
-    desc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    desc.num_elements = 3;
-    desc.stride = sizeof(glm::mat4);
-    desc.size = 3 * sizeof(glm::mat4);
-    desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-    GOMA_TEST_TRY(mvp_buf, device.CreateBuffer(desc));
+    std::vector<Buffer*> mvp_bufs(3, nullptr);
 
     std::unordered_map<Image*, FramebufferDesc> fb_desc;
 
@@ -646,16 +641,25 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
                                     0.1f, 100.0f) *
                    glm::lookAt(eye, center, up) * glm::mat4_cast(rot);
 
-        OUTCOME_TRY(mvp_data, device.MapBuffer(*mvp_buf));
-        memcpy(static_cast<decltype(mvp)*>(mvp_data) + frame_index, &mvp,
-               sizeof(mvp));
-        device.UnmapBuffer(*mvp_buf);
+        if (!mvp_bufs[frame_index]) {
+            desc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+            desc.num_elements = 3;
+            desc.stride = sizeof(glm::mat4);
+            desc.size = 3 * sizeof(glm::mat4);
+            desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+            GOMA_TEST_TRY(mvp_buf, device.CreateBuffer(desc));
+            mvp_bufs[frame_index] = mvp_buf;
+        }
+
+        OUTCOME_TRY(mvp_data, device.MapBuffer(*mvp_bufs[frame_index]));
+        memcpy(mvp_data, &mvp, sizeof(mvp));
+        device.UnmapBuffer(*mvp_bufs[frame_index]);
 
         OUTCOME_TRY(context.Begin());
         OUTCOME_TRY(context.BindFramebuffer(fb_res->second));
 
         auto ds = DescriptorSet{{
-            {0, {*mvp_buf, frame_index * sizeof(mvp), sizeof(mvp)}},
+            {0, {*mvp_bufs[frame_index]}},
         }};
 
         if (textured) {

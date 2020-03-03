@@ -82,7 +82,7 @@ class Device {
     result<Sampler*> CreateSampler(const SamplerDesc&);
 
     result<Shader*> CreateShader(ShaderDesc);
-    result<Pipeline*> CreatePipeline(PipelineDesc);
+    result<Pipeline*> GetPipeline(PipelineDesc);
 
     result<ReceiptPtr> Submit(Context&);
     result<void> WaitOnWork(ReceiptPtr&&);

@@ -1108,7 +1108,37 @@ result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
     return shaders_.back().get();
 }
 
-result<Pipeline*> Device::CreatePipeline(PipelineDesc pipeline_desc) {
+void PadBlendAttachments(PipelineDesc& pipeline_desc) {
+    if (pipeline_desc.blend_attachments.size() <
+        pipeline_desc.fb_desc.color_attachments.size()) {
+        // Pad blend attachments
+        VkPipelineColorBlendAttachmentState blend_att = {};
+
+        // Basic additive blending
+        blend_att.blendEnable = VK_TRUE;
+        blend_att.colorBlendOp = VK_BLEND_OP_ADD;
+        blend_att.colorWriteMask =
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+            VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+
+        blend_att.alphaBlendOp = VK_BLEND_OP_ADD;
+        blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+
+        size_t missing_attachments =
+            pipeline_desc.fb_desc.color_attachments.size() -
+            pipeline_desc.blend_attachments.size();
+        std::fill_n(std::back_inserter(pipeline_desc.blend_attachments),
+                    missing_attachments, blend_att);
+    }
+}
+
+result<Pipeline*> Device::GetPipeline(PipelineDesc pipeline_desc) {
+    // pipeline_desc must be patched before accessing the map
+    PadBlendAttachments(pipeline_desc);
+
     auto pipe_res = pipeline_map_.find(pipeline_desc);
     if (pipe_res != pipeline_map_.end()) {
         return pipe_res->second.get();

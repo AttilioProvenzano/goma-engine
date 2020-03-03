@@ -11,7 +11,7 @@
     {                                                              \
         auto res = fn;                                             \
         if (res.has_error()) UNSCOPED_INFO(res.error().message()); \
-        REQUIRE_FALSE(res.has_error());                            \
+        REQUIRE(!res.has_error());                                 \
     }
 #endif
 
@@ -20,6 +20,6 @@
     auto handle##_res = fn;                            \
     if (handle##_res.has_error())                      \
         UNSCOPED_INFO(handle##_res.error().message()); \
-    REQUIRE_FALSE(handle##_res.has_error());           \
+    REQUIRE(!handle##_res.has_error());                \
     auto& handle = handle##_res.value();
 #endif

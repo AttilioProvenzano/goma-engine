@@ -6,6 +6,9 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+
 #include <windows.h>
 
 namespace goma {
@@ -17,11 +20,16 @@ Win32Platform::~Win32Platform() {
 
 result<void> Win32Platform::MainLoop(MainLoopFn inner_loop) {
     if (!window_) {
-        InitWindow(1280, 800);
+        OUTCOME_TRY(InitWindow(1280, 800));
     }
 
     while (!glfwWindowShouldClose(window_)) {
         glfwPollEvents();
+
+        // TODO: temporarily we check that ImGui is set up via TexID
+        if (ImGui::GetIO().Fonts->TexID) {
+            ImGui_ImplGlfw_NewFrame();
+        }
 
         if (inner_loop) {
             OUTCOME_TRY(should_terminate, inner_loop());
@@ -49,6 +57,13 @@ result<void> Win32Platform::InitWindow(int width, int height) {
     }
 
     glfwSetInputMode(window_, GLFW_STICKY_KEYS, 1);
+
+    // Set up Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    // TODO: GLFW ideas from ImGui (e.g. WindowSize vs FramebufferSize)
+    ImGui_ImplGlfw_InitForVulkan(window_, true);
 
     return outcome::success();
 }

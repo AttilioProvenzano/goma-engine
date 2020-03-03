@@ -1372,6 +1372,7 @@ VkFence Device::GetFence() {
 }
 
 result<ReceiptPtr> Device::Submit(Context& context) {
+    context.End();
     auto cmd_bufs = context.PopQueuedCommands();
 
     VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};

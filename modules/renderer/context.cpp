@@ -322,8 +322,9 @@ result<void> Context::Begin() {
 }
 
 void Context::End() {
-    assert(active_cmd_buf_ != VK_NULL_HANDLE &&
-           "Context is not in a recording state");
+    if (active_cmd_buf_ == VK_NULL_HANDLE) {
+        return;
+    }
 
     vkEndCommandBuffer(active_cmd_buf_);
     submission_queue_.push_back(active_cmd_buf_);
@@ -331,9 +332,6 @@ void Context::End() {
 }
 
 std::vector<VkCommandBuffer> Context::PopQueuedCommands() {
-    assert(active_cmd_buf_ == VK_NULL_HANDLE &&
-           "Context is in a recording state");
-
     auto ret = std::move(submission_queue_);
     submission_queue_.clear();
     return ret;

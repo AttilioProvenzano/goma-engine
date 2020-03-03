@@ -17,8 +17,8 @@ SCENARIO("nodes can be created and destroyed safely", "[scene][node]") {
         Scene s;
 
         auto root_node = s.GetRootNode();
-        CHECK(root_node == NodeIndex{0, 1});
-        CHECK(s.GetChildren(root_node).value() == std::set<NodeIndex>{});
+        REQUIRE(root_node == NodeIndex{0, 1});
+        REQUIRE(s.GetChildren(root_node).value() == std::set<NodeIndex>{});
 
         WHEN("a node is added") {
             GOMA_TEST_TRY(node, s.CreateNode(root_node));
@@ -82,8 +82,8 @@ SCENARIO("attachments are handled correctly") {
         GOMA_TEST_TRY(node, s.CreateNode(s.GetRootNode()));
         GOMA_TEST_TRY(other_node, s.CreateNode(s.GetRootNode()));
 
-        CHECK(s.GetChildren(root_node).value() ==
-              std::set<NodeIndex>{node, other_node});
+        REQUIRE(s.GetChildren(root_node).value() ==
+                std::set<NodeIndex>{node, other_node});
 
         WHEN("a texture is created") {
             GOMA_TEST_TRY(texture, s.CreateAttachment<Texture>({node}, {}));

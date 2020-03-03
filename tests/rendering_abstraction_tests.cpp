@@ -168,7 +168,7 @@ constexpr int kTimeoutSeconds = 2;
 SCENARIO("can compile a GLSL shader", "[shader][glslang][spirv-cross]") {
     GIVEN("a Glslang process") {
         using namespace glslang;
-        InitializeProcess();
+        REQUIRE(InitializeProcess());
 
         WHEN("a shader is parsed") {
             TShader vtx_shader{EShLangVertex};

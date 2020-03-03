@@ -100,6 +100,22 @@ InputState Win32Platform::GetInputState() const {
     return state;
 }
 
+result<std::string> Win32Platform::ReadFileToString(
+    const char* filename) const {
+    std::ifstream t(filename);
+    if (t.rdstate() == std::ios::failbit) {
+        return Error::NotFound;
+    }
+
+    t.seekg(0, std::ios::end);
+    size_t size = t.tellg();
+    std::string buffer(size, ' ');
+    t.seekg(0);
+    t.read(&buffer[0], size);
+
+    return buffer;
+}
+
 void Win32Platform::Sleep(uint32_t microseconds) {
     ::Sleep(microseconds / 1000);
 }

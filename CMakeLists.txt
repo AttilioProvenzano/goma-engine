@@ -29,6 +29,8 @@ endif()
 target_compile_definitions(engine PUBLIC
 	GOMA_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets/")
 
+add_subdirectory(apps)
+
 add_executable(goma-tests
   tests/goma_tests.hpp
 	tests/rendering_abstraction_tests.cpp

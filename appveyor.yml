@@ -31,6 +31,8 @@ build_script:
 
 test_script:
   - cmd: set VK_ICD_FILENAMES=%APPVEYOR_BUILD_FOLDER%\vk_swiftshader_icd.json
+  - cmd: echo "VK_ICD_FILENAMES = %VK_ICD_FILENAMES%"
+  - cmd: dir %VK_ICD_FILENAMES%
   - cmd: .\bin\%configuration%\goma-tests.exe
 
 cache:

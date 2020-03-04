@@ -11,13 +11,17 @@ Engine::Engine()
     : platform_(std::make_unique<Win32Platform>()),
       input_system_(std::make_unique<InputSystem>(*platform_.get())),
       scripting_system_{std::make_unique<ScriptingSystem>(*this)} {
-    platform_->InitWindow(1280, 800);
-    // renderer_ = std::make_unique<Renderer>(*this);
+    auto res = platform_->InitWindow(1280, 800);
+    if (res.has_error()) {
+        throw std::runtime_error(res.error().message());
+    }
+
+    renderer_ = std::make_unique<Renderer>(*this);
 }
 
 result<void> Engine::MainLoop(MainLoopFn inner_loop) {
     if (platform_) {
-        platform_->MainLoop([&]() -> result<bool> {
+        OUTCOME_TRY(platform_->MainLoop([&]() -> result<bool> {
             if (fps_cap > 0) {
                 // Limit FPS
                 std::chrono::duration<float> elapsed =
@@ -35,7 +39,7 @@ result<void> Engine::MainLoop(MainLoopFn inner_loop) {
             delta_time_ = now - frame_timestamp_;
             frame_timestamp_ = now;
 
-            input_system_->AcquireFrameInput();
+            OUTCOME_TRY(input_system_->AcquireFrameInput());
             scripting_system_->Update(delta_time_.count());
             // renderer_->Render();
 
@@ -47,7 +51,7 @@ result<void> Engine::MainLoop(MainLoopFn inner_loop) {
 
             frame_count_++;
             return res;
-        });
+        }));
     }
 
     return outcome::success();
@@ -62,7 +66,7 @@ result<void> Engine::LoadScene(const char* file_path) {
     main_camera_ = main_camera;
 
     if (scene_->GetAttachmentCount<Light>() == 0) {
-        CreateDefaultLight();
+        OUTCOME_TRY(CreateDefaultLight());
     }
 
     FlyCamera fly_camera(main_camera_, 5.0f);

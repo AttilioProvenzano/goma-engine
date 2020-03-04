@@ -709,6 +709,7 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
 SCENARIO("the rendering abstraction can render a spinning cube",
          "[rendering-abstraction][window][cube][texture]") {
     GIVEN("a valid device and platform") {
+        spdlog::set_level(spdlog::level::debug);
         Device device;
 
         std::unique_ptr<Platform> platform_ptr =

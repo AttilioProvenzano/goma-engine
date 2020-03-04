@@ -20,7 +20,6 @@ install:
 
 environment:
   VULKAN_SDK: C:\VulkanSDK\1.2.131.2
-  VK_ICD_FILENAMES: .\vk_swiftshader_icd.json
 
 build_script:
   - cmd: mkdir -p build & exit 0 # ignore errors
@@ -33,7 +32,7 @@ build_script:
 test_script:
   - cmd: cp ..\vk_swiftshader.dll ..\vk_swiftshader_icd.json .
   - cmd: dir
-  - cmd: .\bin\%configuration%\goma-tests.exe
+  - cmd: set VK_ICD_FILENAMES=.\vk_swiftshader_icd.json && .\bin\%configuration%\goma-tests.exe
 
 cache:
   - VulkanSDK.exe

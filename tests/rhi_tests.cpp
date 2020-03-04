@@ -389,10 +389,10 @@ SCENARIO("the rendering abstraction can create objects and submit commands",
                                   });
 
                     UploadContext ctx(device);
-                    GOMA_TEST_TRYV(ctx.Begin());
 
-                    ImageData d = {{{0, image_data.data()}}};
-                    GOMA_TEST_TRYV(ctx.UploadImage(*image, std::move(d)));
+                    GOMA_TEST_TRYV(ctx.Begin());
+                    GOMA_TEST_TRYV(
+                        ctx.UploadImage(*image, {image_data.data()}));
                     ctx.GenerateMipmaps(*image);
                     ctx.End();
 
@@ -559,8 +559,7 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
         GOMA_TEST_TRY(tex, device.CreateImage(image_desc));
         diffuse_tex = tex;
 
-        ImageData d = {{{0, tex_data}}};
-        GOMA_TEST_TRYV(upload_ctx.UploadImage(*tex, std::move(d)));
+        GOMA_TEST_TRYV(upload_ctx.UploadImage(*tex, {tex_data}));
         upload_ctx.GenerateMipmaps(*tex);
 
         stbi_image_free(tex_data);  // already copied in the staging
@@ -772,9 +771,7 @@ SCENARIO("can set up imgui", "[rendering-abstraction][gui][imgui]") {
 
     UploadContext ctx(device);
     GOMA_TEST_TRYV(ctx.Begin());
-
-    ImageData d = {{{0, pixels}}};
-    GOMA_TEST_TRYV(ctx.UploadImage(*font_tex, std::move(d)));
+    GOMA_TEST_TRYV(ctx.UploadImage(*font_tex, {pixels}));
     ctx.End();
 
     {

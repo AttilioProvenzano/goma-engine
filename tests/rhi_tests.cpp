@@ -307,7 +307,7 @@ void HelloTriangle(Device& device, bool offscreen = false) {
 }
 
 SCENARIO("the rendering abstraction can create objects and submit commands",
-         "[rendering-abstraction][buffer][image][texture][shader]") {
+         "[rhi][buffer][image][texture][shader]") {
     GIVEN("a valid device") {
         Device device;
 
@@ -499,7 +499,7 @@ SCENARIO("the rendering abstraction can create objects and submit commands",
 }
 
 SCENARIO("the rendering abstraction can render a triangle",
-         "[rendering-abstraction][window][triangle]") {
+         "[rhi][window][triangle]") {
     GIVEN("a valid device and platform") {
         Device device;
 
@@ -707,7 +707,7 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
 }
 
 SCENARIO("the rendering abstraction can render a spinning cube",
-         "[rendering-abstraction][window][cube][texture]") {
+         "[rhi][window][cube][texture]") {
     GIVEN("a valid device and platform") {
         spdlog::set_level(spdlog::level::debug);
         Device device;
@@ -733,7 +733,7 @@ SCENARIO("the rendering abstraction can render a spinning cube",
     }
 }
 
-SCENARIO("can set up imgui", "[rendering-abstraction][gui][imgui]") {
+SCENARIO("can set up imgui", "[rhi][gui][imgui]") {
     Device device;
 
     std::unique_ptr<Platform> platform_ptr = std::make_unique<Win32Platform>();

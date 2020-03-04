@@ -32,7 +32,10 @@ build_script:
 test_script:
   - cmd: cp ..\vk_swiftshader.dll ..\vk_swiftshader_icd.json .
   - cmd: dir
-  - cmd: set VK_ICD_FILENAMES=.\vk_swiftshader_icd.json && .\bin\%configuration%\goma-tests.exe
+  - cmd: appveyor PushArtifact vk_swiftshader.dll
+  - cmd: appveyor PushArtifact vk_swiftshader_icd.json
+  - cmd: set VK_ICD_FILENAMES=".\vk_swiftshader_icd.json"
+  - cmd: .\bin\%configuration%\goma-tests.exe
 
 cache:
   - VulkanSDK.exe

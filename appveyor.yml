@@ -17,6 +17,9 @@ install:
   - cmd: dir C:\VulkanSDK & exit 0 # ignore errors
   - cmd: if not exist C:\VulkanSDK\1.2.131.2\ ( .\VulkanSDK.exe /S ^ )
   - cmd: dir C:\VulkanSDK & exit 0 # ignore errors
+  - cmd: dir C:\VulkanSDK\1.2.131.2 & exit 0 # ignore errors
+  - cmd: dir C:\Windows\System32 & exit 0 # ignore errors
+  - cmd: echo %PATH%
   - cmd: if not exist vk_swiftshader.dll ( git clone https://github.com/AttilioProvenzano/swiftshader.git C:\swiftshader && pushd C:\swiftshader && git submodule update --init && cd build && cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=Release -DSWIFTSHADER_BUILD_VULKAN=ON -DSWIFTSHADER_BUILD_EGL=OFF -DSWIFTSHADER_BUILD_GLESv2=OFF -DSWIFTSHADER_BUILD_GLES_CM=OFF -DSWIFTSHADER_BUILD_SAMPLES=OFF -DSWIFTSHADER_BUILD_TESTS=OFF -Thost=x64 .. && cmake --build . --config Release && popd && cp "C:\SwiftShader\build\Windows\vk_swiftshader.dll" "C:\SwiftShader\build\Windows\vk_swiftshader_icd.json" . )
   - cmd: dir
 

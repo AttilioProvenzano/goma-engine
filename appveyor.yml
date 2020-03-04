@@ -25,8 +25,6 @@ environment:
 build_script:
   - cmd: mkdir -p build & exit 0 # ignore errors
   - cmd: cd build
-  - cmd: echo %VK_ICD_FILENAMES%
-  - cmd: dir %VK_ICD_FILENAMES%
   - cmd: cmake -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=%configuration% ..
   - cmd: cmake --build . --target ALL_BUILD --config %configuration%
   - cmd: 7z a goma-binaries.zip bin\
@@ -34,6 +32,7 @@ build_script:
 
 test_script:
   - cmd: cp ..\vk_swiftshader.dll ..\vk_swiftshader_icd.json .
+  - cmd: dir %VK_ICD_FILENAMES%
   - cmd: .\bin\%configuration%\goma-tests.exe
 
 cache:

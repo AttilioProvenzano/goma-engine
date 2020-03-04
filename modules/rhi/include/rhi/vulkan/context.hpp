@@ -172,15 +172,8 @@ struct BufferData {
     size_t offset = 0;
 };
 
-struct ImageData {
-    using MipLevel = uint32_t;
-    std::map<MipLevel, const void*> mip_data;
-};
-
-struct ImageArrayData {
-    using ArrayLayer = uint32_t;
-    std::map<ArrayLayer, ImageData> array_data;
-};
+using ImageMipData = std::vector<const void*>;
+using ImageArrayData = std::vector<ImageMipData>;
 
 class UploadContext : public Context {
   public:
@@ -188,7 +181,7 @@ class UploadContext : public Context {
     ~UploadContext();
 
     result<void> UploadBuffer(Buffer&, BufferData);
-    result<void> UploadImage(Image&, ImageData);
+    result<void> UploadImage(Image&, ImageMipData);
     result<void> UploadImageArray(Image&, ImageArrayData);
 
     void GenerateMipmaps(Image&);

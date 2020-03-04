@@ -653,8 +653,8 @@ result<void> UploadContext::UploadBuffer(Buffer& buffer, BufferData data) {
     return outcome::success();
 }
 
-result<void> UploadContext::UploadImage(Image& image, ImageData data) {
-    return UploadImageArray(image, {{{0, std::move(data)}}});
+result<void> UploadContext::UploadImage(Image& image, ImageMipData data) {
+    return UploadImageArray(image, {std::move(data)});
 }
 
 result<void> UploadContext::UploadImageArray(Image& image,
@@ -681,11 +681,19 @@ result<void> UploadContext::UploadImageArray(Image& image,
     auto extent = image.GetSize();
     auto format_info = utils::GetFormatInfo(image.GetFormat());
 
-    for (auto& layer : data.array_data) {
-        for (auto& mip : layer.second.mip_data) {
-            auto mip_extent =
-                VkExtent3D{std::max(extent.width >> mip.first, 1U),
-                           std::max(extent.height >> mip.first, 1U), 1};
+    for (uint32_t layer = 0; layer < data.size(); layer++) {
+        auto& layer_data = data[layer];
+
+        for (uint32_t mip = 0; mip < layer_data.size(); mip++) {
+            auto& mip_data = layer_data[mip];
+
+            if (mip_data == nullptr) {
+                // Skip empty mip level
+                continue;
+            }
+
+            auto mip_extent = VkExtent3D{std::max(extent.width >> mip, 1U),
+                                         std::max(extent.height >> mip, 1U), 1};
 
             // We create staging buffers, then we copy the image from there
             BufferDesc staging_desc = {};
@@ -696,12 +704,12 @@ result<void> UploadContext::UploadImageArray(Image& image,
 
             OUTCOME_TRY(staging_buffer, device_.CreateBuffer(staging_desc));
             OUTCOME_TRY(CopyBufferData(device_, *staging_buffer,
-                                       {staging_desc.size, mip.second}));
+                                       {staging_desc.size, mip_data}));
             staging_buffers_[current_frame_].push_back(staging_buffer);
 
             VkBufferImageCopy region = {};
-            region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip.first,
-                                       layer.first, 1};
+            region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip, layer,
+                                       1};
             region.imageExtent = mip_extent;
 
             vkCmdCopyBufferToImage(

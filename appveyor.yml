@@ -30,8 +30,9 @@ build_script:
   - cmd: appveyor PushArtifact goma-binaries.zip
 
 test_script:
-  - cmd: set VK_ICD_FILENAMES=%APPVEYOR_BUILD_FOLDER%\vk_swiftshader_icd.json
-  - cmd: echo "VK_ICD_FILENAMES = %VK_ICD_FILENAMES%"
+  - cmd: cp ..\vk_swiftshader.dll ..\vk_swiftshader_icd.json .
+  - cmd: set VK_ICD_FILENAMES=%APPVEYOR_BUILD_FOLDER%\build\vk_swiftshader_icd.json
+  - cmd: echo %VK_ICD_FILENAMES%
   - cmd: dir %VK_ICD_FILENAMES%
   - cmd: .\bin\%configuration%\goma-tests.exe
 

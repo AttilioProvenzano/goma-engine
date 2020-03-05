@@ -696,7 +696,7 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
     }));
 
     char* test_name = textured ? "Spinning textured cube" : "Spinning cube";
-    SPDLOG_INFO("{} - Average frame time: {} ms", test_name,
+    SPDLOG_INFO("{} - Average frame time: {:.2f} ms", test_name,
                 elapsed_time.count() / (1e6 * frame));
 
     for (auto& receipt : receipts) {
@@ -1029,7 +1029,7 @@ SCENARIO("can set up imgui", "[rhi][gui][imgui]") {
     }));
 
     char* test_name = "GUI test";
-    SPDLOG_INFO("{} - Average frame time: {} ms", test_name,
+    SPDLOG_INFO("{} - Average frame time: {:.2f} ms", test_name,
                 elapsed_time.count() / (1e6 * frame));
 
     for (auto& receipt : receipts) {

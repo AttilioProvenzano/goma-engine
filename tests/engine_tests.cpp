@@ -19,24 +19,20 @@ SCENARIO("the renderer can render a model", "[engine][renderer]") {
         REQUIRE(e.scene() != nullptr);
 
         THEN("the renderer can render the model") {
-            auto start_time = std::chrono::steady_clock::now();
-            auto elapsed_time = std::chrono::steady_clock::now() - start_time;
-            int frame = 0;
+            RenderingBenchmark rb;
 
-            GOMA_TEST_TRYV(e.platform().MainLoop([&]() -> result<bool> {
-                frame++;
-                elapsed_time = std::chrono::steady_clock::now() - start_time;
-                if (elapsed_time > std::chrono::seconds(kTimeoutSeconds)) {
-                    return true;
-                }
+            rb.run("Rendering a model (renderer only)", [&](int& frame) {
+                GOMA_TEST_TRYV(e.platform().MainLoop([&]() -> result<bool> {
+                    if (rb.elapsed_time() >
+                        std::chrono::seconds(kTimeoutSeconds)) {
+                        return true;
+                    }
 
-                OUTCOME_TRY(e.renderer().Render());
-                return false;
-            }));
-
-            char* test_name = "Rendering a model (renderer only)";
-            SPDLOG_INFO("{} - Average frame time: {:.2f} ms", test_name,
-                        elapsed_time.count() / (1e6 * frame));
+                    OUTCOME_TRY(e.renderer().Render());
+                    frame++;
+                    return false;
+                }));
+            });
         }
     }
 }

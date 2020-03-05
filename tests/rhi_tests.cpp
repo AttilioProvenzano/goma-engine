@@ -593,9 +593,6 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
     std::unordered_map<Image*, FramebufferDesc> fb_desc;
 
     GraphicsContext context(device);
-    auto start_time = std::chrono::steady_clock::now();
-    auto elapsed_time = std::chrono::steady_clock::now() - start_time;
-
     std::vector<ReceiptPtr> receipts(3);
 
     const auto render_frame = [&](int frame) -> result<void> {
@@ -683,21 +680,18 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
         return outcome::success();
     };
 
-    int frame = 0;
-    GOMA_TEST_TRYV(platform.MainLoop([&]() -> result<bool> {
-        frame++;
-        elapsed_time = std::chrono::steady_clock::now() - start_time;
-        if (elapsed_time > std::chrono::seconds(kTimeoutSeconds)) {
-            return true;
-        }
+    RenderingBenchmark rb;
+    rb.run("Spinning cube", [&](int& frame) {
+        GOMA_TEST_TRYV(platform.MainLoop([&]() -> result<bool> {
+            if (rb.elapsed_time() > std::chrono::seconds(kTimeoutSeconds)) {
+                return true;
+            }
 
-        OUTCOME_TRY(render_frame(frame));
-        return false;
-    }));
-
-    char* test_name = textured ? "Spinning textured cube" : "Spinning cube";
-    SPDLOG_INFO("{} - Average frame time: {:.2f} ms", test_name,
-                elapsed_time.count() / (1e6 * frame));
+            OUTCOME_TRY(render_frame(frame));
+            frame++;
+            return false;
+        }));
+    });
 
     for (auto& receipt : receipts) {
         if (receipt) {
@@ -804,9 +798,6 @@ SCENARIO("can set up imgui", "[rhi][gui][imgui]") {
     }
 
     GraphicsContext context(device);
-    auto start_time = std::chrono::steady_clock::now();
-    auto elapsed_time = std::chrono::steady_clock::now() - start_time;
-
     std::vector<ReceiptPtr> receipts(3);
     std::vector<Buffer*> vtx_bufs(3, nullptr);
     std::vector<Buffer*> idx_bufs(3, nullptr);
@@ -1016,21 +1007,18 @@ SCENARIO("can set up imgui", "[rhi][gui][imgui]") {
         return outcome::success();
     };
 
-    int frame = 0;
-    GOMA_TEST_TRYV(platform.MainLoop([&]() -> result<bool> {
-        frame++;
-        elapsed_time = std::chrono::steady_clock::now() - start_time;
-        if (elapsed_time > std::chrono::seconds(kTimeoutSeconds)) {
-            return true;
-        }
+    RenderingBenchmark rb;
+    rb.run("GUI test", [&](int& frame) {
+        GOMA_TEST_TRYV(platform.MainLoop([&]() -> result<bool> {
+            if (rb.elapsed_time() > std::chrono::seconds(kTimeoutSeconds)) {
+                return true;
+            }
 
-        OUTCOME_TRY(render_frame(frame));
-        return false;
-    }));
-
-    char* test_name = "GUI test";
-    SPDLOG_INFO("{} - Average frame time: {:.2f} ms", test_name,
-                elapsed_time.count() / (1e6 * frame));
+            OUTCOME_TRY(render_frame(frame));
+            frame++;
+            return false;
+        }));
+    });
 
     for (auto& receipt : receipts) {
         if (receipt) {

@@ -696,8 +696,8 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
     }));
 
     char* test_name = textured ? "Spinning textured cube" : "Spinning cube";
-    spdlog::info("{} - Average frame time: {} ms", test_name,
-                 elapsed_time.count() / (1e6 * frame));
+    SPDLOG_INFO("{} - Average frame time: {} ms", test_name,
+                elapsed_time.count() / (1e6 * frame));
 
     for (auto& receipt : receipts) {
         if (receipt) {
@@ -709,7 +709,6 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
 SCENARIO("the rendering abstraction can render a spinning cube",
          "[rhi][window][cube][texture]") {
     GIVEN("a valid device and platform") {
-        spdlog::set_level(spdlog::level::debug);
         Device device;
 
         std::unique_ptr<Platform> platform_ptr =
@@ -1030,8 +1029,8 @@ SCENARIO("can set up imgui", "[rhi][gui][imgui]") {
     }));
 
     char* test_name = "GUI test";
-    spdlog::info("{} - Average frame time: {} ms", test_name,
-                 elapsed_time.count() / (1e6 * frame));
+    SPDLOG_INFO("{} - Average frame time: {} ms", test_name,
+                elapsed_time.count() / (1e6 * frame));
 
     for (auto& receipt : receipts) {
         if (receipt) {

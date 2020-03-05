@@ -1,7 +1,6 @@
 #pragma once
 
 #include <spdlog/spdlog.h>
-#include <spdlog/fmt/ostr.h>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE

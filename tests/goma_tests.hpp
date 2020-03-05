@@ -31,3 +31,32 @@
     }                                                                      \
     auto& handle = handle##_res.value();
 #endif
+
+class RenderingBenchmark {
+  public:
+    void run(const char* test_name, std::function<void(int&)> fn) {
+        start_time = std::chrono::steady_clock::now();
+
+        int frame = 0;
+        fn(frame);
+
+        if (!test_name) {
+            test_name = "Benchmark";
+        }
+
+        if (frame > 0) {
+            SPDLOG_INFO("{} - Average frame time: {:.2f} ms", test_name,
+                        elapsed_time().count() / (1e6 * frame));
+        } else {
+            SPDLOG_INFO("{} - No frames rendered", test_name);
+        }
+    }
+
+    std::chrono::nanoseconds elapsed_time() const {
+        return std::chrono::steady_clock::now() - start_time;
+    }
+
+  protected:
+    std::chrono::steady_clock::time_point start_time =
+        std::chrono::steady_clock::now();
+};

@@ -41,7 +41,7 @@ result<void> Engine::MainLoop(MainLoopFn inner_loop) {
 
             OUTCOME_TRY(input_system_->AcquireFrameInput());
             scripting_system_->Update(delta_time_.count());
-            renderer_->Render();
+            OUTCOME_TRY(renderer_->Render());
 
             bool res = false;
             if (inner_loop) {

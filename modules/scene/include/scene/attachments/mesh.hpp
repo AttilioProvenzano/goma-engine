@@ -14,39 +14,34 @@ struct Box {
     glm::vec3 max{glm::vec3(std::numeric_limits<float>::min())};
 };
 
-struct MeshBuffers {
-    Buffer* vertex = nullptr;
-    Buffer* normal = nullptr;
-    Buffer* tangent = nullptr;
-    Buffer* bitangent = nullptr;
-    Buffer* color = nullptr;
-
-    Buffer* index = nullptr;
-
-    Buffer* uv0 = nullptr;
-    Buffer* uv1 = nullptr;
-    Buffer* uvw = nullptr;
+enum class VertexAttribute {
+    Position,
+    Normal,
+    Tangent,
+    Bitangent,
+    Color,
+    UV0,
+    UV1
 };
+
+using VertexLayout = std::vector<VertexAttribute>;
 
 struct Mesh {
     std::string name;
 
-    std::vector<glm::vec3> vertices;
-    std::vector<glm::vec3> normals;
-    std::vector<glm::vec3> tangents;
-    std::vector<glm::vec3> bitangents;
-
+    struct {
+        std::vector<uint8_t> data;
+        uint32_t size = 0;
+        VertexLayout layout = {};
+    } vertices;
     std::vector<uint32_t> indices;
 
-    std::vector<glm::vec4> colors;
-    std::vector<std::vector<glm::vec2>> uv_sets;
-    std::vector<std::vector<glm::vec3>> uvw_sets;
+    Buffer* vertex_buffer = nullptr;
+    Buffer* index_buffer = nullptr;
 
     AttachmentIndex<Material> material{};
 
-    // std::shared_ptr<VertexInputFormat> vertex_input_format;
-    std::unique_ptr<Box> bounding_box{};
-    MeshBuffers buffers{};
+    std::unique_ptr<Box> aabb{};
 };
 
 }  // namespace goma

@@ -24,7 +24,7 @@ class Renderer {
 
   private:
     Engine& engine_;
-    std::unique_ptr<Device> backend_{};
+    std::unique_ptr<Device> device_{};
 
     // TODO: most of the following will be moved to rendering pipeline
 

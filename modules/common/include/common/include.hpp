@@ -23,6 +23,7 @@ using outcome::result;
 #include <limits>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <ostream>
 #include <queue>
 #include <set>

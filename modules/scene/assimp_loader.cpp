@@ -5,6 +5,7 @@
 #include "scene/attachments/camera.hpp"
 #include "scene/attachments/light.hpp"
 #include "scene/attachments/mesh.hpp"
+#include "scene/utils.hpp"
 
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
@@ -143,99 +144,102 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
             aiMesh *ai_mesh = ai_scene->mMeshes[i];
             Mesh mesh{ai_mesh->mName.C_Str()};
 
-            Box bounding_box;
-            mesh.vertices.reserve(ai_mesh->mNumVertices);
-            for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
-                const auto &pos = ai_mesh->mVertices[j];
-                mesh.vertices.push_back({pos.x, pos.y, pos.z});
+            // Create the mesh layout
+            struct AttrAccessorInfo {
+                std::function<bool(const aiMesh &)> has_any;
+                std::function<ai_real *(const aiMesh &)> accessor;
+                uint8_t vec_size;
+                uint8_t stride;  // e.g. UVs have stride 3 but only the first 2
+                                 // elements are relevant
+            };
+            using VertexAttrMap =
+                const std::map<VertexAttribute, AttrAccessorInfo>;
 
-                if (pos.x < bounding_box.min.x) {
-                    bounding_box.min.x = pos.x;
-                }
-                if (pos.x > bounding_box.max.x) {
-                    bounding_box.max.x = pos.x;
-                }
+            static const VertexAttrMap attr_map = {
+                {VertexAttribute::Position,
+                 {[](const auto &m) { return m.HasPositions(); },
+                  [](const auto &m) { return &m.mVertices[0].x; }, 3, 3}},
+                {VertexAttribute::Normal,
+                 {[](const auto &m) { return m.HasNormals(); },
+                  [](const auto &m) { return &m.mNormals[0].x; }, 3, 3}},
+                {VertexAttribute::Tangent,
+                 {[](const auto &m) { return m.HasTangentsAndBitangents(); },
+                  [](const auto &m) { return &m.mTangents[0].x; }, 3, 3}},
+                {VertexAttribute::Bitangent,
+                 {[](const auto &m) { return m.HasTangentsAndBitangents(); },
+                  [](const auto &m) { return &m.mBitangents[0].x; }, 3, 3}},
+                {VertexAttribute::Color,
+                 {[](const auto &m) { return m.HasVertexColors(0); },
+                  [](const auto &m) { return &m.mColors[0][0].r; }, 4, 4}},
+                {VertexAttribute::UV0,
+                 {[](const auto &m) { return m.HasTextureCoords(0); },
+                  [](const auto &m) { return &m.mTextureCoords[0][0].x; }, 2,
+                  3}},
+                {VertexAttribute::UV1,
+                 {[](const auto &m) { return m.HasTextureCoords(1); },
+                  [](const auto &m) { return &m.mTextureCoords[1][0].x; }, 2,
+                  3}},
+            };
 
-                if (pos.y < bounding_box.min.y) {
-                    bounding_box.min.y = pos.y;
-                }
-                if (pos.y > bounding_box.max.y) {
-                    bounding_box.max.y = pos.y;
-                }
+            // Copy the keys (in-order) into a layout vector
+            VertexLayout layout;
+            layout.reserve(attr_map.size());
+            std::transform(attr_map.begin(), attr_map.end(),
+                           std::back_inserter(layout),
+                           [](const auto &a) { return a.first; });
 
-                if (pos.z < bounding_box.min.z) {
-                    bounding_box.min.z = pos.z;
-                }
-                if (pos.z > bounding_box.max.z) {
-                    bounding_box.max.z = pos.z;
-                }
-            }
-            mesh.bounding_box = std::make_unique<Box>(std::move(bounding_box));
+            // Filter out the attributes not present in the current mesh
+            layout.erase(
+                std::remove_if(layout.begin(), layout.end(),
+                               [&ai_mesh](const auto &attr) {
+                                   return !attr_map.at(attr).has_any(*ai_mesh);
+                               }),
+                layout.end());
 
-            mesh.normals.reserve(ai_mesh->mNumVertices);
-            if (ai_mesh->HasNormals()) {
-                for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
-                    const auto &nor = ai_mesh->mNormals[j];
-                    mesh.normals.push_back({nor.x, nor.y, nor.z});
-                }
-            }
+            mesh.vertices.data.resize(ai_mesh->mNumVertices *
+                                      utils::GetStride(layout));
 
-            mesh.tangents.reserve(ai_mesh->mNumVertices);
-            mesh.bitangents.reserve(ai_mesh->mNumVertices);
-            if (ai_mesh->HasTangentsAndBitangents()) {
-                for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
-                    const auto &tan = ai_mesh->mTangents[j];
-                    const auto &bit = ai_mesh->mBitangents[j];
-                    mesh.tangents.push_back({tan.x, tan.y, tan.z});
-                    mesh.bitangents.push_back({bit.x, bit.y, bit.z});
-                }
-            }
+            // Get the bounding box for the mesh
+            Box aabb;
+            std::for_each(ai_mesh->mVertices,
+                          ai_mesh->mVertices + ai_mesh->mNumVertices,
+                          [&aabb](const auto &v) {
+                              if (v.x < aabb.min.x) aabb.min.x = v.x;
+                              if (v.x > aabb.max.x) aabb.max.x = v.x;
+                              if (v.y < aabb.min.y) aabb.min.y = v.y;
+                              if (v.y > aabb.max.y) aabb.max.y = v.y;
+                              if (v.z < aabb.min.z) aabb.min.z = v.z;
+                              if (v.z > aabb.max.z) aabb.max.z = v.z;
+                          });
+            mesh.aabb = std::make_unique<Box>(std::move(aabb));
 
-            mesh.indices.reserve(ai_mesh->mNumFaces);
+            // Copy vertex data into the buffer
+            auto stride = utils::GetStride(layout);
+            std::for_each(
+                layout.begin(), layout.end(),
+                [&mesh, &ai_mesh, &layout, stride](const auto &attr) {
+                    auto offset = utils::GetOffset(layout, attr);
+                    const auto &attr_info = attr_map.at(attr);
+                    for (unsigned i = 0; i < ai_mesh->mNumVertices; i++) {
+                        memcpy(
+                            mesh.vertices.data.data() + i * stride + offset,
+                            attr_info.accessor(*ai_mesh) + i * attr_info.stride,
+                            attr_info.vec_size * sizeof(ai_real));
+                    }
+                });
+            mesh.vertices.size = ai_mesh->mNumVertices;
+            mesh.vertices.layout = std::move(layout);
+
+            // Copy index data into the buffer
             if (ai_mesh->HasFaces()) {
-                for (size_t j = 0; j < ai_mesh->mNumFaces; j++) {
-                    const auto &tri = ai_mesh->mFaces[j];
-                    for (size_t k = 0; k < tri.mNumIndices; k++) {
-                        mesh.indices.push_back(tri.mIndices[k]);
-                    }
-                }
-            }
-
-            mesh.colors.reserve(ai_mesh->mNumFaces);
-            if (ai_mesh->HasVertexColors(0)) {
-                auto color_set = ai_mesh->mColors[0];
-                for (size_t j = 0; j < ai_mesh->mNumVertices; j++) {
-                    const auto &col = color_set[j];
-                    mesh.colors.push_back({col.r, col.g, col.b, col.a});
-                }
-            }
-
-            for (size_t j = 0; j < ai_mesh->GetNumUVChannels(); j++) {
-                // UV coords
-                if (ai_mesh->mNumUVComponents[j] == 2) {
-                    auto ai_uv_set = ai_mesh->mTextureCoords[j];
-                    std::vector<glm::vec2> uv_set;
-                    uv_set.reserve(ai_mesh->mNumVertices);
-
-                    for (size_t k = 0; k < ai_mesh->mNumVertices; k++) {
-                        const auto &uv = ai_uv_set[k];
-                        uv_set.push_back({uv.x, uv.y});
-                    }
-                    mesh.uv_sets.push_back(std::move(uv_set));
-                }
-
-                // UVW coords
-                if (ai_mesh->mNumUVComponents[j] == 3) {
-                    auto ai_uvw_set = ai_mesh->mTextureCoords[j];
-                    std::vector<glm::vec3> uvw_set;
-                    uvw_set.reserve(ai_mesh->mNumVertices);
-
-                    for (size_t k = 0; k < ai_mesh->mNumVertices; k++) {
-                        const auto &uvw = ai_uvw_set[k];
-                        uvw_set.push_back({uvw.x, uvw.y, uvw.z});
-                    }
-                    mesh.uvw_sets.push_back(std::move(uvw_set));
-                }
+                mesh.indices.reserve(ai_mesh->mNumFaces);
+                std::for_each(ai_mesh->mFaces,
+                              ai_mesh->mFaces + ai_mesh->mNumFaces,
+                              [&mesh](const auto &face) {
+                                  std::copy(face.mIndices,
+                                            face.mIndices + face.mNumIndices,
+                                            std::back_inserter(mesh.indices));
+                              });
             }
 
             auto material_res = material_map.find(ai_mesh->mMaterialIndex);
@@ -511,7 +515,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
     }
 
     return std::move(scene);
-}
+}  // namespace goma
 
 result<TextureBinding> AssimpLoader::LoadMaterialTexture(
     Scene *scene, const aiMaterial *ai_material, const std::string &base_path,

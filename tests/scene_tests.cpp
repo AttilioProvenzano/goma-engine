@@ -4,6 +4,8 @@
 #include "scene/attachments/camera.hpp"
 #include "scene/attachments/light.hpp"
 #include "scene/attachments/mesh.hpp"
+#include "scene/utils.hpp"
+
 #include "scene/loaders/assimp_loader.hpp"
 
 #include "goma_tests.hpp"
@@ -151,6 +153,33 @@ SCENARIO("a model can be loaded via Assimp", "[scene][assimp]") {
                 GOMA_TEST_TRY(assimp_children,
                               scene->GetChildren(*assimp_root_node));
                 CHECK(assimp_children.size() == 2);
+
+                GOMA_TEST_TRY(mesh_ref, scene->GetAttachment<Mesh>(0));
+                auto& mesh = mesh_ref.get();
+
+                auto& layout = mesh.vertices.layout;
+                auto stride = utils::GetStride(layout);
+
+                // Check that the vertex buffer has the expected size
+                CHECK(mesh.vertices.size == 2399);
+                CHECK(mesh.vertices.layout.size() == 5);
+                CHECK(mesh.vertices.data.size() == mesh.vertices.size * stride);
+
+                // Check that sample vertex data match expected values
+                auto sample_pos = reinterpret_cast<glm::vec3*>(
+                    mesh.vertices.data.data() + 300 * stride +
+                    utils::GetOffset(layout, VertexAttribute::Position));
+
+                CHECK(sample_pos->x == Approx(45.6635971f));
+                CHECK(sample_pos->y == Approx(56.4673004f));
+                CHECK(sample_pos->z == Approx(46.2574005f));
+
+                auto sample_uvs = reinterpret_cast<glm::vec2*>(
+                    mesh.vertices.data.data() + 400 * stride +
+                    utils::GetOffset(layout, VertexAttribute::UV0));
+
+                CHECK(sample_uvs->x == Approx(0.929875970f));
+                CHECK(sample_uvs->y == Approx(0.470180988f));
             }
         }
     }

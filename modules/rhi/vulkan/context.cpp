@@ -3,6 +3,7 @@
 #include "rhi/vulkan/device.hpp"
 #include "rhi/vulkan/image.hpp"
 #include "rhi/vulkan/utils.hpp"
+#include "rhi/utils.hpp"
 
 namespace goma {
 

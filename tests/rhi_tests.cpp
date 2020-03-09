@@ -7,7 +7,7 @@
 #include "platform/win32_platform.hpp"
 #include "rhi/context.hpp"
 #include "rhi/device.hpp"
-#include "rhi/vulkan/utils.hpp"
+#include "rhi/utils.hpp"
 
 #include "goma_tests.hpp"
 

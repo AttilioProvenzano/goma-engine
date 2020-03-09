@@ -8,6 +8,7 @@
 #include "platform/platform.hpp"
 #include "rhi/vulkan/context.hpp"
 #include "rhi/vulkan/utils.hpp"
+#include "rhi/utils.hpp"
 
 namespace goma {
 

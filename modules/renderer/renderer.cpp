@@ -3,6 +3,7 @@
 #include "engine/engine.hpp"
 #include "rhi/context.hpp"
 #include "rhi/utils.hpp"
+#include "scene/attachments/material.hpp"
 #include "scene/attachments/mesh.hpp"
 #include "scene/utils.hpp"
 
@@ -153,6 +154,9 @@ result<void> Renderer::Render() {
     // TODO: store the graphics ctx and wait for previous receipt
     OUTCOME_TRY(device_->WaitOnWork(std::move(graphics_receipt)));
 
+    current_frame_++;
+    frame_index_ = (frame_index_ + 1) % kMaxFramesInFlight;
+
     return outcome::success();
 }
 
@@ -163,7 +167,19 @@ void Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
     static struct {
         std::string vtx_code;
         std::string frag_code;
+        std::vector<Buffer*> mvp_buffer;
+        Sampler* base_sampler;
     } ro;  // rendering objects
+
+    if (ro.mvp_buffer.empty()) {
+        ro.mvp_buffer.resize(kMaxFramesInFlight);
+    }
+
+    if (!ro.base_sampler) {
+        // TODO: outcome_try
+        auto sampler = device_->CreateSampler({}).value();
+        ro.base_sampler = sampler;
+    }
 
     static const auto vtx_path = GOMA_ASSETS_DIR "shaders/base.vert";
     static const auto frag_path = GOMA_ASSETS_DIR "shaders/base.frag";
@@ -183,6 +199,22 @@ void Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
             return;
         }
         ro.frag_code = std::move(frag_code.value());
+    }
+
+    if (!ro.mvp_buffer[frame_index_]) {
+        BufferDesc desc = {};
+        desc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        desc.num_elements = 256;
+        desc.stride = 256;
+        desc.size = 256 * 256;
+        desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+        auto buffer_res = device_->CreateBuffer(desc);
+        if (!buffer_res) {
+            spdlog::error("Could not create the uniform buffer for the frame");
+        }
+
+        ro.mvp_buffer[frame_index_] = buffer_res.value();
     }
 
     scene.ForEach<Mesh>([&](auto id, auto, Mesh& mesh) {
@@ -246,6 +278,53 @@ void Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         if (!pipeline_res) {
             spdlog::error("Could not get pipeline for mesh \"{}\"", mesh.name);
             return;
+        }
+
+        auto eye = glm::vec3(0.0f, -5.0f, 0.0f);
+        auto center = glm::vec3(0.0f);
+        auto up = glm::vec3{0.0f, 0.0f, 1.0f};
+
+        auto rot_speed = glm::vec3{glm::radians(0.05f), glm::radians(0.1f),
+                                   glm::radians(0.15f)};
+        auto rot = glm::quat(static_cast<float>(current_frame_) * rot_speed);
+
+        auto mvp = glm::perspective(glm::radians(60.0f),
+                                    static_cast<float>(platform.GetWidth()) /
+                                        platform.GetHeight(),
+                                    0.1f, 100.0f) *
+                   glm::lookAt(eye, center, up) * glm::mat4_cast(rot);
+
+        auto& mvp_buf = *ro.mvp_buffer[frame_index_];
+
+        // TODO: really need outcome_try!!
+        // Also MapBuffer could map as uint8_t* for convenience
+        auto mvp_data = device.MapBuffer(mvp_buf).value();
+        memcpy(static_cast<uint8_t*>(mvp_data) + 256 * id.id, &mvp,
+               sizeof(mvp));
+        device.UnmapBuffer(mvp_buf);
+
+        ctx.BindGraphicsPipeline(*pipeline_res.value());
+
+        // TODO: outcome_try - also should really make this more compact :(
+        auto& material = scene.GetAttachment<Material>(mesh.material).value();
+        auto& diffuse_tex_index =
+            material.get().texture_bindings.at(TextureType::Diffuse)[0].index;
+        auto& diffuse_tex =
+            scene.GetAttachment<Texture>(diffuse_tex_index).value().get();
+
+        DescriptorSet ds;
+        ds[0] = {mvp_buf, static_cast<uint32_t>(256 * id.id), sizeof(mvp)};
+        ds[1] = {*diffuse_tex.image, *ro.base_sampler};
+
+        ctx.BindDescriptorSet(ds);
+
+        ctx.BindVertexBuffer(*mesh.vertex_buffer);
+
+        if (mesh.index_buffer) {
+            ctx.BindIndexBuffer(*mesh.index_buffer);
+            ctx.DrawIndexed(static_cast<uint32_t>(mesh.indices.size()));
+        } else {
+            ctx.Draw(mesh.vertices.size);
         }
     });
 }

@@ -23,6 +23,8 @@ struct ShaderDesc {
     VkShaderStageFlagBits stage;
     std::string source;
     std::string preamble;
+
+    bool operator==(const ShaderDesc& rhs) const;
 };
 
 class Shader {

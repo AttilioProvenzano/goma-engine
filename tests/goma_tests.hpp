@@ -1,6 +1,11 @@
 #pragma once
 
 #include <catch.hpp>
+#include <spdlog/spdlog.h>
+
+struct TestOptions {
+    static int timeout;
+};
 
 #ifndef GOMA_ASSETS_DIR
 #define GOMA_ASSETS_DIR "assets/"

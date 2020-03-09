@@ -163,7 +163,6 @@ std::vector<uint32_t> cube_index_data = {
 
 constexpr int kWindowWidth = 1024;
 constexpr int kWindowHeight = 768;
-constexpr int kTimeoutSeconds = 2;
 
 SCENARIO("can compile a GLSL shader", "[shader][glslang][spirv-cross]") {
     GIVEN("a Glslang process") {
@@ -512,7 +511,7 @@ SCENARIO("the rendering abstraction can render a triangle",
 
         THEN("a triangle can be rendered to the screen") {
             HelloTriangle(device);
-            platform.Sleep(kTimeoutSeconds * 1000000);
+            platform.Sleep(TestOptions::timeout * 1000000);
         }
     }
 }
@@ -683,7 +682,8 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
     RenderingBenchmark rb;
     rb.run("Spinning cube", [&](int& frame) {
         GOMA_TEST_TRYV(platform.MainLoop([&]() -> result<bool> {
-            if (rb.elapsed_time() > std::chrono::seconds(kTimeoutSeconds)) {
+            if (rb.elapsed_time() >
+                std::chrono::seconds(TestOptions::timeout)) {
                 return true;
             }
 
@@ -1010,7 +1010,8 @@ SCENARIO("can set up imgui", "[rhi][gui][imgui]") {
     RenderingBenchmark rb;
     rb.run("GUI test", [&](int& frame) {
         GOMA_TEST_TRYV(platform.MainLoop([&]() -> result<bool> {
-            if (rb.elapsed_time() > std::chrono::seconds(kTimeoutSeconds)) {
+            if (rb.elapsed_time() >
+                std::chrono::seconds(TestOptions::timeout)) {
                 return true;
             }
 

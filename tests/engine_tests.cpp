@@ -8,7 +8,6 @@ namespace {
 
 constexpr int kWindowWidth = 1024;
 constexpr int kWindowHeight = 768;
-constexpr int kTimeoutSeconds = 2;
 
 SCENARIO("the renderer can render a model", "[engine][renderer]") {
     GIVEN("a valid engine and a model") {
@@ -24,7 +23,7 @@ SCENARIO("the renderer can render a model", "[engine][renderer]") {
             rb.run("Rendering a model (renderer only)", [&](int& frame) {
                 GOMA_TEST_TRYV(e.platform().MainLoop([&]() -> result<bool> {
                     if (rb.elapsed_time() >
-                        std::chrono::seconds(kTimeoutSeconds)) {
+                        std::chrono::seconds(TestOptions::timeout)) {
                         return true;
                     }
 

@@ -51,6 +51,10 @@ class Renderer {
     Engine& engine_;
     std::unique_ptr<Device> device_{};
 
+    const uint32_t kMaxFramesInFlight = 3;
+    uint32_t frame_index_ = 0;
+    uint32_t current_frame_ = 0;
+
     using ShaderMap = std::unordered_map<ShaderDesc, Shader*>;
     ShaderMap shader_map;
 

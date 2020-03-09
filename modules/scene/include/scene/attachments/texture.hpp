@@ -4,6 +4,8 @@
 
 namespace goma {
 
+class Image;
+
 struct Texture {
     std::string path;
 
@@ -12,7 +14,7 @@ struct Texture {
     std::vector<uint8_t> data;
     bool compressed{false};
 
-    // std::shared_ptr<Image> image{};
+    Image* image = nullptr;
 };
 
 }  // namespace goma

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/include.hpp"
+#include "common/hash.hpp"
 #include "common/vulkan.hpp"
 #include "rhi/vulkan/image.hpp"
 
@@ -134,7 +135,9 @@ class GraphicsContext : public Context {
     virtual void End() override;
     virtual void NextFrame() override;
 
-    result<void> GraphicsContext::BindFramebuffer(FramebufferDesc&);
+    result<void> BindFramebuffer(FramebufferDesc&);
+    FramebufferDesc& GetFramebuffer();
+
     void SetViewport(VkViewport viewport);
     void SetScissor(VkRect2D scissor);
 
@@ -200,8 +203,8 @@ struct hash<goma::FramebufferDesc::Attachment> {
         size_t seed = 0;
 
         if (att.image) {
-            ::hash_combine(seed, att.image->GetFormat());
-            ::hash_combine(seed, att.image->GetSampleCount());
+            goma::hash_combine(seed, att.image->GetFormat());
+            goma::hash_combine(seed, att.image->GetSampleCount());
         }
 
         return seed;
@@ -211,9 +214,9 @@ struct hash<goma::FramebufferDesc::Attachment> {
 template <>
 struct hash<goma::FramebufferDesc> {
     size_t operator()(const goma::FramebufferDesc& desc) const {
-        size_t seed = vector_hash<goma::FramebufferDesc::Attachment>()(
+        size_t seed = goma::vector_hash<goma::FramebufferDesc::Attachment>()(
             desc.color_attachments);
-        ::hash_combine(seed, desc.depth_attachment);
+        goma::hash_combine(seed, desc.depth_attachment);
         return seed;
     };
 };

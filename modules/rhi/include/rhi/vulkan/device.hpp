@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/include.hpp"
+#include "common/hash.hpp"
 #include "common/vulkan.hpp"
 #include "rhi/buffer.hpp"
 #include "rhi/image.hpp"
@@ -29,14 +30,14 @@ struct hash<goma::PipelineDesc> {
     };
 
     size_t operator()(const goma::PipelineDesc& desc) const {
-        size_t seed = vector_hash<goma::Shader*>()(desc.shaders);
+        size_t seed = goma::vector_hash<goma::Shader*>()(desc.shaders);
 
         auto packed_desc = PackedDesc{
             desc.primitive_topology, desc.cull_mode,    desc.front_face,
             desc.sample_count,       desc.depth_test,   desc.depth_write,
             desc.depth_compare_op,   desc.stencil_test, desc.color_blend,
             desc.suppress_fragment};
-        ::hash_combine(seed, packed_desc.val);
+        goma::hash_combine(seed, packed_desc.val);
 
         return seed;
     };

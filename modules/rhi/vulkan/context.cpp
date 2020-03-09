@@ -516,6 +516,8 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     return outcome::success();
 }
 
+FramebufferDesc& GraphicsContext::GetFramebuffer() { return current_fb_; }
+
 void GraphicsContext::SetViewport(VkViewport viewport) {
     assert(active_cmd_buf_ != VK_NULL_HANDLE &&
            "Context is not in a recording state");

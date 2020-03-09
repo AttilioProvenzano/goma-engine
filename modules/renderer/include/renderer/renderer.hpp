@@ -3,10 +3,35 @@
 #include "rhi/device.hpp"
 
 #include "common/include.hpp"
+#include "common/hash.hpp"
+
+namespace std {
+
+template <>
+struct hash<goma::ShaderDesc> {
+    size_t operator()(const goma::ShaderDesc& desc) const {
+        size_t seed = 0;
+
+        // Hash either the path or the source, depending on what is present
+        if (!desc.name.empty()) {
+            goma::hash_combine(seed, goma::djb2_hash(desc.name.c_str()));
+        } else {
+            goma::hash_combine(seed, goma::djb2_hash(desc.source.c_str()));
+        }
+
+        goma::hash_combine(seed, goma::djb2_hash(desc.preamble.c_str()));
+        goma::hash_combine(seed, desc.stage);
+
+        return seed;
+    };
+};
+
+}  // namespace std
 
 namespace goma {
 
 class Engine;
+class GraphicsContext;
 class Scene;
 
 class Renderer {
@@ -25,6 +50,11 @@ class Renderer {
   private:
     Engine& engine_;
     std::unique_ptr<Device> device_{};
+
+    using ShaderMap = std::unordered_map<ShaderDesc, Shader*>;
+    ShaderMap shader_map;
+
+    void RenderMeshes(GraphicsContext& ctx, Scene& scene);
 
     // TODO: most of the following will be moved to rendering pipeline
 

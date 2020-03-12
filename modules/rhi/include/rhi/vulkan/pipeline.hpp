@@ -3,14 +3,15 @@
 #include "common/include.hpp"
 #include "common/vulkan.hpp"
 
+#include "rhi/vulkan/context.hpp"
+
 namespace goma {
 
-struct FramebufferDesc;
 class Shader;
 
 struct PipelineDesc {
     std::vector<Shader*> shaders;
-    FramebufferDesc& fb_desc;
+    FramebufferDesc fb_desc;
 
     VkPrimitiveTopology primitive_topology =
         VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;

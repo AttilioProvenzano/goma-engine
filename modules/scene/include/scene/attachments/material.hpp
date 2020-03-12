@@ -53,6 +53,16 @@ struct Material {
     float specular_strength = 1.0f;
     float metallic_factor = 0.0f;
     float roughness_factor = 1.0f;
+
+    struct {
+        bool valid = false;
+        Image* diffuse_tex = nullptr;
+        Image* normal_tex = nullptr;
+        Image* metallic_roughness_tex = nullptr;
+        Image* ambient_tex = nullptr;
+        Image* emissive_tex = nullptr;
+        std::string preamble;
+    } rhi;
 };
 
 }  // namespace goma

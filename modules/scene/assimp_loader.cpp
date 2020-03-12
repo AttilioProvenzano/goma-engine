@@ -200,7 +200,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                                       utils::GetStride(layout));
 
             // Get the bounding box for the mesh
-            Box aabb;
+            AABB aabb;
             std::for_each(ai_mesh->mVertices,
                           ai_mesh->mVertices + ai_mesh->mNumVertices,
                           [&aabb](const auto &v) {
@@ -211,7 +211,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                               if (v.z < aabb.min.z) aabb.min.z = v.z;
                               if (v.z > aabb.max.z) aabb.max.z = v.z;
                           });
-            mesh.aabb = std::make_unique<Box>(std::move(aabb));
+            mesh.aabb = std::make_unique<AABB>(std::move(aabb));
 
             // Copy vertex data into the buffer
             auto stride = utils::GetStride(layout);
@@ -232,7 +232,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
 
             // Copy index data into the buffer
             if (ai_mesh->HasFaces()) {
-                mesh.indices.reserve(ai_mesh->mNumFaces);
+                mesh.indices.reserve(ai_mesh->mNumFaces * 3);
                 std::for_each(ai_mesh->mFaces,
                               ai_mesh->mFaces + ai_mesh->mNumFaces,
                               [&mesh](const auto &face) {

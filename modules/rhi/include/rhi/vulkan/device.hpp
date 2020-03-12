@@ -76,7 +76,7 @@ class Device {
 
     result<Buffer*> CreateBuffer(const BufferDesc&);
     void DestroyBuffer(Buffer&);
-    result<void*> MapBuffer(Buffer&);
+    result<uint8_t*> MapBuffer(Buffer&);
     void UnmapBuffer(Buffer&);
 
     result<Image*> AcquireSwapchainImage();

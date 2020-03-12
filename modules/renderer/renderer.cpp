@@ -221,7 +221,6 @@ result<void> Renderer::Render() {
 
     OUTCOME_TRY(swapchain_image, device_.AcquireSwapchainImage());
 
-    // TODO: Alternate constructors to make it more obvious
     auto fb_desc = FramebufferDesc{{{swapchain_image}}};
     fb_desc.depth_attachment.image = depth_image;
     OUTCOME_TRY(graphics_ctx_.BindFramebuffer(fb_desc));
@@ -340,8 +339,6 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
             mesh.rhi.preamble = preamble.str();
         }
 
-        // TODO: ShaderDesc only needs references to source and preamble, shader
-        //       will store hashed versions
         auto vtx_desc = ShaderDesc{vtx_path, VK_SHADER_STAGE_VERTEX_BIT, "",
                                    mesh.rhi.preamble};
 
@@ -439,10 +436,8 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         auto& mvp_buf = *ro.mvp_buffer[frame_index_];
 
         // TODO: really need outcome_try!!
-        // Also MapBuffer could map as uint8_t* for convenience
         auto mvp_data = device.MapBuffer(mvp_buf).value();
-        memcpy(static_cast<uint8_t*>(mvp_data) + buf_alignment * mesh_id.id,
-               &mvp, sizeof(mvp));
+        memcpy(mvp_data + buf_alignment * mesh_id.id, &mvp, sizeof(mvp));
         device.UnmapBuffer(mvp_buf);
 
         ctx.BindGraphicsPipeline(*pipeline);

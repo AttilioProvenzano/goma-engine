@@ -627,8 +627,7 @@ namespace {
 
 result<void> CopyBufferData(Device& device, Buffer& buffer, BufferData data) {
     OUTCOME_TRY(mapped_data, device.MapBuffer(buffer));
-    memcpy(static_cast<uint8_t*>(mapped_data) + data.offset, data.data,
-           data.size);
+    memcpy(mapped_data + data.offset, data.data, data.size);
     device.UnmapBuffer(buffer);
 
     return outcome::success();

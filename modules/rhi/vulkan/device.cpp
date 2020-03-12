@@ -771,12 +771,12 @@ void Device::DestroyBuffer(Buffer& buffer) {
     }
 }
 
-result<void*> Device::MapBuffer(Buffer& buffer) {
+result<uint8_t*> Device::MapBuffer(Buffer& buffer) {
     void* data = nullptr;
     VK_CHECK(vmaMapMemory(api_handles_.allocator,
                           buffer.GetAllocation().allocation, &data));
 
-    return data;
+    return static_cast<uint8_t*>(data);
 }
 
 void Device::UnmapBuffer(Buffer& buffer) {

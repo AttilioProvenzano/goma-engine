@@ -320,7 +320,7 @@ SCENARIO("the rendering abstraction can create objects and submit commands",
                 CHECK(buffer->GetNumElements() == cube_vtx_data.size());
 
                 GOMA_TEST_TRY(data, device.MapBuffer(*buffer));
-                auto buf_data = static_cast<Vertex*>(data);
+                auto buf_data = reinterpret_cast<Vertex*>(data);
                 CHECK(buf_data[2].pos[2] == cube_vtx_data[2].pos[2]);
                 CHECK(buf_data[5].color[1] == cube_vtx_data[5].color[1]);
                 device.UnmapBuffer(*buffer);

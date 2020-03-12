@@ -34,6 +34,7 @@ add_subdirectory(apps)
 add_executable(goma-tests
   tests/goma_tests.hpp
 	tests/engine_tests.cpp
+	tests/infrastructure_tests.cpp
 	tests/rhi_tests.cpp
 	tests/scene_tests.cpp
 	tests/test_main.cpp

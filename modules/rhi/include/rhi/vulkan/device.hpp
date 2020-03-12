@@ -72,6 +72,7 @@ class Device {
 
     VkDevice GetHandle();
     uint32_t GetQueueFamilyIndex();
+    VkDeviceSize GetMinBufferAlignment();
 
     result<Buffer*> CreateBuffer(const BufferDesc&);
     void DestroyBuffer(Buffer&);

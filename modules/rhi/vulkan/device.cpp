@@ -138,12 +138,6 @@ result<VkPhysicalDevice> CreatePhysicalDevice(VkInstance instance) {
     vkEnumeratePhysicalDevices(instance, &physical_device_count,
                                physical_devices.data());
 
-    VkPhysicalDeviceProperties properties;
-    vkGetPhysicalDeviceProperties(physical_devices[0], &properties);
-
-    spdlog::debug("Physical device: {}, driver version: {}",
-                  properties.deviceName, properties.driverVersion);
-
     return physical_devices[0];
 }
 
@@ -689,6 +683,11 @@ uint32_t Device::GetQueueFamilyIndex() {
     return queue_family_index_;
 }
 
+VkDeviceSize Device::GetMinBufferAlignment() {
+    assert(api_handles_.device != VK_NULL_HANDLE && "Device not initialized.");
+    return api_handles_.properties.limits.minUniformBufferOffsetAlignment;
+}
+
 result<void> Device::Init() {
     VK_CHECK(volkInitialize());
 
@@ -700,6 +699,11 @@ result<void> Device::Init() {
 
     OUTCOME_TRY(physical_device, CreatePhysicalDevice(instance));
     api_handles_.physical_device = physical_device;
+    vkGetPhysicalDeviceProperties(physical_device, &api_handles_.properties);
+
+    spdlog::debug("Physical device: {}, driver version: {}",
+                  api_handles_.properties.deviceName,
+                  api_handles_.properties.driverVersion);
 
     OUTCOME_TRY(queue_family_index, GetQueueFamilyIndex_(physical_device));
     queue_family_index_ = queue_family_index;

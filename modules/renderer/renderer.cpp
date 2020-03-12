@@ -273,12 +273,17 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         ro.frag_code = std::move(frag_code);
     }
 
+    // Ensure that buffer alignment is a multiple of minBufferAlignment
+    auto mask = device_.GetMinBufferAlignment() - 1;
+    auto buf_alignment =
+        static_cast<uint32_t>((sizeof(glm::mat4) + mask) & ~mask);
+
     if (!ro.mvp_buffer[frame_index_]) {
         BufferDesc desc = {};
         desc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
         desc.num_elements = 256;
-        desc.stride = 256;
-        desc.size = 256 * 256;
+        desc.stride = buf_alignment;
+        desc.size = 256 * buf_alignment;
         desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
         OUTCOME_TRY(buffer, device_.CreateBuffer(desc));
@@ -434,17 +439,17 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         auto& mvp_buf = *ro.mvp_buffer[frame_index_];
 
         // TODO: really need outcome_try!!
-        // TODO: get alignment
         // Also MapBuffer could map as uint8_t* for convenience
         auto mvp_data = device.MapBuffer(mvp_buf).value();
-        memcpy(static_cast<uint8_t*>(mvp_data) + 256 * mesh_id.id, &mvp,
-               sizeof(mvp));
+        memcpy(static_cast<uint8_t*>(mvp_data) + buf_alignment * mesh_id.id,
+               &mvp, sizeof(mvp));
         device.UnmapBuffer(mvp_buf);
 
         ctx.BindGraphicsPipeline(*pipeline);
 
         DescriptorSet ds;
-        ds[0] = {mvp_buf, static_cast<uint32_t>(256 * mesh_id.id), sizeof(mvp)};
+        ds[0] = {mvp_buf, static_cast<uint32_t>(buf_alignment * mesh_id.id),
+                 sizeof(mvp)};
         ds[1] = {*material.rhi.diffuse_tex, *ro.base_sampler};
 
         ctx.BindDescriptorSet(ds);

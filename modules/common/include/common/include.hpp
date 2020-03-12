@@ -4,6 +4,7 @@
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_XYZW_ONLY
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -20,6 +21,7 @@ using outcome::result;
 #include <array>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>

@@ -13,51 +13,27 @@
 //     https://www.cs.virginia.edu/~jdl/bib/appearance/analytic%20models/schlick94b.pdf
 #version 450
 
-#ifdef HAS_DIFFUSE_MAP
+#ifdef HAS_DIFFUSE_TEX
 layout(set = 0, binding = 0) uniform sampler2D diffuseTex;
 #endif
 
-#ifdef HAS_SPECULAR_MAP
-layout(set = 0, binding = 1) uniform sampler2D specularTex;
-#endif
-
-#ifdef HAS_AMBIENT_MAP
-layout(set = 0, binding = 2) uniform sampler2D ambientTex;
-#endif
-
-#ifdef HAS_EMISSIVE_MAP
-layout(set = 0, binding = 3) uniform sampler2D emissiveTex;
-#endif
-
-#ifdef HAS_METALLIC_ROUGHNESS_MAP
-layout(set = 0, binding = 4) uniform sampler2D metallicRoughnessTex;
-#endif
-
-#ifdef HAS_HEIGHT_MAP
-layout(set = 0, binding = 5) uniform sampler2D heightTex;
-#endif
-
-#ifdef HAS_NORMAL_MAP
+#ifdef HAS_NORMAL_TEX
 layout(set = 0, binding = 6) uniform sampler2D normalTex;
 #endif
 
-#ifdef HAS_SHININESS_MAP
-layout(set = 0, binding = 7) uniform sampler2D shininessTex;
+#ifdef HAS_METALLIC_ROUGHNESS_TEX
+layout(set = 0, binding = 4) uniform sampler2D metallicRoughnessTex;
 #endif
 
-#ifdef HAS_OPACITY_MAP
-layout(set = 0, binding = 8) uniform sampler2D opacityTex;
+#ifdef HAS_AMBIENT_TEX
+layout(set = 0, binding = 2) uniform sampler2D ambientTex;
 #endif
 
-#ifdef HAS_DISPLACEMENT_MAP
-layout(set = 0, binding = 9) uniform sampler2D displacementTex;
+#ifdef HAS_EMISSIVE_TEX
+layout(set = 0, binding = 3) uniform sampler2D emissiveTex;
 #endif
 
-#ifdef HAS_LIGHT_MAP
-layout(set = 0, binding = 10) uniform sampler2D lightTex;
-#endif
-
-#ifdef HAS_REFLECTION_MAP
+#ifdef HAS_REFLECTION_TEX
 layout(set = 0, binding = 11) uniform samplerCube reflectionTex;
 layout(set = 0, binding = 16) uniform sampler2D brdfLUT;
 #endif
@@ -165,7 +141,7 @@ vec3 getNormal()
     mat3 tbn = inTBN;
 #endif
 
-#ifdef HAS_NORMAL_MAP
+#ifdef HAS_NORMAL_TEX
     vec3 n = texture(normalTex, UV).rgb;
     n = normalize(tbn * (2.0 * n - 1.0));
 #else
@@ -410,7 +386,7 @@ vec3 applySpotLight(Light light, MaterialInfo materialInfo, vec3 normal, vec3 vi
         * light.colorAndIntensity.rgb * shade;
 }
 
-#ifdef HAS_REFLECTION_MAP
+#ifdef HAS_REFLECTION_TEX
 vec3 getIBLContribution(MaterialInfo materialInfo, vec3 n, vec3 v)
 {
     float NdotV = clamp(dot(n, v), 0.0, 1.0);
@@ -441,7 +417,7 @@ void main()
     vec3 specularColor= vec3(0.0);
     vec3 f0 = vec3(0.04);
 
-#ifdef HAS_METALLIC_ROUGHNESS_MAP
+#ifdef HAS_METALLIC_ROUGHNESS_TEX
     // Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
     // This layout intentionally reserves the 'r' channel for (optional) occlusion map data
     vec4 mrSample = texture(metallicRoughnessTex, inUV0);
@@ -453,7 +429,7 @@ void main()
 #endif
 
     // The albedo may be defined from a base texture or a flat color
-#ifdef HAS_DIFFUSE_MAP
+#ifdef HAS_DIFFUSE_TEX
     baseColor = SRGBtoLINEAR(texture(diffuseTex, inUV0)) * ubo.baseColor;
 #else
     baseColor = ubo.baseColor;
@@ -541,19 +517,19 @@ void main()
 
     float ao = 1.0;
     // Apply optional PBR terms for additional (optional) shading
-#ifdef HAS_LIGHT_MAP
+#ifdef HAS_LIGHT_TEX
     // Occlusion map
     ao = texture(lightTex, inUV0).r;
     color = mix(color, color * ao, 1.0); // Forced occlusionStrength = 1.0
 #endif
 
     vec3 emissive = vec3(0);
-#ifdef HAS_EMISSIVE_MAP
+#ifdef HAS_EMISSIVE_TEX
     emissive = SRGBtoLINEAR(texture(emissiveTex, inUV0)).rgb;
     color += emissive;
 #endif
 
-#ifdef HAS_REFLECTION_MAP
+#ifdef HAS_REFLECTION_TEX
     color += ubo.mipIBL.y * getIBLContribution(materialInfo, normal, view);
 #endif
 
@@ -573,7 +549,7 @@ void main()
     #endif
 
     #ifdef DEBUG_NORMAL
-        #ifdef HAS_NORMAL_MAP
+        #ifdef HAS_NORMAL_TEX
             outColor.rgb = texture(normalTex, inUV0).rgb;
         #else
             outColor.rgb = vec3(0.5, 0.5, 1.0);

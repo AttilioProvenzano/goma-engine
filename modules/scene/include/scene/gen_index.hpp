@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/include.hpp"
+#include "common/hash.hpp"
 
 namespace goma {
 
@@ -34,3 +35,19 @@ template <typename T>
 using AttachmentIndex = GenIndex;
 
 }  // namespace goma
+
+namespace std {
+
+template <>
+struct hash<goma::GenIndex> {
+    size_t operator()(const goma::GenIndex& id) const {
+        size_t seed = 0;
+
+        goma::hash_combine(seed, id.id);
+        goma::hash_combine(seed, id.gen);
+
+        return seed;
+    };
+};
+
+}  // namespace std

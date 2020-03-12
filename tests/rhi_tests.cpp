@@ -829,7 +829,7 @@ SCENARIO("can set up imgui", "[rhi][gui][imgui]") {
         if (!vtx_bufs[frame_index] ||
             vtx_bufs[frame_index]->GetSize() < vtx_size) {
             if (vtx_bufs[frame_index]) {
-                // TODO: device.DestroyBuffer(*vtx_bufs[frame_index]);
+                device.DestroyBuffer(*vtx_bufs[frame_index]);
             }
 
             BufferDesc vtx_buf_desc = {};
@@ -846,7 +846,7 @@ SCENARIO("can set up imgui", "[rhi][gui][imgui]") {
         if (!idx_bufs[frame_index] ||
             idx_bufs[frame_index]->GetSize() < idx_size) {
             if (idx_bufs[frame_index]) {
-                // TODO: device.DestroyBuffer(*idx_bufs[frame_index]);
+                device.DestroyBuffer(*idx_bufs[frame_index]);
             }
 
             BufferDesc idx_buf_desc = {};

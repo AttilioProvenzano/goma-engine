@@ -26,8 +26,8 @@ result<void> Win32Platform::MainLoop(MainLoopFn inner_loop) {
     while (!glfwWindowShouldClose(window_)) {
         glfwPollEvents();
 
-        // TODO: temporarily we check that ImGui is set up via TexID
-        if (ImGui::GetIO().Fonts->TexID) {
+        if (ImGui::GetIO().Fonts->IsBuilt()) {
+            // NewFrame needs the font atlas to be pre-built
             ImGui_ImplGlfw_NewFrame();
         }
 
@@ -59,10 +59,7 @@ result<void> Win32Platform::InitWindow(int width, int height) {
     glfwSetInputMode(window_, GLFW_STICKY_KEYS, 1);
 
     // Set up Dear ImGui context
-    IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-
-    // TODO: GLFW ideas from ImGui (e.g. WindowSize vs FramebufferSize)
     ImGui_ImplGlfw_InitForVulkan(window_, true);
 
     return outcome::success();
@@ -84,13 +81,13 @@ result<VkSurfaceKHR> Win32Platform::CreateVulkanSurface(
 
 uint32_t Win32Platform::GetWidth() const {
     int width;
-    glfwGetWindowSize(window_, &width, nullptr);
+    glfwGetFramebufferSize(window_, &width, nullptr);
     return static_cast<uint32_t>(width);
 };
 
 uint32_t Win32Platform::GetHeight() const {
     int height;
-    glfwGetWindowSize(window_, nullptr, &height);
+    glfwGetFramebufferSize(window_, nullptr, &height);
     return static_cast<uint32_t>(height);
 };
 

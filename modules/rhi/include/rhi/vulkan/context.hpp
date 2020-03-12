@@ -89,14 +89,14 @@ class DescriptorSetManager {
 struct FramebufferDesc {
     struct Attachment {
         Image* image = nullptr;
+        VkClearValue clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
         VkAttachmentLoadOp load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
         VkAttachmentStoreOp store_op = VK_ATTACHMENT_STORE_OP_STORE;
-        VkClearValue clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
         Image* resolve_to = nullptr;
     };
 
     std::vector<Attachment> color_attachments;
-    Attachment depth_attachment;
+    Attachment depth_attachment = {nullptr, {1.0f, 0}};
 
     VkRenderPass render_pass_ = VK_NULL_HANDLE;  // for internal use
 };

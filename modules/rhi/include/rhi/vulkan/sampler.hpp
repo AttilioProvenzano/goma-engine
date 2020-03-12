@@ -13,7 +13,7 @@ struct SamplerDesc {
     float max_anisotropy = 1.0f;
     VkBorderColor border_color = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
     float min_lod = 0.0f;
-    float max_lod = std::numeric_limits<float>::max();
+    float max_lod = VK_LOD_CLAMP_NONE;
 };
 
 class Sampler {

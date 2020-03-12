@@ -10,11 +10,8 @@
 namespace goma {
 
 Renderer::Renderer(Engine& engine)
-    : engine_(engine),
-      device_(std::make_unique<Device>()),
-      graphics_ctx_(*device_),
-      upload_ctx_(*device_) {
-    auto res = device_->InitWindow(engine_.platform());
+    : engine_(engine), device_(), graphics_ctx_(device_), upload_ctx_(device_) {
+    auto res = device_.InitWindow(engine_.platform());
     if (res.has_error()) {
         throw std::runtime_error(res.error().message());
     }
@@ -174,10 +171,10 @@ result<void> Renderer::Render() {
     OUTCOME_TRY(upload_ctx_.Begin());
 
     // Ensure that all meshes have their own buffers
-    CreateMeshBuffers(*device_, upload_ctx_, scene);
+    CreateMeshBuffers(device_, upload_ctx_, scene);
 
     // Upload any missing textures
-    UploadTextures(*device_, upload_ctx_, scene);
+    UploadTextures(device_, upload_ctx_, scene);
 
     // Bind texture handles to materials for efficient retrieval
     BindMaterialTextures(scene);
@@ -185,10 +182,11 @@ result<void> Renderer::Render() {
     upload_ctx_.End();
 
     // TODO: avoid unnecessary upload submission when possible
-    OUTCOME_TRY(receipt, device_->Submit(upload_ctx_));
+    //       could be achieved via implicit Begin() and End()
+    OUTCOME_TRY(receipt, device_.Submit(upload_ctx_));
 
     // TODO: wait for previous receipt in ring buffer
-    OUTCOME_TRY(device_->WaitOnWork(std::move(receipt)));
+    OUTCOME_TRY(device_.WaitOnWork(std::move(receipt)));
 
     graphics_ctx_.NextFrame();
     OUTCOME_TRY(graphics_ctx_.Begin());
@@ -199,11 +197,11 @@ result<void> Renderer::Render() {
         depth_desc.size = {engine_.platform().GetWidth(),
                            engine_.platform().GetHeight(), 1};
 
-        OUTCOME_TRY(d, device_->CreateImage(depth_desc));
+        OUTCOME_TRY(d, device_.CreateImage(depth_desc));
         depth_image = d;
     }
 
-    OUTCOME_TRY(swapchain_image, device_->AcquireSwapchainImage());
+    OUTCOME_TRY(swapchain_image, device_.AcquireSwapchainImage());
 
     // TODO: Alternate constructors to make it more obvious
     auto fb_desc = FramebufferDesc{{{swapchain_image}}};
@@ -213,11 +211,11 @@ result<void> Renderer::Render() {
     OUTCOME_TRY(RenderMeshes(graphics_ctx_, scene));
 
     graphics_ctx_.End();
-    OUTCOME_TRY(graphics_receipt, device_->Submit(graphics_ctx_));
-    OUTCOME_TRY(device_->Present());
+    OUTCOME_TRY(graphics_receipt, device_.Submit(graphics_ctx_));
+    OUTCOME_TRY(device_.Present());
 
     // TODO: Wait for previous receipt
-    OUTCOME_TRY(device_->WaitOnWork(std::move(graphics_receipt)));
+    OUTCOME_TRY(device_.WaitOnWork(std::move(graphics_receipt)));
 
     current_frame_++;
     frame_index_ = (frame_index_ + 1) % kMaxFramesInFlight;
@@ -226,7 +224,7 @@ result<void> Renderer::Render() {
 }
 
 result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
-    auto& device = *device_;
+    auto& device = device_;
     auto& platform = engine_.platform();
 
     static struct {
@@ -241,7 +239,7 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
     }
 
     if (!ro.base_sampler) {
-        OUTCOME_TRY(sampler, device_->CreateSampler({}));
+        OUTCOME_TRY(sampler, device_.CreateSampler({}));
         ro.base_sampler = sampler;
     }
 
@@ -265,7 +263,7 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         desc.size = 256 * 256;
         desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
-        OUTCOME_TRY(buffer, device_->CreateBuffer(desc));
+        OUTCOME_TRY(buffer, device_.CreateBuffer(desc));
 
         ro.mvp_buffer[frame_index_] = buffer;
     }
@@ -328,7 +326,7 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         if (vtx_shader == shader_map_.end()) {
             vtx_desc.source = ro.vtx_code;
 
-            auto vtx_res = device_->CreateShader(vtx_desc);
+            auto vtx_res = device_.CreateShader(vtx_desc);
             if (!vtx_res) {
                 spdlog::error("Could not create vertex shader \"{}\"",
                               vtx_path);
@@ -376,7 +374,7 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         if (frag_shader == shader_map_.end()) {
             frag_desc.source = ro.frag_code;
 
-            auto frag_res = device_->CreateShader(frag_desc);
+            auto frag_res = device_.CreateShader(frag_desc);
             if (!frag_res) {
                 spdlog::error("Could not create fragment shader \"{}\"",
                               frag_path);
@@ -392,7 +390,7 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         pipeline_desc.cull_mode = VK_CULL_MODE_BACK_BIT;
         pipeline_desc.depth_test = true;
 
-        auto pipeline = device_->GetPipeline(std::move(pipeline_desc)).value();
+        auto pipeline = device_.GetPipeline(std::move(pipeline_desc)).value();
 
         float rot_speed = 0.2f;
         float rot_angle = glm::radians(rot_speed * current_frame_);

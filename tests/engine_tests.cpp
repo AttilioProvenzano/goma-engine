@@ -18,6 +18,9 @@ SCENARIO("the renderer can render a model", "[engine][renderer]") {
         REQUIRE(e.scene() != nullptr);
 
         THEN("the renderer can render the model") {
+            // First frame loads buffers and textures
+            GOMA_TEST_TRYV(e.renderer().Render());
+
             RenderingBenchmark rb;
 
             rb.run("Rendering a model (renderer only)", [&](int& frame) {

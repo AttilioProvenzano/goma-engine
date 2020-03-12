@@ -1,3 +1,5 @@
+#include "goma_tests.hpp"
+
 #include <glslang/Public/ShaderLang.h>
 #include <SPIRV/GlslangToSpv.h>
 #include <spirv_glsl.hpp>
@@ -8,8 +10,6 @@
 #include "rhi/context.hpp"
 #include "rhi/device.hpp"
 #include "rhi/utils.hpp"
-
-#include "goma_tests.hpp"
 
 using namespace goma;
 
@@ -98,14 +98,15 @@ struct Vertex {
     glm::vec2 uv;
 };
 
-const glm::vec3 kFrontTopLeft = {-1.0f, 1.0f, -1.0f};
-const glm::vec3 kFrontBottomLeft = {-1.0f, -1.0f, -1.0f};
-const glm::vec3 kFrontTopRight = {1.0f, 1.0f, -1.0f};
-const glm::vec3 kFrontBottomRight = {1.0f, -1.0f, -1.0f};
-const glm::vec3 kBackTopLeft = {-1.0f, 1.0f, 1.0f};
-const glm::vec3 kBackBottomLeft = {-1.0f, -1.0f, 1.0f};
-const glm::vec3 kBackTopRight = {1.0f, 1.0f, 1.0f};
-const glm::vec3 kBackBottomRight = {1.0f, -1.0f, 1.0f};
+// x: left to right, y: top to bottom, z: front to back
+const glm::vec3 kFrontTopLeft = {-1.0f, -1.0f, -1.0f};
+const glm::vec3 kFrontBottomLeft = {-1.0f, 1.0f, -1.0f};
+const glm::vec3 kFrontTopRight = {1.0f, -1.0f, -1.0f};
+const glm::vec3 kFrontBottomRight = {1.0f, 1.0f, -1.0f};
+const glm::vec3 kBackTopLeft = {-1.0f, -1.0f, 1.0f};
+const glm::vec3 kBackBottomLeft = {-1.0f, 1.0f, 1.0f};
+const glm::vec3 kBackTopRight = {1.0f, -1.0f, 1.0f};
+const glm::vec3 kBackBottomRight = {1.0f, 1.0f, 1.0f};
 
 const Color kRed = {1.0f, 0.0f, 0.0f};
 const Color kBlue = {0.0f, 0.0f, 1.0f};
@@ -608,10 +609,7 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
         if (fb_res == fb_desc.end()) {
             FramebufferDesc fb = {};
             fb.color_attachments.push_back({swapchain_image});
-            fb.depth_attachment = {depth_image,
-                                   VK_ATTACHMENT_LOAD_OP_CLEAR,
-                                   VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                                   {1.0f, 0}};
+            fb.depth_attachment = {depth_image, {1.0f, 0}};
 
             fb_desc[swapchain_image] = fb;
             fb_res = fb_desc.find(swapchain_image);
@@ -622,12 +620,12 @@ void SpinningCube(Device& device, Platform& platform, bool textured = false) {
         pipe_desc.cull_mode = VK_CULL_MODE_BACK_BIT;
         OUTCOME_TRY(pipeline, device.GetPipeline(std::move(pipe_desc)));
 
-        auto eye = glm::vec3(0.0f, -5.0f, 0.0f);
+        auto eye = glm::vec3(0.0f, 0.0f, -5.0f);
         auto center = glm::vec3(0.0f);
-        auto up = glm::vec3{0.0f, 0.0f, 1.0f};
+        auto up = glm::vec3{0.0f, -1.0f, 0.0f};
 
-        auto rot_speed = glm::vec3{glm::radians(0.05f), glm::radians(0.1f),
-                                   glm::radians(0.15f)};
+        auto rot_speed = glm::vec3{glm::radians(0.05f), glm::radians(0.15f),
+                                   glm::radians(0.1f)};
         auto rot = glm::quat(static_cast<float>(frame) * rot_speed);
 
         auto mvp = glm::perspective(glm::radians(60.0f),

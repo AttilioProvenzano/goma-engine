@@ -1,3 +1,5 @@
+#include "goma_tests.hpp"
+
 #include "scene/scene.hpp"
 #include "scene/attachments/texture.hpp"
 #include "scene/attachments/material.hpp"
@@ -7,8 +9,6 @@
 #include "scene/utils.hpp"
 
 #include "scene/loaders/assimp_loader.hpp"
-
-#include "goma_tests.hpp"
 
 using namespace goma;
 

@@ -183,6 +183,9 @@ result<void> Renderer::Render() {
         OUTCOME_TRY(device_.WaitOnWork(std::move(r)));
     }
 
+    // This allows for proper destruction of staging buffers
+    upload_ctx_.NextFrame();
+
     if (needs_upload_) {
         OUTCOME_TRY(upload_ctx_.Begin());
 

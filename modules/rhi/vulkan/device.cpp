@@ -761,6 +761,19 @@ result<Buffer*> Device::CreateBuffer(const BufferDesc& buffer_desc) {
     return buffers_.back().get();
 }
 
+void Device::DestroyBuffer(Buffer& buffer) {
+    vmaDestroyBuffer(api_handles_.allocator, buffer.GetHandle(),
+                     buffer.GetAllocation().allocation);
+
+    auto res = std::find_if(
+        buffers_.begin(), buffers_.end(),
+        [&buffer](const auto& buf_ptr) { return buf_ptr.get() == &buffer; });
+
+    if (res != buffers_.end()) {
+        buffers_.erase(res);
+    }
+}
+
 result<void*> Device::MapBuffer(Buffer& buffer) {
     void* data = nullptr;
     VK_CHECK(vmaMapMemory(api_handles_.allocator,

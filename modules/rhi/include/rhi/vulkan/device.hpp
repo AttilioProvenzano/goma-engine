@@ -75,6 +75,7 @@ class Device {
     uint32_t GetQueueFamilyIndex();
 
     result<Buffer*> CreateBuffer(const BufferDesc&);
+    void DestroyBuffer(Buffer&);
     result<void*> MapBuffer(Buffer&);
     void UnmapBuffer(Buffer&);
 

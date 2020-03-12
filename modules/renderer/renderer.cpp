@@ -15,6 +15,17 @@ Renderer::Renderer(Engine& engine)
     if (res.has_error()) {
         throw std::runtime_error(res.error().message());
     }
+
+    frame_receipts_.resize(kMaxFramesInFlight);
+}
+
+Renderer::~Renderer() {
+    // Wait for any outstanding work
+    for (auto& fr : frame_receipts_) {
+        for (auto& r : fr) {
+            auto _ = device_.WaitOnWork(std::move(r));
+        }
+    }
 }
 
 namespace {
@@ -168,25 +179,29 @@ result<void> Renderer::Render() {
     }
     auto& scene = *engine_.scene();
 
-    OUTCOME_TRY(upload_ctx_.Begin());
+    for (auto& r : frame_receipts_[frame_index_]) {
+        OUTCOME_TRY(device_.WaitOnWork(std::move(r)));
+    }
 
-    // Ensure that all meshes have their own buffers
-    CreateMeshBuffers(device_, upload_ctx_, scene);
+    if (needs_upload_) {
+        OUTCOME_TRY(upload_ctx_.Begin());
 
-    // Upload any missing textures
-    UploadTextures(device_, upload_ctx_, scene);
+        // Ensure that all meshes have their own buffers
+        CreateMeshBuffers(device_, upload_ctx_, scene);
 
-    // Bind texture handles to materials for efficient retrieval
-    BindMaterialTextures(scene);
+        // Upload any missing textures
+        UploadTextures(device_, upload_ctx_, scene);
 
-    upload_ctx_.End();
+        // Bind texture handles to materials for efficient retrieval
+        BindMaterialTextures(scene);
 
-    // TODO: avoid unnecessary upload submission when possible
-    //       could be achieved via implicit Begin() and End()
-    OUTCOME_TRY(receipt, device_.Submit(upload_ctx_));
+        upload_ctx_.End();
 
-    // TODO: wait for previous receipt in ring buffer
-    OUTCOME_TRY(device_.WaitOnWork(std::move(receipt)));
+        OUTCOME_TRY(receipt, device_.Submit(upload_ctx_));
+        frame_receipts_[frame_index_].push_back(std::move(receipt));
+
+        needs_upload_ = false;
+    }
 
     graphics_ctx_.NextFrame();
     OUTCOME_TRY(graphics_ctx_.Begin());
@@ -211,11 +226,11 @@ result<void> Renderer::Render() {
     OUTCOME_TRY(RenderMeshes(graphics_ctx_, scene));
 
     graphics_ctx_.End();
-    OUTCOME_TRY(graphics_receipt, device_.Submit(graphics_ctx_));
-    OUTCOME_TRY(device_.Present());
 
-    // TODO: Wait for previous receipt
-    OUTCOME_TRY(device_.WaitOnWork(std::move(graphics_receipt)));
+    OUTCOME_TRY(graphics_receipt, device_.Submit(graphics_ctx_));
+    frame_receipts_[frame_index_].push_back(std::move(graphics_receipt));
+
+    OUTCOME_TRY(device_.Present());
 
     current_frame_++;
     frame_index_ = (frame_index_ + 1) % kMaxFramesInFlight;

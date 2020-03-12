@@ -37,6 +37,7 @@ class Scene;
 class Renderer {
   public:
     Renderer(Engine& engine);
+    ~Renderer();
 
     result<void> Render();
 
@@ -50,6 +51,11 @@ class Renderer {
     const uint32_t kMaxFramesInFlight = 3;
     uint32_t frame_index_ = 0;
     uint32_t current_frame_ = 0;
+
+    bool needs_upload_ = true;
+
+    using FrameReceipts = std::vector<ReceiptPtr>;
+    std::vector<FrameReceipts> frame_receipts_;
 
     using ShaderMap = std::unordered_map<ShaderDesc, Shader*>;
     ShaderMap shader_map_;

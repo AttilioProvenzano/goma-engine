@@ -49,16 +49,20 @@ class Renderer {
 
   private:
     Engine& engine_;
+    // TODO: device doesn't need to be a pointer
     std::unique_ptr<Device> device_{};
+
+    GraphicsContext graphics_ctx_;
+    UploadContext upload_ctx_;
 
     const uint32_t kMaxFramesInFlight = 3;
     uint32_t frame_index_ = 0;
     uint32_t current_frame_ = 0;
 
     using ShaderMap = std::unordered_map<ShaderDesc, Shader*>;
-    ShaderMap shader_map;
+    ShaderMap shader_map_;
 
-    void RenderMeshes(GraphicsContext& ctx, Scene& scene);
+    result<void> RenderMeshes(GraphicsContext& ctx, Scene& scene);
 
     // TODO: most of the following will be moved to rendering pipeline
 

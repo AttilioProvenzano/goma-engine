@@ -148,8 +148,6 @@ result<VkPhysicalDevice> CreatePhysicalDevice(VkInstance instance) {
 }
 
 result<uint32_t> GetQueueFamilyIndex_(VkPhysicalDevice physical_device) {
-    // TODO: create multiple queues, separate queues for transfer and
-    // compute
     uint32_t queue_family_count;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device,
                                              &queue_family_count, nullptr);
@@ -302,8 +300,7 @@ result<VkSwapchainKHR> CreateSwapchain(
     swapchain_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     swapchain_info.queueFamilyIndexCount = 1;
     swapchain_info.pQueueFamilyIndices = &queue_family_index;
-    swapchain_info.preTransform =
-        VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;  // TODO: Handle pre-transform
+    swapchain_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
     swapchain_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     swapchain_info.presentMode = *selected_present_mode;
     swapchain_info.clipped = VK_FALSE;
@@ -393,13 +390,9 @@ result<std::vector<ImagePtr>> GetSwapchainImages(const Platform& platform,
 
     std::vector<ImagePtr> ret;
     for (auto image : images) {
-        // TODO: abstract out the CreateImageView helper (used in CreateImage
-        // too)
-
         auto image_desc = ImageDesc::ColorAttachmentDesc;
         image_desc.size = {platform.GetWidth(), platform.GetHeight(), 1};
         image_desc.format = fb_format;
-        // TODO: other parameters
 
         VkImageAspectFlags aspect =
             image_desc.usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
@@ -1206,8 +1199,6 @@ result<Pipeline*> Device::GetPipeline(PipelineDesc pipeline_desc) {
     set_layout_info.bindingCount = static_cast<uint32_t>(bindings.size());
     set_layout_info.pBindings = bindings.data();
 
-    // TODO: cache descriptor set layouts to limit descriptor pool creation
-
     VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
     VK_CHECK(vkCreateDescriptorSetLayout(api_handles_.device, &set_layout_info,
                                          nullptr, &set_layout));
@@ -1230,7 +1221,7 @@ result<Pipeline*> Device::GetPipeline(PipelineDesc pipeline_desc) {
             VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
         stage.stage = shader->GetStage();
         stage.module = shader->GetHandle();
-        stage.pName = "main";  // TODO: Store in shader
+        stage.pName = "main";
 
         stages.push_back(stage);
     }
@@ -1367,7 +1358,6 @@ result<Pipeline*> Device::GetPipeline(PipelineDesc pipeline_desc) {
     str << "}";
     std::string name = str.str();
 
-    // TODO: add a name in PipelineDesc
     VkDebugUtilsObjectNameInfoEXT name_info = {
         VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
     name_info.objectType = VK_OBJECT_TYPE_PIPELINE;

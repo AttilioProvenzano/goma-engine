@@ -374,7 +374,6 @@ void GraphicsContext::End() {
 }
 
 result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
-    // TODO: Replace asserts with outcome::error
     assert(active_cmd_buf_ != VK_NULL_HANDLE &&
            "Context is not in a recording state");
 
@@ -384,7 +383,6 @@ result<void> GraphicsContext::BindFramebuffer(FramebufferDesc& desc) {
     }
 
     if (desc.render_pass_ == VK_NULL_HANDLE) {
-        // TODO: store all the render passes in Device
         OUTCOME_TRY(render_pass,
                     utils::CreateRenderPass(device_.GetHandle(), desc));
         desc.render_pass_ = render_pass;
@@ -559,8 +557,7 @@ void GraphicsContext::BindDescriptorSet(const DescriptorSet& set) {
     auto desc_set =
         desc_set_manager.RequestDescriptorSet(*current_pipeline_, set);
 
-    // TODO: bind point compute
-    vkCmdBindDescriptorSets(active_cmd_buf_, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    vkCmdBindDescriptorSets(active_cmd_buf_, current_bind_point_,
                             current_pipeline_->GetLayout(), 0, 1, &desc_set, 0,
                             nullptr);
 }
@@ -573,6 +570,7 @@ void GraphicsContext::BindGraphicsPipeline(Pipeline& pipeline) {
     vkCmdBindPipeline(active_cmd_buf_, VK_PIPELINE_BIND_POINT_GRAPHICS, handle);
 
     current_pipeline_ = &pipeline;
+    current_bind_point_ = VK_PIPELINE_BIND_POINT_GRAPHICS;
 }
 
 void GraphicsContext::BindComputePipeline(Pipeline& pipeline) {
@@ -583,6 +581,7 @@ void GraphicsContext::BindComputePipeline(Pipeline& pipeline) {
     vkCmdBindPipeline(active_cmd_buf_, VK_PIPELINE_BIND_POINT_COMPUTE, handle);
 
     current_pipeline_ = &pipeline;
+    current_bind_point_ = VK_PIPELINE_BIND_POINT_COMPUTE;
 }
 
 void GraphicsContext::Draw(uint32_t vertex_count, uint32_t instance_count,
@@ -609,9 +608,19 @@ UploadContext::UploadContext(Device& device) : Context(device) {}
 UploadContext::~UploadContext() {
     for (auto& staging_buffers_entry : staging_buffers_) {
         for (auto& staging_buffer : staging_buffers_entry.second) {
-            // TODO: Ask the device to destroy the staging buffer
+            device_.DestroyBuffer(*staging_buffer);
         }
     }
+}
+
+void UploadContext::NextFrame() {
+    Context::NextFrame();
+
+    auto& staging_buffers = staging_buffers_[current_frame_];
+    for (auto& buf : staging_buffers) {
+        device_.DestroyBuffer(*buf);
+    }
+    staging_buffers.clear();
 }
 
 namespace {

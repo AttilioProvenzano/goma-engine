@@ -60,10 +60,9 @@ using ReceiptPtr = std::unique_ptr<Receipt>;
 class Device {
   public:
     struct Config {
-        enum class FbColorSpace {
-            Linear,
-            Srgb
-        } fb_color_space = FbColorSpace::Srgb;
+        enum class FbColorSpace { Linear, Srgb };
+
+        FbColorSpace fb_color_space = FbColorSpace::Srgb;
     };
 
     Device(const Config& = {});

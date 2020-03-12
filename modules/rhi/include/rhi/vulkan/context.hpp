@@ -162,6 +162,7 @@ class GraphicsContext : public Context {
     FramebufferDesc current_fb_;
 
     Pipeline* current_pipeline_ = nullptr;
+    VkPipelineBindPoint current_bind_point_;
 };
 
 class ComputeContext : public Context {
@@ -182,6 +183,8 @@ class UploadContext : public Context {
   public:
     UploadContext(Device& device);
     ~UploadContext();
+
+    virtual void NextFrame() override;
 
     result<void> UploadBuffer(Buffer&, BufferData);
     result<void> UploadImage(Image&, ImageMipData);

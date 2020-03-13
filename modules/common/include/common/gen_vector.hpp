@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common/include.hpp"
-#include "scene/gen_index.hpp"
+#include "common/hash.hpp"
 
 namespace goma {
 
@@ -34,10 +34,12 @@ class gen_vector {
 
     // Pushes an element to the end of the vector, without the option to recycle
     // an index
-    void push_back(value_type&& item) {
+    index_type push_back(value_type&& item) {
         items_.push_back(std::forward<T>(item));
         gens_.push_back(0);
         last_valid_id_ = items_.size() - 1;
+
+        return {last_valid_id_, 0};
     }
 
     index_type insert(value_type&& item) {
@@ -291,3 +293,17 @@ class gen_vector_iter {
 };
 
 }  // namespace goma
+
+namespace std {
+
+template <>
+struct hash<goma::gen_id> {
+    size_t operator()(goma::gen_id id) const {
+        size_t seed = 0;
+        goma::hash_combine(seed, id.id);
+        goma::hash_combine(seed, id.gen);
+        return seed;
+    }
+};
+
+}  // namespace std

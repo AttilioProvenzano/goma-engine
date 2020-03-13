@@ -22,7 +22,7 @@ class Engine {
     ScriptingSystem& scripting_system() { return *scripting_system_.get(); }
     Renderer& renderer() { return *renderer_.get(); }
     Scene* scene() { return scene_.get(); }
-    AttachmentIndex<Camera> main_camera() { return main_camera_; }
+    gen_id main_camera_id() { return main_camera_id_; }
 
     uint32_t frame_count() { return frame_count_; }
 
@@ -33,7 +33,7 @@ class Engine {
     std::unique_ptr<Renderer> renderer_{};
 
     std::unique_ptr<Scene> scene_{};
-    AttachmentIndex<Camera> main_camera_{};
+    gen_id main_camera_id_{};
 
     uint32_t frame_count_{0};
 
@@ -42,8 +42,8 @@ class Engine {
     std::chrono::time_point<std::chrono::high_resolution_clock>
         frame_timestamp_{std::chrono::high_resolution_clock::now()};
 
-    result<AttachmentIndex<Camera>> CreateDefaultCamera();
-    result<AttachmentIndex<Light>> CreateDefaultLight();
+    gen_id CreateDefaultCamera();
+    gen_id CreateDefaultLight();
 };
 
 }  // namespace goma

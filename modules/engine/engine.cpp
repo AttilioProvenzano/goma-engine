@@ -62,14 +62,13 @@ result<void> Engine::LoadScene(const char* file_path) {
     OUTCOME_TRY(scene, loader.ReadSceneFromFile(file_path));
     scene_ = std::move(scene);
 
-    OUTCOME_TRY(main_camera, CreateDefaultCamera());
-    main_camera_ = main_camera;
+    main_camera_id_ = CreateDefaultCamera();
 
-    if (scene_->GetAttachmentCount<Light>() == 0) {
-        OUTCOME_TRY(CreateDefaultLight());
+    if (scene_->lights().empty()) {
+        CreateDefaultLight();
     }
 
-    FlyCamera fly_camera(main_camera_, 5.0f);
+    FlyCamera fly_camera(main_camera_id_, 5.0f);
     scripting_system_->RegisterScript(std::move(fly_camera));
 
     // OUTCOME_TRY(renderer_->CreateSkybox());
@@ -77,25 +76,20 @@ result<void> Engine::LoadScene(const char* file_path) {
     return outcome::success();
 }
 
-result<AttachmentIndex<Camera>> Engine::CreateDefaultCamera() {
+gen_id Engine::CreateDefaultCamera() {
+    auto& node = scene_->root_node().add_child("Default camera");
+
     Camera camera{};
     camera.aspect_ratio = float(platform_->GetWidth()) / platform_->GetHeight();
+    camera.attach_to(node);
 
-    auto new_camera_res = scene_->CreateAttachment<Camera>(std::move(camera));
-    if (!new_camera_res) {
-        return Error::NoMainCamera;
-    }
-
-    auto new_camera_id = new_camera_res.value();
-    // Create a node for the new camera
-    auto camera_node = scene_->CreateNode(scene_->GetRootNode()).value();
-    scene_->Attach<Camera>(new_camera_id, camera_node);
-
-    return new_camera_id;
+    return scene_->cameras().push_back(std::move(camera));
 }
 
-result<AttachmentIndex<Light>> Engine::CreateDefaultLight() {
-    Light light{"default_light"};
+gen_id Engine::CreateDefaultLight() {
+    auto& node = scene_->root_node().add_child("Default light");
+
+    Light light{"Default light"};
 
     // Light facing down
     light.direction = {0.0f, -1.0f, 0.0f};
@@ -104,14 +98,8 @@ result<AttachmentIndex<Light>> Engine::CreateDefaultLight() {
     // Tilt it a bit
     auto rotation = glm::quat({glm::radians(5.0f), 0.0f, glm::radians(5.0f)});
 
-    OUTCOME_TRY(light_id, scene_->CreateAttachment<Light>(std::move(light)));
-
-    // Create a node for the new light
-    OUTCOME_TRY(light_node, scene_->CreateNode(scene_->GetRootNode(),
-                                               {glm::vec3(0.0f), rotation}));
-    scene_->Attach<Light>(light_id, light_node);
-
-    return light_id;
+    light.attach_to(node);
+    return scene_->lights().push_back(std::move(light));
 }
 
 }  // namespace goma

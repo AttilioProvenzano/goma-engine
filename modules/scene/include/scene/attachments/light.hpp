@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/include.hpp"
+#include "scene/attachment.hpp"
 
 namespace goma {
 
@@ -29,6 +30,15 @@ struct Light {
     float inner_cone_angle{360.0f};
     float outer_cone_angle{360.0f};
     glm::vec2 area_size{glm::vec2(0.0f)};
+
+    // Attachment component and convenience functions
+    AttachmentComponent att_;
+    void attach_to(Node& node) { att_.attach_to(node); }
+    void detach_from(Node& node) { att_.detach_from(node); }
+    void detach_all() { att_.detach_all(); }
+    const std::vector<Node*>& attached_nodes() const {
+        return att_.attached_nodes();
+    }
 };
 
 }  // namespace goma

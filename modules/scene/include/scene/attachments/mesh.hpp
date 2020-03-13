@@ -1,13 +1,12 @@
 #pragma once
 
-#include "scene/gen_index.hpp"
-
 #include "common/include.hpp"
+#include "common/gen_vector.hpp"
+#include "scene/attachment.hpp"
 
 namespace goma {
 
 class Buffer;
-struct Material;
 
 struct AABB {
     glm::vec3 min{glm::vec3(std::numeric_limits<float>::max())};
@@ -36,8 +35,8 @@ struct Mesh {
     } vertices;
     std::vector<uint32_t> indices;
 
-    AttachmentIndex<Material> material{};
-    std::unique_ptr<AABB> aabb{};
+    gen_id material_id;
+    std::unique_ptr<AABB> aabb;
 
     struct {
         bool valid = false;
@@ -45,6 +44,15 @@ struct Mesh {
         Buffer* index_buffer = nullptr;
         std::string preamble;
     } rhi;
+
+    // Attachment component and convenience functions
+    AttachmentComponent att_;
+    void attach_to(Node& node) { att_.attach_to(node); }
+    void detach_from(Node& node) { att_.detach_from(node); }
+    void detach_all() { att_.detach_all(); }
+    const std::vector<Node*>& attached_nodes() const {
+        return att_.attached_nodes();
+    }
 };
 
 }  // namespace goma

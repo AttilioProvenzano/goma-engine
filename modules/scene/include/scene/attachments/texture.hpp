@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/include.hpp"
+#include "scene/attachment.hpp"
 
 namespace goma {
 
@@ -18,6 +19,15 @@ struct Texture {
         bool valid = false;
         Image* image = nullptr;
     } rhi;
+
+    // Attachment component and convenience functions
+    AttachmentComponent att_;
+    void attach_to(Node& node) { att_.attach_to(node); }
+    void detach_from(Node& node) { att_.detach_from(node); }
+    void detach_all() { att_.detach_all(); }
+    const std::vector<Node*>& attached_nodes() const {
+        return att_.attached_nodes();
+    }
 };
 
 }  // namespace goma

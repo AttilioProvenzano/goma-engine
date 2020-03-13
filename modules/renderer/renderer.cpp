@@ -1,5 +1,6 @@
 #include "renderer/renderer.hpp"
 
+#include "common/hash.hpp"
 #include "engine/engine.hpp"
 #include "rhi/context.hpp"
 #include "rhi/utils.hpp"
@@ -30,10 +31,11 @@ Renderer::~Renderer() {
 
 namespace {
 
-void CreateMeshBuffers(Device& device, UploadContext& ctx, Scene& scene) {
-    scene.ForEach<Mesh>([&](auto id, auto&, Mesh& mesh) {
+result<void> CreateMeshBuffers(Device& device, UploadContext& ctx,
+                               Scene& scene) {
+    for (auto& mesh : scene.meshes()) {
         if (mesh.rhi.valid) {
-            return;
+            continue;
         }
 
         if (!mesh.vertices.data.empty()) {
@@ -48,22 +50,12 @@ void CreateMeshBuffers(Device& device, UploadContext& ctx, Scene& scene) {
             vtx_buf_desc.size = vtx_data.size() * sizeof(vtx_data[0]);
             vtx_buf_desc.storage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-            auto vtx_buf_res = device.CreateBuffer(vtx_buf_desc);
-            if (!vtx_buf_res) {
-                spdlog::error("Vertex buffer creation failed for mesh \"{}\"",
-                              mesh.name);
-                return;
-            }
+            OUTCOME_TRY(vtx_buf, device.CreateBuffer(vtx_buf_desc));
+            mesh.rhi.vertex_buffer = vtx_buf;
 
-            mesh.rhi.vertex_buffer = vtx_buf_res.value();
-
-            if (!ctx.UploadBuffer(
-                    *vtx_buf_res.value(),
-                    {vtx_data.size() * sizeof(vtx_data[0]), vtx_data.data()})) {
-                spdlog::error("Vertex buffer upload failed for mesh \"{}\"",
-                              mesh.name);
-                return;
-            }
+            OUTCOME_TRY(ctx.UploadBuffer(
+                *vtx_buf,
+                {vtx_data.size() * sizeof(vtx_data[0]), vtx_data.data()}));
         }
 
         if (!mesh.indices.empty()) {
@@ -77,32 +69,24 @@ void CreateMeshBuffers(Device& device, UploadContext& ctx, Scene& scene) {
             idx_buf_desc.size = idx_data.size() * sizeof(idx_data[0]);
             idx_buf_desc.storage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-            auto idx_buf_res = device.CreateBuffer(idx_buf_desc);
-            if (!idx_buf_res) {
-                spdlog::error("Index buffer creation failed for mesh \"{}\"",
-                              mesh.name);
-                return;
-            }
+            OUTCOME_TRY(idx_buf, device.CreateBuffer(idx_buf_desc));
+            mesh.rhi.index_buffer = idx_buf;
 
-            mesh.rhi.index_buffer = idx_buf_res.value();
-
-            if (!ctx.UploadBuffer(
-                    *idx_buf_res.value(),
-                    {idx_data.size() * sizeof(idx_data[0]), idx_data.data()})) {
-                spdlog::error("Index buffer upload failed for mesh \"{}\"",
-                              mesh.name);
-                return;
-            }
+            OUTCOME_TRY(ctx.UploadBuffer(
+                *idx_buf,
+                {idx_data.size() * sizeof(idx_data[0]), idx_data.data()}));
         }
 
         mesh.rhi.valid = true;
-    });
+    }
+
+    return outcome::success();
 }
 
-void UploadTextures(Device& device, UploadContext& ctx, Scene& scene) {
-    scene.ForEach<Texture>([&](auto id, auto&, Texture& texture) {
+result<void> UploadTextures(Device& device, UploadContext& ctx, Scene& scene) {
+    for (auto& texture : scene.textures()) {
         if (texture.rhi.valid) {
-            return;
+            continue;
         }
 
         auto desc = ImageDesc::TextureDesc;
@@ -110,20 +94,9 @@ void UploadTextures(Device& device, UploadContext& ctx, Scene& scene) {
         desc.mip_levels =
             utils::ComputeMipLevels(texture.width, texture.height);
 
-        auto image_res = device.CreateImage(desc);
-        if (!image_res) {
-            spdlog::error("Image creation failed for texture \"{}\"",
-                          texture.path);
-            return;
-        }
-        auto& image = image_res.value();
+        OUTCOME_TRY(image, device.CreateImage(desc));
 
-        auto upload_res = ctx.UploadImage(*image, {texture.data.data()});
-        if (!upload_res) {
-            spdlog::error("Image upload failed for texture \"{}\"",
-                          texture.path);
-            return;
-        }
+        OUTCOME_TRY(ctx.UploadImage(*image, {texture.data.data()}));
 
         if (desc.mip_levels > 1) {
             ctx.GenerateMipmaps(*image);
@@ -131,11 +104,13 @@ void UploadTextures(Device& device, UploadContext& ctx, Scene& scene) {
 
         texture.rhi.image = image;
         texture.rhi.valid = true;
-    });
+    }
+
+    return outcome::success();
 }
 
 void BindMaterialTextures(Scene& scene) {
-    scene.ForEach<Material>([&scene](auto id, auto&, Material& material) {
+    for (auto& material : scene.materials()) {
         if (material.rhi.valid) {
             return;
         }
@@ -158,17 +133,17 @@ void BindMaterialTextures(Scene& scene) {
                 continue;
             }
 
-            auto& tex_index = tex_binding->second[0].index;
-
-            // TODO: outcome_try (or new signature)
-            auto& tex = scene.GetAttachment<Texture>(tex_index).value().get();
-            if (tex.rhi.valid) {
-                material.rhi.*(mt.second) = tex.rhi.image;
+            auto& tex_id = tex_binding->second[0].index;
+            if (scene.textures().is_valid(tex_id)) {
+                auto& tex = scene.textures().at(tex_id);
+                if (tex.rhi.valid) {
+                    material.rhi.*(mt.second) = tex.rhi.image;
+                }
             }
         }
 
         material.rhi.valid = true;
-    });
+    }
 }
 
 }  // namespace
@@ -190,10 +165,10 @@ result<void> Renderer::Render() {
         OUTCOME_TRY(upload_ctx_.Begin());
 
         // Ensure that all meshes have their own buffers
-        CreateMeshBuffers(device_, upload_ctx_, scene);
+        OUTCOME_TRY(CreateMeshBuffers(device_, upload_ctx_, scene));
 
         // Upload any missing textures
-        UploadTextures(device_, upload_ctx_, scene);
+        OUTCOME_TRY(UploadTextures(device_, upload_ctx_, scene));
 
         // Bind texture handles to materials for efficient retrieval
         BindMaterialTextures(scene);
@@ -290,10 +265,17 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         ro.mvp_buffer[frame_index_] = buffer;
     }
 
-    scene.ForEach<Mesh>([&](auto mesh_id, auto& nodes, Mesh& mesh) {
-        // TODO: make it more compact (no ref wrapper)
-        auto& material =
-            scene.GetAttachment<Material>(mesh.material).value().get();
+    uint32_t mesh_count = 0;
+    for (auto& mesh : scene.meshes()) {
+        ++mesh_count;
+
+        if (!scene.materials().is_valid(mesh.material_id)) {
+            spdlog::error(
+                "Mesh \"{}\" references an invalid material, skipping.",
+                mesh.name);
+            continue;
+        }
+        auto& material = scene.materials().at(mesh.material_id);
 
         if (material.rhi.preamble.empty()) {
             std::stringstream preamble;
@@ -346,28 +328,19 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         if (vtx_shader == shader_map_.end()) {
             vtx_desc.source = ro.vtx_code;
 
-            auto vtx_res = device_.CreateShader(vtx_desc);
-            if (!vtx_res) {
-                spdlog::error("Could not create vertex shader \"{}\"",
-                              vtx_path);
-                return;
-            }
+            OUTCOME_TRY(v, device_.CreateShader(vtx_desc));
+            shader_map_[vtx_desc] = v;
 
-            shader_map_[vtx_desc] = vtx_res.value();
             vtx_shader = shader_map_.find(vtx_desc);
         }
 
-        // TODO: Convenience types, MeshIndex, AttachmentIndex etc.
-        using MeshMaterialPair =
-            std::pair<AttachmentIndex<Mesh>, AttachmentIndex<Material>>;
+        using MeshMaterialPair = std::pair<std::string, gen_id>;
 
         struct MeshMaterialHash {
             size_t operator()(const MeshMaterialPair& mm) const {
                 size_t seed = 0;
-
-                goma::hash_combine(seed, mm.first);
+                goma::hash_combine(seed, djb2_hash(mm.first.c_str()));
                 goma::hash_combine(seed, mm.second);
-
                 return seed;
             };
         };
@@ -377,7 +350,7 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
 
         static CombinedPreambleMap comb_preamble_map;
 
-        auto mesh_mat_pair = std::make_pair(mesh_id, mesh.material);
+        auto mesh_mat_pair = std::make_pair(mesh.name, mesh.material_id);
         auto comb_preamble = comb_preamble_map.find(mesh_mat_pair);
 
         if (comb_preamble == comb_preamble_map.end()) {
@@ -394,14 +367,9 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         if (frag_shader == shader_map_.end()) {
             frag_desc.source = ro.frag_code;
 
-            auto frag_res = device_.CreateShader(frag_desc);
-            if (!frag_res) {
-                spdlog::error("Could not create fragment shader \"{}\"",
-                              frag_path);
-                return;
-            }
+            OUTCOME_TRY(f, device_.CreateShader(frag_desc));
+            shader_map_[frag_desc] = f;
 
-            shader_map_[frag_desc] = frag_res.value();
             frag_shader = shader_map_.find(frag_desc);
         }
 
@@ -410,7 +378,7 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         pipeline_desc.cull_mode = VK_CULL_MODE_BACK_BIT;
         pipeline_desc.depth_test = true;
 
-        auto pipeline = device_.GetPipeline(std::move(pipeline_desc)).value();
+        OUTCOME_TRY(pipeline, device_.GetPipeline(std::move(pipeline_desc)));
 
         float rot_speed = 0.2f;
         float rot_angle = glm::radians(rot_speed * current_frame_);
@@ -420,30 +388,23 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         auto center = glm::vec3(0.0f, 10.0f, 0.0f);
         auto up = glm::vec3{0.0f, -1.0f, 0.0f};
 
-        // TODO: for each node! outcome_try and no ref_wrapper
-        // TODO: keep pointers back to scene and call functions like
-        //       node->GetTransformMatrix
-        // TODO: std::set inconvenient for nodes, maybe ordered vector?
-
         auto mvp = glm::perspective(glm::radians(60.0f),
                                     static_cast<float>(platform.GetWidth()) /
                                         platform.GetHeight(),
                                     0.1f, 100.0f) *
                    glm::lookAt(eye, center, up) *
-                   scene.GetTransformMatrix(*nodes.begin())
-                       .value();  // TODO: outcome_try
+                   mesh.attached_nodes()[0]->get_transform_matrix();
 
         auto& mvp_buf = *ro.mvp_buffer[frame_index_];
 
-        // TODO: really need outcome_try!!
-        auto mvp_data = device.MapBuffer(mvp_buf).value();
-        memcpy(mvp_data + buf_alignment * mesh_id.id, &mvp, sizeof(mvp));
+        OUTCOME_TRY(mvp_data, device.MapBuffer(mvp_buf));
+        memcpy(mvp_data + buf_alignment * mesh_count, &mvp, sizeof(mvp));
         device.UnmapBuffer(mvp_buf);
 
         ctx.BindGraphicsPipeline(*pipeline);
 
         DescriptorSet ds;
-        ds[0] = {mvp_buf, static_cast<uint32_t>(buf_alignment * mesh_id.id),
+        ds[0] = {mvp_buf, static_cast<uint32_t>(buf_alignment * mesh_count),
                  sizeof(mvp)};
         ds[1] = {*material.rhi.diffuse_tex, *ro.base_sampler};
 
@@ -457,7 +418,7 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         } else {
             ctx.Draw(mesh.vertices.size);
         }
-    });
+    }
 
     return outcome::success();
 }

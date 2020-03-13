@@ -1,7 +1,7 @@
 #include "rhi/vulkan/device.hpp"
 
-#include <glslang/Public/ShaderLang.h>
-#include <SPIRV/GlslangToSpv.h>
+#include "glslang/Public/ShaderLang.h"
+#include "SPIRV/GlslangToSpv.h"
 #include <spirv_glsl.hpp>
 
 #include "common/error_codes.hpp"

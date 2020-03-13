@@ -1,9 +1,9 @@
 #include "goma_tests.hpp"
 
-#include <glslang/Public/ShaderLang.h>
-#include <SPIRV/GlslangToSpv.h>
+#include "glslang/Public/ShaderLang.h"
+#include "SPIRV/GlslangToSpv.h"
 #include <spirv_glsl.hpp>
-#include <stb/stb_image.h>
+#include "stb/stb_image.h"
 #include <imgui.h>
 
 #include "platform/win32_platform.hpp"

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <catch.hpp>
-#include <spdlog/spdlog.h>
+#include "spdlog/spdlog.h"
 
 struct TestOptions {
     static int timeout;

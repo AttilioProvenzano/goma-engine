@@ -9,27 +9,26 @@ namespace goma {
 
 class FlyCamera : public Script {
   public:
-    FlyCamera(const AttachmentIndex<Camera> camera_id, float speed = 1.0f)
+    FlyCamera(gen_id camera_id, float speed = 1.0f)
         : camera_id_(camera_id), speed_(speed) {}
 
     virtual void Update(Engine& engine, float delta_time) override {
         auto scene = engine.scene();
 
-        auto camera_res = scene->GetAttachment<Camera>(camera_id_);
-        if (!camera_res) {
-            spdlog::error("FlyCamera: attached camera not found.");
+        if (!scene->cameras().is_valid(camera_id_)) {
+            spdlog::error("FlyCamera: attached camera is invalid.");
             return;
         }
 
-        auto& camera = camera_res.value().get();
-        auto camera_nodes = scene->GetAttachedNodes<Camera>(camera_id_);
+        auto& camera = scene->cameras().at(camera_id_);
+        auto& camera_nodes = camera.attached_nodes();
         glm::mat4 camera_transform = glm::mat4(1.0f);
 
-        if (camera_nodes && camera_nodes.value().get().size() > 0) {
-            auto camera_node = *camera_nodes.value().get().begin();
+        if (!camera_nodes.empty()) {
+            auto& camera_node = *camera_nodes[0];
 
             // Update transform based on input
-            auto transform = scene->GetTransform(camera_node).value();
+            auto transform = camera_node.transform();
             auto input_state = engine.input_system().GetFrameInput();
             const auto& keypresses = input_state.keypresses;
 
@@ -89,12 +88,12 @@ class FlyCamera : public Script {
                                       glm::cross(camera.look_at, camera.up) *
                                       speed_ * delta_time;
             }
-            scene->SetTransform(camera_node, transform);
+            camera_node.set_transform(transform);
         }
     }
 
   private:
-    AttachmentIndex<Camera> camera_id_{};
+    gen_id camera_id_{};
     float speed_{1.0f};
 };
 

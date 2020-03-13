@@ -36,12 +36,43 @@ result<std::unique_ptr<Scene>> AssimpLoader::ReadSceneFromFile(
     return std::move(ConvertScene(ai_scene, std::move(base_path)));
 }
 
+namespace {
+
+void ConvertNode(const aiNode &ai_node, Node &out_node,
+                 gen_vector<Mesh> &out_meshes) {
+    aiVector3D pos, rot, scale;
+    ai_node.mTransformation.Decompose(scale, rot, pos);
+
+    Transform t;
+    t.position = {pos.x, pos.y, pos.z};
+    t.rotation = glm::quat(glm::vec3(rot.x, rot.y, rot.z));
+    t.scale = {scale.x, scale.y, scale.z};
+
+    out_node.set_transform(std::move(t));
+
+    std::for_each(ai_node.mMeshes, ai_node.mMeshes + ai_node.mNumMeshes,
+                  [&out_node, &out_meshes](unsigned int mesh_id) {
+                      if (out_meshes.is_valid({mesh_id, 0})) {
+                          out_meshes.at({mesh_id, 0}).attach_to(out_node);
+                      }
+                  });
+
+    std::for_each(ai_node.mChildren, ai_node.mChildren + ai_node.mNumChildren,
+                  [&out_node, &out_meshes](aiNode *ai_child) {
+                      auto &child =
+                          out_node.add_child({ai_child->mName.C_Str()});
+                      ConvertNode(*ai_child, child, out_meshes);
+                  });
+}
+
+}  // namespace
+
 result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
     const aiScene *ai_scene, const std::string &base_path) {
     std::unique_ptr<Scene> scene = std::make_unique<Scene>();
 
-    std::map<std::string, NodeIndex> node_name_map;
-    std::map<size_t, AttachmentIndex<Material>> material_map;
+    // Useful to avoid errors if the scene is already filled
+    auto base_material_offset = scene->materials().size();
 
     // Convert materials
     if (ai_scene->HasMaterials()) {
@@ -124,17 +155,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 material.roughness_factor = roughness_factor;
             }
 
-            auto material_result = scene->CreateAttachment(std::move(material));
-
-            if (material_result.has_value()) {
-                auto m = material_result.value();
-                scene->RegisterAttachment<Material>(
-                    m, ai_material->GetName().C_Str());
-                material_map[i] = m;
-            } else {
-                spdlog::warn("Material creation failed for material \"{}\".",
-                             ai_material->GetName().C_Str());
-            }
+            scene->materials().push_back(std::move(material));
         }
     }
 
@@ -242,105 +263,20 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                               });
             }
 
-            auto material_res = material_map.find(ai_mesh->mMaterialIndex);
-            if (material_res != material_map.end()) {
-                mesh.material = material_res->second;
-            } else {
-                spdlog::warn("Could not find material for mesh \"{}\".",
-                             ai_mesh->mName.C_Str());
-            }
+            // Using push_back() for materials guarantees that they are stored
+            // in order; a solution using insert() would require keeping track
+            // of the actual indices.
+            mesh.material_id = {base_material_offset + ai_mesh->mMaterialIndex,
+                                0};
 
-            auto mesh_result = scene->CreateAttachment(std::move(mesh));
-
-            if (mesh_result.has_value()) {
-                auto m = mesh_result.value();
-                scene->RegisterAttachment<Mesh>(m, ai_mesh->mName.C_Str());
-            } else {
-                spdlog::warn("Mesh creation failed for mesh \"{}\".",
-                             ai_mesh->mName.C_Str());
-            }
+            scene->meshes().push_back(std::move(mesh));
         }
     }
 
-    // Convert node structure
+    // Convert node structure and meshes
     if (ai_scene->mRootNode) {
-        std::map<aiNode *, NodeIndex> node_map;
-
-        aiNode *ai_root_node = ai_scene->mRootNode;
-        aiVector3D pos, rot, scale;
-
-        auto scene_root_node = scene->CreateNode(scene->GetRootNode()).value();
-
-        ai_root_node->mTransformation.Decompose(scale, rot, pos);
-        auto root_transform = scene->GetTransform(scene_root_node).value();
-        root_transform.position = {pos.x, pos.y, pos.z};
-        root_transform.rotation = glm::quat(glm::vec3(rot.x, rot.y, rot.z));
-        root_transform.scale = {scale.x, scale.y, scale.z};
-        scene->SetTransform(scene_root_node, root_transform);
-
-        node_map[ai_root_node] = scene_root_node;
-        node_name_map[ai_root_node->mName.C_Str()] = scene_root_node;
-
-        for (unsigned int i = 0; i < ai_root_node->mNumMeshes; i++) {
-            // We have a 1:1 correspondence between aiMesh and Mesh objects,
-            // so we can use the same index
-            uint32_t mesh_index = ai_root_node->mMeshes[i];
-            scene->Attach<Mesh>({mesh_index}, scene_root_node);
-        }
-
-        // Traverse the node graph
-        std::queue<aiNode *> open_nodes;
-        std::set<aiNode *> closed_nodes;
-
-        for (unsigned int i = 0; i < ai_root_node->mNumChildren; i++) {
-            open_nodes.push(ai_root_node->mChildren[i]);
-        }
-
-        while (open_nodes.size() > 0) {
-            aiNode *ai_node = open_nodes.front();
-            open_nodes.pop();
-            closed_nodes.insert(ai_node);
-
-            NodeIndex parent = scene_root_node;
-            auto result = node_map.find(ai_node->mParent);
-            if (result != node_map.end()) {
-                parent = result->second;
-            }
-
-            ai_node->mTransformation.Decompose(scale, rot, pos);
-            auto node_result = scene->CreateNode(
-                parent, {{pos.x, pos.y, pos.z},
-                         glm::quat(glm::vec3(rot.x, rot.y, rot.z)),
-                         {scale.x, scale.y, scale.z}});
-
-            if (!node_result.has_value()) {
-                const auto &error = node_result.error();
-                spdlog::error(
-                    "Node conversion failed for node \"{}\". Error: {}",
-                    ai_node->mName.C_Str(), error.message());
-                continue;
-            }
-
-            auto node = node_result.value();
-            node_map[ai_node] = node;
-            node_name_map[ai_node->mName.C_Str()] = node;
-
-            for (unsigned int i = 0; i < ai_node->mNumMeshes; i++) {
-                // We have a 1:1 correspondence between aiMesh and Mesh objects,
-                // so we can use the same index
-                uint32_t mesh_index = ai_node->mMeshes[i];
-                scene->Attach<Mesh>({mesh_index}, node);
-            }
-
-            // Add children to open_nodes
-            for (unsigned int i = 0; i < ai_node->mNumChildren; i++) {
-                auto child = ai_node->mChildren[i];
-                // Guard against loops in the graph
-                if (closed_nodes.find(child) == closed_nodes.end()) {
-                    open_nodes.push(child);
-                }
-            }
-        }
+        // This will recursively convert all other nodes
+        ConvertNode(*ai_scene->mRootNode, scene->root_node(), scene->meshes());
     }
 
     // Convert embedded textures (if any)
@@ -369,39 +305,18 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                     data.resize(4 * ai_texture->mWidth * ai_texture->mHeight);
                     memcpy(data.data(), ai_texture->pcData, data.size());
 
-                    std::string path = ai_texture->mFilename.C_Str();
-                    auto texture = scene->CreateAttachment<Texture>(
-                        {path, ai_texture->mWidth, 1, std::move(data), true});
-
-                    if (texture.has_value()) {
-                        auto t = texture.value();
-                        scene->RegisterAttachment<Texture>(t, path);
-                    } else {
-                        const auto &error = texture.error();
-                        spdlog::warn(
-                            "Loading texture \"{}\" failed with error: {}",
-                            path, error.message());
-                    }
+                    scene->textures().push_back({ai_texture->mFilename.C_Str(),
+                                                 ai_texture->mWidth, 1,
+                                                 std::move(data), true});
                 } else {
                     std::vector<uint8_t> data;
                     data.resize(4 * width * height);
                     memcpy(data.data(), image_data, data.size());
 
-                    std::string path = ai_texture->mFilename.C_Str();
-                    auto texture = scene->CreateAttachment<Texture>(
-                        {path, static_cast<uint32_t>(width),
-                         static_cast<uint32_t>(height), std::move(data),
-                         false});
-
-                    if (texture.has_value()) {
-                        auto t = texture.value();
-                        scene->RegisterAttachment<Texture>(t, path);
-                    } else {
-                        const auto &error = texture.error();
-                        spdlog::warn(
-                            "Loading texture \"{}\" failed with error: {}",
-                            path, error.message());
-                    }
+                    scene->textures().push_back({ai_texture->mFilename.C_Str(),
+                                                 static_cast<uint32_t>(width),
+                                                 static_cast<uint32_t>(height),
+                                                 std::move(data), false});
                 }
 
                 stbi_image_free(image_data);
@@ -411,19 +326,9 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 data.resize(4 * ai_texture->mWidth * ai_texture->mHeight);
                 memcpy(data.data(), ai_texture->pcData, data.size());
 
-                std::string path = ai_texture->mFilename.C_Str();
-                auto texture = scene->CreateAttachment<Texture>(
+                scene->textures().push_back(
                     {ai_texture->mFilename.C_Str(), ai_texture->mWidth,
                      ai_texture->mHeight, std::move(data), false});
-
-                if (texture.has_value()) {
-                    auto t = texture.value();
-                    scene->RegisterAttachment<Texture>(t, path);
-                } else {
-                    const auto &error = texture.error();
-                    spdlog::warn("Loading texture \"{}\" failed with error: {}",
-                                 path, error.message());
-                }
             }
         }
     }
@@ -433,31 +338,23 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
         for (size_t i = 0; i < ai_scene->mNumCameras; i++) {
             aiCamera *ai_camera = ai_scene->mCameras[i];
 
-            NodeIndex node = scene->GetRootNode();
-            auto result = node_name_map.find(ai_camera->mName.C_Str());
-            if (result != node_name_map.end()) {
-                node = result->second;
-            }
+            Camera camera{
+                ai_camera->mName.C_Str(),
+                glm::degrees(ai_camera->mHorizontalFOV),
+                ai_camera->mClipPlaneNear,
+                ai_camera->mClipPlaneFar,
+                ai_camera->mAspect,
+                {ai_camera->mPosition.x, ai_camera->mPosition.y,
+                 ai_camera->mPosition.z},
+                {ai_camera->mUp.x, ai_camera->mUp.y, ai_camera->mUp.z},
+                {ai_camera->mLookAt.x, ai_camera->mLookAt.y,
+                 ai_camera->mLookAt.z}};
 
-            auto camera_result = scene->CreateAttachment<Camera>(
-                node, {ai_camera->mName.C_Str(),
-                       glm::degrees(ai_camera->mHorizontalFOV),
-                       ai_camera->mClipPlaneNear,
-                       ai_camera->mClipPlaneFar,
-                       ai_camera->mAspect,
-                       {ai_camera->mPosition.x, ai_camera->mPosition.y,
-                        ai_camera->mPosition.z},
-                       {ai_camera->mUp.x, ai_camera->mUp.y, ai_camera->mUp.z},
-                       {ai_camera->mLookAt.x, ai_camera->mLookAt.y,
-                        ai_camera->mLookAt.z}});
-
-            if (camera_result.has_value()) {
-                auto c = camera_result.value();
-                scene->RegisterAttachment<Camera>(c, ai_camera->mName.C_Str());
-            } else {
-                spdlog::warn("Camera creation failed for camera \"{}\".",
-                             ai_camera->mName.C_Str());
+            auto node = scene->find(ai_camera->mName.C_Str());
+            if (node) {
+                camera.attach_to(*node);
             }
+            scene->cameras().push_back(std::move(camera));
         }
     }
 
@@ -465,12 +362,6 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
     if (ai_scene->HasLights()) {
         for (size_t i = 0; i < ai_scene->mNumLights; i++) {
             aiLight *ai_light = ai_scene->mLights[i];
-
-            NodeIndex node = scene->GetRootNode();
-            auto result = node_name_map.find(ai_light->mName.C_Str());
-            if (result != node_name_map.end()) {
-                node = result->second;
-            }
 
             static const std::map<aiLightSourceType, LightType> light_type_map =
                 {
@@ -482,35 +373,32 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                     {aiLightSource_AREA, LightType::Area},
                 };
 
-            auto light_result = scene->CreateAttachment<Light>(
-                node,
-                {ai_light->mName.C_Str(),
-                 light_type_map.at(ai_light->mType),
-                 {ai_light->mPosition.x, ai_light->mPosition.y,
-                  ai_light->mPosition.z},
-                 {ai_light->mDirection.x, ai_light->mDirection.y,
-                  ai_light->mDirection.z},
-                 {ai_light->mUp.x, ai_light->mUp.y, ai_light->mUp.z},
-                 1.0f,
-                 {ai_light->mColorDiffuse.r, ai_light->mColorDiffuse.g,
-                  ai_light->mColorDiffuse.b},
-                 {ai_light->mColorSpecular.r, ai_light->mColorSpecular.g,
-                  ai_light->mColorSpecular.b},
-                 {ai_light->mColorAmbient.r, ai_light->mColorAmbient.g,
-                  ai_light->mColorAmbient.b},
-                 {ai_light->mAttenuationConstant, ai_light->mAttenuationLinear,
-                  ai_light->mAttenuationQuadratic},
-                 glm::degrees(ai_light->mAngleInnerCone),
-                 glm::degrees(ai_light->mAngleOuterCone),
-                 {ai_light->mSize.x, ai_light->mSize.y}});
+            Light light{
+                ai_light->mName.C_Str(),
+                light_type_map.at(ai_light->mType),
+                {ai_light->mPosition.x, ai_light->mPosition.y,
+                 ai_light->mPosition.z},
+                {ai_light->mDirection.x, ai_light->mDirection.y,
+                 ai_light->mDirection.z},
+                {ai_light->mUp.x, ai_light->mUp.y, ai_light->mUp.z},
+                1.0f,
+                {ai_light->mColorDiffuse.r, ai_light->mColorDiffuse.g,
+                 ai_light->mColorDiffuse.b},
+                {ai_light->mColorSpecular.r, ai_light->mColorSpecular.g,
+                 ai_light->mColorSpecular.b},
+                {ai_light->mColorAmbient.r, ai_light->mColorAmbient.g,
+                 ai_light->mColorAmbient.b},
+                {ai_light->mAttenuationConstant, ai_light->mAttenuationLinear,
+                 ai_light->mAttenuationQuadratic},
+                glm::degrees(ai_light->mAngleInnerCone),
+                glm::degrees(ai_light->mAngleOuterCone),
+                {ai_light->mSize.x, ai_light->mSize.y}};
 
-            if (light_result.has_value()) {
-                auto l = light_result.value();
-                scene->RegisterAttachment<Light>(l, ai_light->mName.C_Str());
-            } else {
-                spdlog::warn("Light creation failed for light \"{}\".",
-                             ai_light->mName.C_Str());
+            auto node = scene->find(ai_light->mName.C_Str());
+            if (node) {
+                light.attach_to(*node);
             }
+            scene->lights().push_back(std::move(light));
         }
     }
 
@@ -523,6 +411,7 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
     uint32_t texture_index) {
     assert(scene && "Scene must be valid");
     assert(ai_material && "Assimp material must be valid");
+
     // Get texture information from the material
     aiString path;
     aiTextureMapping mapping = aiTextureMapping_UV;
@@ -540,44 +429,24 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
         return Error::NotFound;
     }
 
-    // Gather the texture (if already loaded) or create one
-    AttachmentIndex<Texture> texture;
-    auto result = scene->FindAttachment<Texture>(path.C_Str());
-    if (result.has_value()) {
-        texture = result.value().first;
-    } else {
-        // Create a texture using stb_image
-        int width, height, n;
-        auto full_path = base_path + path.C_Str();
-        auto image_data = stbi_load(full_path.c_str(), &width, &height, &n, 4);
+    // Create a texture using stb_image
+    int width, height, n;
+    auto full_path = base_path + path.C_Str();
+    auto image_data = stbi_load(full_path.c_str(), &width, &height, &n, 4);
 
-        if (!image_data) {
-            spdlog::warn("Decompressing \"{}\" failed with error: {}",
-                         full_path, stbi_failure_reason());
-            return Error::DecompressionFailed;
-        }
-
-        std::vector<uint8_t> data;
-        data.resize(4 * width * height);
-        memcpy(data.data(), image_data, data.size());
-
-        auto texture_result = scene->CreateAttachment<Texture>(
-            {path.C_Str(), static_cast<uint32_t>(width),
-             static_cast<uint32_t>(height), std::move(data), false});
-
-        if (texture_result.has_value()) {
-            texture = texture_result.value();
-            scene->RegisterAttachment<Texture>(texture, path.C_Str());
-            stbi_image_free(image_data);
-        } else {
-            const auto &error = texture_result.error();
-            spdlog::warn("Loading texture \"{}\" failed with error: {}",
-                         path.C_Str(), error.message());
-
-            stbi_image_free(image_data);
-            return Error::LoadingFailed;
-        }
+    if (!image_data) {
+        spdlog::warn("Decompressing \"{}\" failed with error: {}", full_path,
+                     stbi_failure_reason());
+        return Error::DecompressionFailed;
     }
+
+    std::vector<uint8_t> data;
+    data.resize(4 * width * height);
+    memcpy(data.data(), image_data, data.size());
+
+    auto tex_id = scene->textures().push_back(
+        Texture{path.C_Str(), static_cast<uint32_t>(width),
+                static_cast<uint32_t>(height), std::move(data), false});
 
     static const std::map<aiTextureMapMode, VkSamplerAddressMode>
         texture_wrap_modes{
@@ -586,7 +455,7 @@ result<TextureBinding> AssimpLoader::LoadMaterialTexture(
             {aiTextureMapMode_Mirror, VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT},
             {aiTextureMapMode_Decal, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER}};
 
-    TextureBinding tex_binding = {texture, texture_wrap_modes.at(mapmode[0]),
+    TextureBinding tex_binding = {tex_id, texture_wrap_modes.at(mapmode[0]),
                                   uvindex, blend};
     return tex_binding;
 }

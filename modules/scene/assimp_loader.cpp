@@ -16,12 +16,101 @@
 #include "scene/attachments/light.hpp"
 #include "scene/attachments/mesh.hpp"
 #include "scene/utils.hpp"
+#include "platform/platform.hpp"
 
 namespace goma {
 
 namespace {
 
-Texture LoadTexture(const std::string &base_path, const std::string &path) {
+Texture LoadDDSTexture(const std::string &base_path, const std::string &path) {
+    auto full_path = base_path + path;
+
+    auto data_res = Platform::ReadFile(full_path, true);
+    if (!data_res) {
+        throw std::runtime_error(data_res.error().message());
+    }
+
+    auto &data = data_res.value();
+    size_t pos = 0;
+
+    // Read in file marker, make sure it's a DDS file
+    if (data.compare(pos, 4, "DDS ")) {
+        throw std::runtime_error("not a DDS file");
+    }
+    pos += 4;
+
+    struct DDS_PIXELFORMAT {
+        uint32_t dwSize;
+        uint32_t dwFlags;
+        uint32_t dwFourCC;
+        uint32_t dwRGBBitCount;
+        uint32_t dwRBitMask;
+        uint32_t dwGBitMask;
+        uint32_t dwBBitMask;
+        uint32_t dwABitMask;
+    };
+    struct DDS_HEADER {
+        uint32_t dwSize;
+        uint32_t dwFlags;
+        uint32_t dwHeight;
+        uint32_t dwWidth;
+        uint32_t dwPitchOrLinearSize;
+        uint32_t dwDepth;
+        uint32_t dwMipMapCount;
+        uint32_t dwReserved1[11];
+        DDS_PIXELFORMAT ddspf;
+        uint32_t dwCaps1;
+        uint32_t dwCaps2;
+        uint32_t dwReserved2[3];
+    };
+
+    // Read in DDS header
+    DDS_HEADER ddsh;
+    memcpy(&ddsh, data.data() + pos, sizeof(ddsh));
+    pos += sizeof(ddsh);
+
+    // Figure out the image format
+    VkFormat format;
+    int components;
+
+    const uint32_t FOURCC_DXT1 = 'D' | 'X' << 8 | 'T' << 16 | '1' << 24;
+    const uint32_t FOURCC_DXT3 = 'D' | 'X' << 8 | 'T' << 16 | '3' << 24;
+    const uint32_t FOURCC_DXT5 = 'D' | 'X' << 8 | 'T' << 16 | '5' << 24;
+
+    if (ddsh.ddspf.dwFlags & 4) {  // FOURCC
+        switch (ddsh.ddspf.dwFourCC) {
+            case FOURCC_DXT1:
+                format = VK_FORMAT_BC1_RGB_SRGB_BLOCK;
+                components = 3;
+                break;
+            case FOURCC_DXT3:
+                format = VK_FORMAT_BC2_SRGB_BLOCK;
+                components = 4;
+                break;
+            case FOURCC_DXT5:
+                format = VK_FORMAT_BC3_SRGB_BLOCK;
+                components = 4;
+                break;
+            default:
+                throw std::runtime_error("Invalid compression format in DDS");
+        }
+    } else {
+        throw std::runtime_error("Invalid texture format in DDS");
+    }
+
+    // Store primary surface width and height (ignore depth)
+    uint32_t width, height;
+    width = ddsh.dwWidth;
+    height = ddsh.dwHeight;
+
+    std::vector<uint8_t> tex_data(data.size() - pos);
+    memcpy(tex_data.data(), data.data() + pos, tex_data.size());
+
+    return Texture{
+        path, width, height, std::move(tex_data), format, ddsh.dwMipMapCount};
+}
+
+Texture LoadStbiTexture(const std::string &base_path, const std::string &path) {
     // Create a texture using stb_image
     int width, height, n;
     auto full_path = base_path + path;
@@ -38,7 +127,26 @@ Texture LoadTexture(const std::string &base_path, const std::string &path) {
     stbi_image_free(image_data);
 
     return Texture{path, static_cast<uint32_t>(width),
-                   static_cast<uint32_t>(height), std::move(data), false};
+                   static_cast<uint32_t>(height), std::move(data)};
+}
+
+Texture LoadTexture(const std::string &base_path, const std::string &path) {
+    auto last_dot = path.find_last_of(".");
+    if (last_dot == path.npos) {
+        // No extension found, let's try STB and hope for the best
+        return LoadStbiTexture(base_path, path);
+    }
+
+    auto extension = path.substr(last_dot + 1);
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    if (extension == "dds") {
+        return LoadDDSTexture(base_path, path);
+    } else {
+        // Use STB as a catch-all
+        return LoadStbiTexture(base_path, path);
+    }
 }
 
 const std::map<aiTextureType, TextureType> texture_types{

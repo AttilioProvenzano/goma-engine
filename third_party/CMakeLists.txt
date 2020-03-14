@@ -51,12 +51,11 @@ target_include_directories(glm INTERFACE glm)
 
 set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
 set(ENABLE_SPVREMAPPER OFF CACHE BOOL "" FORCE)
-set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
 set(ENABLE_CTEST OFF CACHE BOOL "" FORCE)
 set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
 add_subdirectory(glslang)
 
-foreach(target glslang OGLCompiler OSDependent SPIRV)
+foreach(target glslang glslang-default-resource-limits glslangValidator OGLCompiler OSDependent SPIRV)
   if(TARGET ${target})
     set_property(TARGET ${target} PROPERTY FOLDER ThirdParty/glslang)
   endif()
@@ -87,6 +86,7 @@ endforeach()
 
 # - Spdlog
 
+set(SPDLOG_BUILD_TESTS ON CACHE BOOL "" FORCE)
 add_subdirectory(spdlog)
 
 # - Stb

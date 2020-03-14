@@ -1,12 +1,5 @@
 #include "scene/loaders/assimp_loader.hpp"
 
-#include "scene/attachments/texture.hpp"
-#include "scene/attachments/material.hpp"
-#include "scene/attachments/camera.hpp"
-#include "scene/attachments/light.hpp"
-#include "scene/attachments/mesh.hpp"
-#include "scene/utils.hpp"
-
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/pbrmaterial.h"
@@ -15,7 +8,14 @@
 #define STBI_FAILURE_USERMSG
 #include "stb/stb_image.h"
 
+#include "common/include.hpp"
 #include "common/error_codes.hpp"
+#include "scene/attachments/texture.hpp"
+#include "scene/attachments/material.hpp"
+#include "scene/attachments/camera.hpp"
+#include "scene/attachments/light.hpp"
+#include "scene/attachments/mesh.hpp"
+#include "scene/utils.hpp"
 
 namespace goma {
 

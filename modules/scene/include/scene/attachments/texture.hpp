@@ -13,7 +13,8 @@ struct Texture {
     uint32_t width;
     uint32_t height;
     std::vector<uint8_t> data;
-    bool compressed = false;
+    VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
+    uint32_t mip_levels = 1;
 
     struct {
         bool valid = false;

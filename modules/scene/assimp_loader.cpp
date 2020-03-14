@@ -75,7 +75,6 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
     auto base_material_offset = scene->materials().size();
 
     // Convert materials
-    if (ai_scene->HasMaterials()) {
         for (size_t i = 0; i < ai_scene->mNumMaterials; i++) {
             aiMaterial *ai_material = ai_scene->mMaterials[i];
             Material material{ai_material->GetName().C_Str()};
@@ -137,8 +136,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 ai_material->Get(AI_MATKEY_OPACITY, opacity);
                 ai_material->Get(AI_MATKEY_GLTF_ALPHACUTOFF, alpha_cutoff);
                 ai_material->Get(AI_MATKEY_SHININESS, shininess_exponent);
-                ai_material->Get(AI_MATKEY_SHININESS_STRENGTH,
-                                 specular_strength);
+            ai_material->Get(AI_MATKEY_SHININESS_STRENGTH, specular_strength);
                 ai_material->Get(
                     AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR,
                     metallic_factor);
@@ -157,10 +155,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
 
             scene->materials().push_back(std::move(material));
         }
-    }
 
     // Convert meshes
-    if (ai_scene->HasMeshes()) {
         for (size_t i = 0; i < ai_scene->mNumMeshes; i++) {
             aiMesh *ai_mesh = ai_scene->mMeshes[i];
             Mesh mesh{ai_mesh->mName.C_Str()};
@@ -173,8 +169,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 uint8_t stride;  // e.g. UVs have stride 3 but only the first 2
                                  // elements are relevant
             };
-            using VertexAttrMap =
-                const std::map<VertexAttribute, AttrAccessorInfo>;
+        using VertexAttrMap = const std::map<VertexAttribute, AttrAccessorInfo>;
 
             static const VertexAttrMap attr_map = {
                 {VertexAttribute::Position,
@@ -194,12 +189,10 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                   [](const auto &m) { return &m.mColors[0][0].r; }, 4, 4}},
                 {VertexAttribute::UV0,
                  {[](const auto &m) { return m.HasTextureCoords(0); },
-                  [](const auto &m) { return &m.mTextureCoords[0][0].x; }, 2,
-                  3}},
+              [](const auto &m) { return &m.mTextureCoords[0][0].x; }, 2, 3}},
                 {VertexAttribute::UV1,
                  {[](const auto &m) { return m.HasTextureCoords(1); },
-                  [](const auto &m) { return &m.mTextureCoords[1][0].x; }, 2,
-                  3}},
+              [](const auto &m) { return &m.mTextureCoords[1][0].x; }, 2, 3}},
             };
 
             // Copy the keys (in-order) into a layout vector
@@ -242,8 +235,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                     auto offset = utils::GetOffset(layout, attr);
                     const auto &attr_info = attr_map.at(attr);
                     for (unsigned i = 0; i < ai_mesh->mNumVertices; i++) {
-                        memcpy(
-                            mesh.vertices.data.data() + i * stride + offset,
+                    memcpy(mesh.vertices.data.data() + i * stride + offset,
                             attr_info.accessor(*ai_mesh) + i * attr_info.stride,
                             attr_info.vec_size * sizeof(ai_real));
                     }
@@ -254,8 +246,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
             // Copy index data into the buffer
             if (ai_mesh->HasFaces()) {
                 mesh.indices.reserve(ai_mesh->mNumFaces * 3);
-                std::for_each(ai_mesh->mFaces,
-                              ai_mesh->mFaces + ai_mesh->mNumFaces,
+            std::for_each(ai_mesh->mFaces, ai_mesh->mFaces + ai_mesh->mNumFaces,
                               [&mesh](const auto &face) {
                                   std::copy(face.mIndices,
                                             face.mIndices + face.mNumIndices,
@@ -266,21 +257,15 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
             // Using push_back() for materials guarantees that they are stored
             // in order; a solution using insert() would require keeping track
             // of the actual indices.
-            mesh.material_id = {base_material_offset + ai_mesh->mMaterialIndex,
-                                0};
+        mesh.material_id = {base_material_offset + ai_mesh->mMaterialIndex, 0};
 
             scene->meshes().push_back(std::move(mesh));
         }
-    }
 
-    // Convert node structure and meshes
-    if (ai_scene->mRootNode) {
-        // This will recursively convert all other nodes
+    // Recursively convert node structure and meshes
         ConvertNode(*ai_scene->mRootNode, scene->root_node(), scene->meshes());
-    }
 
     // Convert embedded textures (if any)
-    if (ai_scene->HasTextures()) {
         for (size_t i = 0; i < ai_scene->mNumTextures; i++) {
             aiTexture *ai_texture = ai_scene->mTextures[i];
 
@@ -331,10 +316,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                      ai_texture->mHeight, std::move(data), false});
             }
         }
-    }
 
     // Convert cameras
-    if (ai_scene->HasCameras()) {
         for (size_t i = 0; i < ai_scene->mNumCameras; i++) {
             aiCamera *ai_camera = ai_scene->mCameras[i];
 
@@ -347,8 +330,7 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 {ai_camera->mPosition.x, ai_camera->mPosition.y,
                  ai_camera->mPosition.z},
                 {ai_camera->mUp.x, ai_camera->mUp.y, ai_camera->mUp.z},
-                {ai_camera->mLookAt.x, ai_camera->mLookAt.y,
-                 ai_camera->mLookAt.z}};
+            {ai_camera->mLookAt.x, ai_camera->mLookAt.y, ai_camera->mLookAt.z}};
 
             auto node = scene->find(ai_camera->mName.C_Str());
             if (node) {
@@ -356,15 +338,12 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
             }
             scene->cameras().push_back(std::move(camera));
         }
-    }
 
     // Convert lights
-    if (ai_scene->HasLights()) {
         for (size_t i = 0; i < ai_scene->mNumLights; i++) {
             aiLight *ai_light = ai_scene->mLights[i];
 
-            static const std::map<aiLightSourceType, LightType> light_type_map =
-                {
+        static const std::map<aiLightSourceType, LightType> light_type_map = {
                     {aiLightSource_UNDEFINED, LightType::Directional},
                     {aiLightSource_DIRECTIONAL, LightType::Directional},
                     {aiLightSource_POINT, LightType::Point},
@@ -400,7 +379,6 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
             }
             scene->lights().push_back(std::move(light));
         }
-    }
 
     return std::move(scene);
 }  // namespace goma

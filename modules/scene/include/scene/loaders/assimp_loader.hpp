@@ -20,11 +20,6 @@ class AssimpLoader : public SceneLoader {
 
     result<std::unique_ptr<Scene>> ConvertScene(const aiScene* ai_scene,
                                                 const std::string& base_path);
-
-    result<TextureBinding> LoadMaterialTexture(
-        Scene* scene, const aiMaterial* material, const std::string& base_path,
-        const std::pair<aiTextureType, TextureType>& texture_type,
-        uint32_t texture_index);
 };
 
 }  // namespace goma

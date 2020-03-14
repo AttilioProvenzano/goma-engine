@@ -15,6 +15,9 @@ class AssimpLoader : public SceneLoader {
         const char* file_path) override;
 
   private:
+    const int kNumThreads = 8;
+    ctpl::thread_pool thread_pool_{kNumThreads};
+
     result<std::unique_ptr<Scene>> ConvertScene(const aiScene* ai_scene,
                                                 const std::string& base_path);
 

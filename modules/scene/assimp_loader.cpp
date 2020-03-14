@@ -65,6 +65,46 @@ void ConvertNode(const aiNode &ai_node, Node &out_node,
                   });
 }
 
+static const std::vector<std::pair<aiTextureType, TextureType>> texture_types{
+    {aiTextureType_DIFFUSE, TextureType::Diffuse},
+    {aiTextureType_SPECULAR, TextureType::Specular},
+    {aiTextureType_AMBIENT, TextureType::Ambient},
+    {aiTextureType_EMISSIVE, TextureType::Emissive},
+    {aiTextureType_HEIGHT, TextureType::HeightMap},
+    {aiTextureType_NORMALS, TextureType::NormalMap},
+    {aiTextureType_SHININESS, TextureType::Shininess},
+    {aiTextureType_OPACITY, TextureType::Opacity},
+    {aiTextureType_DISPLACEMENT, TextureType::Displacement},
+    {aiTextureType_LIGHTMAP, TextureType::LightMap},
+    {aiTextureType_REFLECTION, TextureType::Reflection},
+    {aiTextureType_UNKNOWN, TextureType::MetallicRoughness}};
+
+Texture LoadTexture(const std::string &base_path, const std::string &path) {
+    // Create a texture using stb_image
+    int width, height, n;
+    auto full_path = base_path + path;
+    auto image_data = stbi_load(full_path.c_str(), &width, &height, &n, 4);
+
+    if (!image_data) {
+        throw std::runtime_error(stbi_failure_reason());
+    }
+
+    std::vector<uint8_t> data;
+    data.resize(4 * width * height);
+    memcpy(data.data(), image_data, data.size());
+
+    stbi_image_free(image_data);
+
+    return Texture{path, static_cast<uint32_t>(width),
+                   static_cast<uint32_t>(height), std::move(data), false};
+}
+
+const std::map<aiTextureMapMode, VkSamplerAddressMode> texture_wrap_modes{
+    {aiTextureMapMode_Wrap, VK_SAMPLER_ADDRESS_MODE_REPEAT},
+    {aiTextureMapMode_Clamp, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE},
+    {aiTextureMapMode_Mirror, VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT},
+    {aiTextureMapMode_Decal, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER}};
+
 }  // namespace
 
 result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
@@ -75,36 +115,64 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
     auto base_material_offset = scene->materials().size();
 
     // Convert materials
+    {
+        std::vector<std::future<Texture>> texture_fut;
+        texture_fut.reserve(ai_scene->mNumMaterials);
+
+        // A first pass loads textures in parallel
         for (size_t i = 0; i < ai_scene->mNumMaterials; i++) {
             aiMaterial *ai_material = ai_scene->mMaterials[i];
             Material material{ai_material->GetName().C_Str()};
 
-            static const std::vector<std::pair<aiTextureType, TextureType>>
-                texture_types{
-                    {aiTextureType_DIFFUSE, TextureType::Diffuse},
-                    {aiTextureType_SPECULAR, TextureType::Specular},
-                    {aiTextureType_AMBIENT, TextureType::Ambient},
-                    {aiTextureType_EMISSIVE, TextureType::Emissive},
-                    {aiTextureType_HEIGHT, TextureType::HeightMap},
-                    {aiTextureType_NORMALS, TextureType::NormalMap},
-                    {aiTextureType_SHININESS, TextureType::Shininess},
-                    {aiTextureType_OPACITY, TextureType::Opacity},
-                    {aiTextureType_DISPLACEMENT, TextureType::Displacement},
-                    {aiTextureType_LIGHTMAP, TextureType::LightMap},
-                    {aiTextureType_REFLECTION, TextureType::Reflection},
-                    {aiTextureType_UNKNOWN, TextureType::MetallicRoughness}};
+            for (const auto &texture_type : texture_types) {
+                auto tex_count =
+                    ai_material->GetTextureCount(texture_type.first);
+
+                for (uint32_t j = 0; j < tex_count; j++) {
+                    aiString path;
+                    ai_material->GetTexture(texture_type.first, j, &path);
+
+                    texture_fut.push_back(
+                        thread_pool_.push([&base_path, &path](int) {
+                            return LoadTexture(base_path, path.C_Str());
+                        }));
+                }
+            }
+        }
+
+        // A second pass loads the materials
+        size_t fut_id = 0;
+        for (size_t i = 0; i < ai_scene->mNumMaterials; i++) {
+            aiMaterial *ai_material = ai_scene->mMaterials[i];
+            Material material{ai_material->GetName().C_Str()};
 
             for (const auto &texture_type : texture_types) {
-                for (uint32_t j = 0;
-                     j < ai_material->GetTextureCount(texture_type.first);
-                     j++) {
-                    auto tex_binding = LoadMaterialTexture(
-                        scene.get(), ai_material, base_path, texture_type, j);
+                auto tex_count =
+                    ai_material->GetTextureCount(texture_type.first);
 
-                    if (tex_binding.has_value()) {
-                        material.texture_bindings[texture_type.second]
-                            .push_back(std::move(tex_binding.value()));
-                    }
+                for (uint32_t j = 0; j < tex_count; j++) {
+                    // Get texture information from the material
+                    aiString path;
+                    aiTextureMapping mapping = aiTextureMapping_UV;
+                    unsigned int uvindex = 0;
+                    float blend = 1.0f;
+                    aiTextureOp op = aiTextureOp_Add;
+                    aiTextureMapMode mapmode[3] = {aiTextureMapMode_Wrap,
+                                                   aiTextureMapMode_Wrap,
+                                                   aiTextureMapMode_Wrap};
+
+                    ai_material->GetTexture(texture_type.first, j, &path,
+                                            &mapping, &uvindex, &blend, &op,
+                                            mapmode);
+
+                    // Get the textures that were loaded in parallel,
+                    // relying on the same iteration order
+                    auto tex_id = scene->textures().push_back(
+                        texture_fut[fut_id++].get());
+
+                    material.texture_bindings[texture_type.second].push_back(
+                        {tex_id, texture_wrap_modes.at(mapmode[0]), uvindex,
+                         blend});
                 }
 
                 aiColor3D diffuse(0, 0, 0);
@@ -136,7 +204,8 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
                 ai_material->Get(AI_MATKEY_OPACITY, opacity);
                 ai_material->Get(AI_MATKEY_GLTF_ALPHACUTOFF, alpha_cutoff);
                 ai_material->Get(AI_MATKEY_SHININESS, shininess_exponent);
-            ai_material->Get(AI_MATKEY_SHININESS_STRENGTH, specular_strength);
+                ai_material->Get(AI_MATKEY_SHININESS_STRENGTH,
+                                 specular_strength);
                 ai_material->Get(
                     AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR,
                     metallic_factor);
@@ -155,235 +224,181 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
 
             scene->materials().push_back(std::move(material));
         }
+    }
 
     // Convert meshes
-        for (size_t i = 0; i < ai_scene->mNumMeshes; i++) {
-            aiMesh *ai_mesh = ai_scene->mMeshes[i];
-            Mesh mesh{ai_mesh->mName.C_Str()};
+    for (size_t i = 0; i < ai_scene->mNumMeshes; i++) {
+        aiMesh *ai_mesh = ai_scene->mMeshes[i];
+        Mesh mesh{ai_mesh->mName.C_Str()};
 
-            // Create the mesh layout
-            struct AttrAccessorInfo {
-                std::function<bool(const aiMesh &)> has_any;
-                std::function<ai_real *(const aiMesh &)> accessor;
-                uint8_t vec_size;
-                uint8_t stride;  // e.g. UVs have stride 3 but only the first 2
-                                 // elements are relevant
-            };
+        // Create the mesh layout
+        struct AttrAccessorInfo {
+            std::function<bool(const aiMesh &)> has_any;
+            std::function<ai_real *(const aiMesh &)> accessor;
+            uint8_t vec_size;
+            uint8_t stride;  // e.g. UVs have stride 3 but only the
+                             // first 2 elements are relevant
+        };
         using VertexAttrMap = const std::map<VertexAttribute, AttrAccessorInfo>;
 
-            static const VertexAttrMap attr_map = {
-                {VertexAttribute::Position,
-                 {[](const auto &m) { return m.HasPositions(); },
-                  [](const auto &m) { return &m.mVertices[0].x; }, 3, 3}},
-                {VertexAttribute::Normal,
-                 {[](const auto &m) { return m.HasNormals(); },
-                  [](const auto &m) { return &m.mNormals[0].x; }, 3, 3}},
-                {VertexAttribute::Tangent,
-                 {[](const auto &m) { return m.HasTangentsAndBitangents(); },
-                  [](const auto &m) { return &m.mTangents[0].x; }, 3, 3}},
-                {VertexAttribute::Bitangent,
-                 {[](const auto &m) { return m.HasTangentsAndBitangents(); },
-                  [](const auto &m) { return &m.mBitangents[0].x; }, 3, 3}},
-                {VertexAttribute::Color,
-                 {[](const auto &m) { return m.HasVertexColors(0); },
-                  [](const auto &m) { return &m.mColors[0][0].r; }, 4, 4}},
-                {VertexAttribute::UV0,
-                 {[](const auto &m) { return m.HasTextureCoords(0); },
+        static const VertexAttrMap attr_map = {
+            {VertexAttribute::Position,
+             {[](const auto &m) { return m.HasPositions(); },
+              [](const auto &m) { return &m.mVertices[0].x; }, 3, 3}},
+            {VertexAttribute::Normal,
+             {[](const auto &m) { return m.HasNormals(); },
+              [](const auto &m) { return &m.mNormals[0].x; }, 3, 3}},
+            {VertexAttribute::Tangent,
+             {[](const auto &m) { return m.HasTangentsAndBitangents(); },
+              [](const auto &m) { return &m.mTangents[0].x; }, 3, 3}},
+            {VertexAttribute::Bitangent,
+             {[](const auto &m) { return m.HasTangentsAndBitangents(); },
+              [](const auto &m) { return &m.mBitangents[0].x; }, 3, 3}},
+            {VertexAttribute::Color,
+             {[](const auto &m) { return m.HasVertexColors(0); },
+              [](const auto &m) { return &m.mColors[0][0].r; }, 4, 4}},
+            {VertexAttribute::UV0,
+             {[](const auto &m) { return m.HasTextureCoords(0); },
               [](const auto &m) { return &m.mTextureCoords[0][0].x; }, 2, 3}},
-                {VertexAttribute::UV1,
-                 {[](const auto &m) { return m.HasTextureCoords(1); },
+            {VertexAttribute::UV1,
+             {[](const auto &m) { return m.HasTextureCoords(1); },
               [](const auto &m) { return &m.mTextureCoords[1][0].x; }, 2, 3}},
-            };
+        };
 
-            // Copy the keys (in-order) into a layout vector
-            VertexLayout layout;
-            layout.reserve(attr_map.size());
-            std::transform(attr_map.begin(), attr_map.end(),
-                           std::back_inserter(layout),
-                           [](const auto &a) { return a.first; });
+        // Copy the keys (in-order) into a layout vector
+        VertexLayout layout;
+        layout.reserve(attr_map.size());
+        std::transform(attr_map.begin(), attr_map.end(),
+                       std::back_inserter(layout),
+                       [](const auto &a) { return a.first; });
 
-            // Filter out the attributes not present in the current mesh
-            layout.erase(
-                std::remove_if(layout.begin(), layout.end(),
-                               [&ai_mesh](const auto &attr) {
-                                   return !attr_map.at(attr).has_any(*ai_mesh);
-                               }),
-                layout.end());
+        // Filter out the attributes not present in the current mesh
+        layout.erase(
+            std::remove_if(layout.begin(), layout.end(),
+                           [&ai_mesh](const auto &attr) {
+                               return !attr_map.at(attr).has_any(*ai_mesh);
+                           }),
+            layout.end());
 
-            mesh.vertices.data.resize(ai_mesh->mNumVertices *
-                                      utils::GetStride(layout));
+        mesh.vertices.data.resize(ai_mesh->mNumVertices *
+                                  utils::GetStride(layout));
 
-            // Get the bounding box for the mesh
-            AABB aabb;
-            std::for_each(ai_mesh->mVertices,
-                          ai_mesh->mVertices + ai_mesh->mNumVertices,
-                          [&aabb](const auto &v) {
-                              if (v.x < aabb.min.x) aabb.min.x = v.x;
-                              if (v.x > aabb.max.x) aabb.max.x = v.x;
-                              if (v.y < aabb.min.y) aabb.min.y = v.y;
-                              if (v.y > aabb.max.y) aabb.max.y = v.y;
-                              if (v.z < aabb.min.z) aabb.min.z = v.z;
-                              if (v.z > aabb.max.z) aabb.max.z = v.z;
-                          });
-            mesh.aabb = std::make_unique<AABB>(std::move(aabb));
+        // Get the bounding box for the mesh
+        AABB aabb;
+        std::for_each(ai_mesh->mVertices,
+                      ai_mesh->mVertices + ai_mesh->mNumVertices,
+                      [&aabb](const auto &v) {
+                          if (v.x < aabb.min.x) aabb.min.x = v.x;
+                          if (v.x > aabb.max.x) aabb.max.x = v.x;
+                          if (v.y < aabb.min.y) aabb.min.y = v.y;
+                          if (v.y > aabb.max.y) aabb.max.y = v.y;
+                          if (v.z < aabb.min.z) aabb.min.z = v.z;
+                          if (v.z > aabb.max.z) aabb.max.z = v.z;
+                      });
+        mesh.aabb = std::make_unique<AABB>(std::move(aabb));
 
-            // Copy vertex data into the buffer
-            auto stride = utils::GetStride(layout);
-            std::for_each(
-                layout.begin(), layout.end(),
-                [&mesh, &ai_mesh, &layout, stride](const auto &attr) {
-                    auto offset = utils::GetOffset(layout, attr);
-                    const auto &attr_info = attr_map.at(attr);
-                    for (unsigned i = 0; i < ai_mesh->mNumVertices; i++) {
+        // Copy vertex data into the buffer
+        auto stride = utils::GetStride(layout);
+        std::for_each(
+            layout.begin(), layout.end(),
+            [&mesh, &ai_mesh, &layout, stride](const auto &attr) {
+                auto offset = utils::GetOffset(layout, attr);
+                const auto &attr_info = attr_map.at(attr);
+                for (unsigned i = 0; i < ai_mesh->mNumVertices; i++) {
                     memcpy(mesh.vertices.data.data() + i * stride + offset,
-                            attr_info.accessor(*ai_mesh) + i * attr_info.stride,
-                            attr_info.vec_size * sizeof(ai_real));
-                    }
-                });
-            mesh.vertices.size = ai_mesh->mNumVertices;
-            mesh.vertices.layout = std::move(layout);
+                           attr_info.accessor(*ai_mesh) + i * attr_info.stride,
+                           attr_info.vec_size * sizeof(ai_real));
+                }
+            });
+        mesh.vertices.size = ai_mesh->mNumVertices;
+        mesh.vertices.layout = std::move(layout);
 
-            // Copy index data into the buffer
-            if (ai_mesh->HasFaces()) {
-                mesh.indices.reserve(ai_mesh->mNumFaces * 3);
+        // Copy index data into the buffer
+        if (ai_mesh->HasFaces()) {
+            mesh.indices.reserve(ai_mesh->mNumFaces * 3);
             std::for_each(ai_mesh->mFaces, ai_mesh->mFaces + ai_mesh->mNumFaces,
-                              [&mesh](const auto &face) {
-                                  std::copy(face.mIndices,
-                                            face.mIndices + face.mNumIndices,
-                                            std::back_inserter(mesh.indices));
-                              });
-            }
+                          [&mesh](const auto &face) {
+                              std::copy(face.mIndices,
+                                        face.mIndices + face.mNumIndices,
+                                        std::back_inserter(mesh.indices));
+                          });
+        }
 
-            // Using push_back() for materials guarantees that they are stored
-            // in order; a solution using insert() would require keeping track
-            // of the actual indices.
+        // Using push_back() for materials guarantees that they are
+        // stored in order; a solution using insert() would require
+        // keeping track of the actual indices.
         mesh.material_id = {base_material_offset + ai_mesh->mMaterialIndex, 0};
 
-            scene->meshes().push_back(std::move(mesh));
-        }
+        scene->meshes().push_back(std::move(mesh));
+    }
 
     // Recursively convert node structure and meshes
-        ConvertNode(*ai_scene->mRootNode, scene->root_node(), scene->meshes());
+    ConvertNode(*ai_scene->mRootNode, scene->root_node(), scene->meshes());
 
     // Convert cameras
-        for (size_t i = 0; i < ai_scene->mNumCameras; i++) {
-            aiCamera *ai_camera = ai_scene->mCameras[i];
+    for (size_t i = 0; i < ai_scene->mNumCameras; i++) {
+        aiCamera *ai_camera = ai_scene->mCameras[i];
 
-            Camera camera{
-                ai_camera->mName.C_Str(),
-                glm::degrees(ai_camera->mHorizontalFOV),
-                ai_camera->mClipPlaneNear,
-                ai_camera->mClipPlaneFar,
-                ai_camera->mAspect,
-                {ai_camera->mPosition.x, ai_camera->mPosition.y,
-                 ai_camera->mPosition.z},
-                {ai_camera->mUp.x, ai_camera->mUp.y, ai_camera->mUp.z},
+        Camera camera{
+            ai_camera->mName.C_Str(),
+            glm::degrees(ai_camera->mHorizontalFOV),
+            ai_camera->mClipPlaneNear,
+            ai_camera->mClipPlaneFar,
+            ai_camera->mAspect,
+            {ai_camera->mPosition.x, ai_camera->mPosition.y,
+             ai_camera->mPosition.z},
+            {ai_camera->mUp.x, ai_camera->mUp.y, ai_camera->mUp.z},
             {ai_camera->mLookAt.x, ai_camera->mLookAt.y, ai_camera->mLookAt.z}};
 
-            auto node = scene->find(ai_camera->mName.C_Str());
-            if (node) {
-                camera.attach_to(*node);
-            }
-            scene->cameras().push_back(std::move(camera));
+        auto node = scene->find(ai_camera->mName.C_Str());
+        if (node) {
+            camera.attach_to(*node);
         }
+        scene->cameras().push_back(std::move(camera));
+    }
 
     // Convert lights
-        for (size_t i = 0; i < ai_scene->mNumLights; i++) {
-            aiLight *ai_light = ai_scene->mLights[i];
+    for (size_t i = 0; i < ai_scene->mNumLights; i++) {
+        aiLight *ai_light = ai_scene->mLights[i];
 
         static const std::map<aiLightSourceType, LightType> light_type_map = {
-                    {aiLightSource_UNDEFINED, LightType::Directional},
-                    {aiLightSource_DIRECTIONAL, LightType::Directional},
-                    {aiLightSource_POINT, LightType::Point},
-                    {aiLightSource_SPOT, LightType::Spot},
-                    {aiLightSource_AMBIENT, LightType::Ambient},
-                    {aiLightSource_AREA, LightType::Area},
-                };
+            {aiLightSource_UNDEFINED, LightType::Directional},
+            {aiLightSource_DIRECTIONAL, LightType::Directional},
+            {aiLightSource_POINT, LightType::Point},
+            {aiLightSource_SPOT, LightType::Spot},
+            {aiLightSource_AMBIENT, LightType::Ambient},
+            {aiLightSource_AREA, LightType::Area},
+        };
 
-            Light light{
-                ai_light->mName.C_Str(),
-                light_type_map.at(ai_light->mType),
-                {ai_light->mPosition.x, ai_light->mPosition.y,
-                 ai_light->mPosition.z},
-                {ai_light->mDirection.x, ai_light->mDirection.y,
-                 ai_light->mDirection.z},
-                {ai_light->mUp.x, ai_light->mUp.y, ai_light->mUp.z},
-                1.0f,
-                {ai_light->mColorDiffuse.r, ai_light->mColorDiffuse.g,
-                 ai_light->mColorDiffuse.b},
-                {ai_light->mColorSpecular.r, ai_light->mColorSpecular.g,
-                 ai_light->mColorSpecular.b},
-                {ai_light->mColorAmbient.r, ai_light->mColorAmbient.g,
-                 ai_light->mColorAmbient.b},
-                {ai_light->mAttenuationConstant, ai_light->mAttenuationLinear,
-                 ai_light->mAttenuationQuadratic},
-                glm::degrees(ai_light->mAngleInnerCone),
-                glm::degrees(ai_light->mAngleOuterCone),
-                {ai_light->mSize.x, ai_light->mSize.y}};
+        Light light{
+            ai_light->mName.C_Str(),
+            light_type_map.at(ai_light->mType),
+            {ai_light->mPosition.x, ai_light->mPosition.y,
+             ai_light->mPosition.z},
+            {ai_light->mDirection.x, ai_light->mDirection.y,
+             ai_light->mDirection.z},
+            {ai_light->mUp.x, ai_light->mUp.y, ai_light->mUp.z},
+            1.0f,
+            {ai_light->mColorDiffuse.r, ai_light->mColorDiffuse.g,
+             ai_light->mColorDiffuse.b},
+            {ai_light->mColorSpecular.r, ai_light->mColorSpecular.g,
+             ai_light->mColorSpecular.b},
+            {ai_light->mColorAmbient.r, ai_light->mColorAmbient.g,
+             ai_light->mColorAmbient.b},
+            {ai_light->mAttenuationConstant, ai_light->mAttenuationLinear,
+             ai_light->mAttenuationQuadratic},
+            glm::degrees(ai_light->mAngleInnerCone),
+            glm::degrees(ai_light->mAngleOuterCone),
+            {ai_light->mSize.x, ai_light->mSize.y}};
 
-            auto node = scene->find(ai_light->mName.C_Str());
-            if (node) {
-                light.attach_to(*node);
-            }
-            scene->lights().push_back(std::move(light));
+        auto node = scene->find(ai_light->mName.C_Str());
+        if (node) {
+            light.attach_to(*node);
         }
+        scene->lights().push_back(std::move(light));
+    }
 
     return std::move(scene);
-}  // namespace goma
-
-result<TextureBinding> AssimpLoader::LoadMaterialTexture(
-    Scene *scene, const aiMaterial *ai_material, const std::string &base_path,
-    const std::pair<aiTextureType, TextureType> &texture_type,
-    uint32_t texture_index) {
-    assert(scene && "Scene must be valid");
-    assert(ai_material && "Assimp material must be valid");
-
-    // Get texture information from the material
-    aiString path;
-    aiTextureMapping mapping = aiTextureMapping_UV;
-    unsigned int uvindex = 0;
-    float blend = 1.0f;
-    aiTextureOp op = aiTextureOp_Add;
-    aiTextureMapMode mapmode[3] = {aiTextureMapMode_Wrap, aiTextureMapMode_Wrap,
-                                   aiTextureMapMode_Wrap};
-
-    ai_material->GetTexture(texture_type.first, texture_index, &path, &mapping,
-                            &uvindex, &blend, &op, mapmode);
-
-    if (path.length == 0) {
-        spdlog::warn("No path specified for texture, skipping.");
-        return Error::NotFound;
-    }
-
-    // Create a texture using stb_image
-    int width, height, n;
-    auto full_path = base_path + path.C_Str();
-    auto image_data = stbi_load(full_path.c_str(), &width, &height, &n, 4);
-
-    if (!image_data) {
-        spdlog::warn("Decompressing \"{}\" failed with error: {}", full_path,
-                     stbi_failure_reason());
-        return Error::DecompressionFailed;
-    }
-
-    std::vector<uint8_t> data;
-    data.resize(4 * width * height);
-    memcpy(data.data(), image_data, data.size());
-
-    auto tex_id = scene->textures().push_back(
-        Texture{path.C_Str(), static_cast<uint32_t>(width),
-                static_cast<uint32_t>(height), std::move(data), false});
-
-    static const std::map<aiTextureMapMode, VkSamplerAddressMode>
-        texture_wrap_modes{
-            {aiTextureMapMode_Wrap, VK_SAMPLER_ADDRESS_MODE_REPEAT},
-            {aiTextureMapMode_Clamp, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE},
-            {aiTextureMapMode_Mirror, VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT},
-            {aiTextureMapMode_Decal, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER}};
-
-    TextureBinding tex_binding = {tex_id, texture_wrap_modes.at(mapmode[0]),
-                                  uvindex, blend};
-    return tex_binding;
 }
 
 }  // namespace goma

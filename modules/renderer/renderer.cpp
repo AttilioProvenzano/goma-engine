@@ -11,7 +11,11 @@
 namespace goma {
 
 Renderer::Renderer(Engine& engine)
-    : engine_(engine), device_(), graphics_ctx_(device_), upload_ctx_(device_) {
+    : engine_(engine),
+      device_(),
+      graphics_ctx_(device_),
+      upload_ctx_(device_),
+      thread_pool_(kNumThreads) {
     auto res = device_.InitWindow(engine_.platform());
     if (res.has_error()) {
         throw std::runtime_error(res.error().message());

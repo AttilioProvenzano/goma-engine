@@ -60,6 +60,9 @@ class Renderer {
     using ShaderMap = std::unordered_map<ShaderDesc, Shader*>;
     ShaderMap shader_map_;
 
+    const int kNumThreads = 8;
+    ctpl::thread_pool thread_pool_;
+
     result<void> RenderMeshes(GraphicsContext& ctx, Scene& scene);
 };
 

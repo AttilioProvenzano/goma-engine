@@ -419,9 +419,13 @@ Device::Device(const Device::Config& config) : config_(config) {
     if (res.has_error()) {
         throw std::runtime_error(res.error().message());
     }
+
+    glslang::InitializeProcess();
 }
 
 Device::~Device() {
+    glslang::FinalizeProcess();
+
     vkDeviceWaitIdle(api_handles_.device);
 
     for (auto& shader : shaders_) {
@@ -915,7 +919,6 @@ result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
             stage_map = {{VK_SHADER_STAGE_VERTEX_BIT, EShLangVertex},
                          {VK_SHADER_STAGE_FRAGMENT_BIT, EShLangFragment}};
 
-        glslang::InitializeProcess();
         glslang::TShader shader{stage_map.at(shader_desc.stage)};
 
         auto source = shader_desc.source.c_str();
@@ -958,8 +961,6 @@ result<Shader*> Device::CreateShader(ShaderDesc shader_desc) {
         glslang::SpvOptions spvOptions = {};
         GlslangToSpv(*program.getIntermediate(stage_map.at(shader_desc.stage)),
                      spirv, &logger, &spvOptions);
-
-        glslang::FinalizeProcess();
     }
 
     VkShaderModuleCreateInfo shader_info = {

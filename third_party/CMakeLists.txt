@@ -28,6 +28,11 @@ endforeach()
 add_library(catch2 INTERFACE)
 target_include_directories(catch2 INTERFACE catch2)
 
+# - Ctpl
+
+add_library(ctpl INTERFACE)
+target_include_directories(ctpl INTERFACE ctpl/include)
+
 # - Dear imgui
 
 add_subdirectory(imgui)

@@ -1,2 +1,2 @@
 include(${CMAKE_SOURCE_DIR}/scripts/cmake/add_module.cmake)
-add_module(glm outcome spdlog vulkan)
+add_module(glm ctpl outcome spdlog vulkan)

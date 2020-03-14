@@ -771,10 +771,10 @@ SCENARIO("can set up imgui", "[rhi][gui][imgui]") {
         GOMA_TEST_TRYV(device.WaitOnWork(std::move(receipt)));
     }
 
-    GOMA_TEST_TRY(gui_vtx, platform.ReadFileToString(GOMA_ASSETS_DIR
-                                                     "shaders/imgui.vert"));
-    GOMA_TEST_TRY(gui_frag, platform.ReadFileToString(GOMA_ASSETS_DIR
-                                                      "shaders/imgui.frag"));
+    GOMA_TEST_TRY(gui_vtx,
+                  platform.ReadFile(GOMA_ASSETS_DIR "shaders/imgui.vert"));
+    GOMA_TEST_TRY(gui_frag,
+                  platform.ReadFile(GOMA_ASSETS_DIR "shaders/imgui.frag"));
 
     ShaderDesc vtx_desc = {"gui_vtx", VK_SHADER_STAGE_VERTEX_BIT,
                            std::move(gui_vtx)};

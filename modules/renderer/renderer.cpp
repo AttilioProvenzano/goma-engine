@@ -239,11 +239,11 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
     static const auto frag_path = GOMA_ASSETS_DIR "shaders/base.frag";
 
     if (ro.vtx_code.empty()) {
-        OUTCOME_TRY(vtx_code, platform.ReadFileToString(vtx_path));
+        OUTCOME_TRY(vtx_code, platform.ReadFile(vtx_path));
         ro.vtx_code = std::move(vtx_code);
     }
     if (ro.frag_code.empty()) {
-        OUTCOME_TRY(frag_code, platform.ReadFileToString(frag_path));
+        OUTCOME_TRY(frag_code, platform.ReadFile(frag_path));
         ro.frag_code = std::move(frag_code);
     }
 

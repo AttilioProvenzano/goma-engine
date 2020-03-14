@@ -17,6 +17,10 @@
 namespace outcome = OUTCOME_V2_NAMESPACE;
 using outcome::result;
 
+#ifndef GOMA_CACHE_DIR
+#define GOMA_CACHE_DIR "goma-cache/"
+#endif
+
 #include <algorithm>
 #include <array>
 #include <fstream>

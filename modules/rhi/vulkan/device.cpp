@@ -14,7 +14,7 @@ namespace goma {
 
 namespace {
 
-const char* kPipelineCacheFilename = "pipeline_cache.data";
+const char* kPipelineCacheFilename = GOMA_CACHE_DIR "pipeline_cache.data";
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
 DebugMessenger(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -309,18 +309,12 @@ result<VkSwapchainKHR> CreateSwapchain(
 
 result<VkPipelineCache> CreatePipelineCache(VkDevice device,
                                             const char* filename = nullptr) {
-    std::vector<char> data;
+    std::string data;
 
     if (filename) {
-        std::ifstream f(filename, std::ios_base::in | std::ios_base::binary);
-
-        if (f.good()) {
-            f.seekg(0, std::ios::end);
-            auto size = static_cast<size_t>(f.tellg());
-
-            data.resize(size);
-            f.seekg(0);
-            f.read(data.data(), size);
+        auto d = Platform::ReadFile(filename, true);
+        if (d) {
+            data = std::move(d.value());
         }
     }
 
@@ -329,7 +323,7 @@ result<VkPipelineCache> CreatePipelineCache(VkDevice device,
 
     if (!data.empty()) {
         pipeline_cache_info.initialDataSize = data.size();
-        pipeline_cache_info.pInitialData = data.data();
+        pipeline_cache_info.pInitialData = data.c_str();
     }
 
     VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
@@ -489,11 +483,8 @@ Device::~Device() {
         vkGetPipelineCacheData(api_handles_.device, api_handles_.pipeline_cache,
                                &data_size, static_cast<void*>(data.data()));
 
-        std::ofstream f(kPipelineCacheFilename,
-                        std::ios_base::out | std::ios_base::binary);
-        if (f.good()) {
-            f.write(data.data(), data.size());
-        }
+        auto _ = Platform::WriteFile(kPipelineCacheFilename, data.size(),
+                                     data.data(), true);
 
         vkDestroyPipelineCache(api_handles_.device, api_handles_.pipeline_cache,
                                nullptr);

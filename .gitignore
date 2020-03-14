@@ -1,6 +1,6 @@
 build/
+goma-cache/
 .vscode
 .tags
 .tags1
-pipeline_cache.data
 imgui.ini

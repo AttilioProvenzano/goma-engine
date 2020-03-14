@@ -265,58 +265,6 @@ result<std::unique_ptr<Scene>> AssimpLoader::ConvertScene(
     // Recursively convert node structure and meshes
         ConvertNode(*ai_scene->mRootNode, scene->root_node(), scene->meshes());
 
-    // Convert embedded textures (if any)
-        for (size_t i = 0; i < ai_scene->mNumTextures; i++) {
-            aiTexture *ai_texture = ai_scene->mTextures[i];
-
-            if (ai_texture->mFilename.length == 0) {
-                spdlog::warn("No filename specified for texture, skipping.");
-                continue;
-            }
-
-            if (!ai_texture->mHeight) {
-                int width, height, n;
-                auto image_data = stbi_load_from_memory(
-                    reinterpret_cast<const stbi_uc *>(ai_texture->pcData),
-                    ai_texture->mWidth, &width, &height, &n, 4);
-
-                if (!image_data) {
-                    spdlog::warn("Decompressing \"{}\" failed with error: {}",
-                                 ai_texture->mFilename.C_Str(),
-                                 stbi_failure_reason());
-
-                    // Decompression failed, store the compressed texture
-                    std::vector<uint8_t> data;
-                    data.resize(4 * ai_texture->mWidth * ai_texture->mHeight);
-                    memcpy(data.data(), ai_texture->pcData, data.size());
-
-                    scene->textures().push_back({ai_texture->mFilename.C_Str(),
-                                                 ai_texture->mWidth, 1,
-                                                 std::move(data), true});
-                } else {
-                    std::vector<uint8_t> data;
-                    data.resize(4 * width * height);
-                    memcpy(data.data(), image_data, data.size());
-
-                    scene->textures().push_back({ai_texture->mFilename.C_Str(),
-                                                 static_cast<uint32_t>(width),
-                                                 static_cast<uint32_t>(height),
-                                                 std::move(data), false});
-                }
-
-                stbi_image_free(image_data);
-            } else {
-                // Uncompressed texture
-                std::vector<uint8_t> data;
-                data.resize(4 * ai_texture->mWidth * ai_texture->mHeight);
-                memcpy(data.data(), ai_texture->pcData, data.size());
-
-                scene->textures().push_back(
-                    {ai_texture->mFilename.C_Str(), ai_texture->mWidth,
-                     ai_texture->mHeight, std::move(data), false});
-            }
-        }
-
     // Convert cameras
         for (size_t i = 0; i < ai_scene->mNumCameras; i++) {
             aiCamera *ai_camera = ai_scene->mCameras[i];

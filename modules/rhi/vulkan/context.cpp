@@ -691,6 +691,10 @@ result<void> UploadContext::UploadImageArray(Image& image,
 
     auto extent = image.GetSize();
     auto format_info = utils::GetFormatInfo(image.GetFormat());
+    auto format_block_size = utils::GetFormatBlockSize(image.GetFormat());
+    auto format_compression = utils::GetFormatCompression(image.GetFormat());
+    auto format_scale =
+        format_info.size / (format_block_size.width * format_block_size.height);
 
     for (uint32_t layer = 0; layer < data.size(); layer++) {
         auto& layer_data = data[layer];
@@ -706,10 +710,22 @@ result<void> UploadContext::UploadImageArray(Image& image,
             auto mip_extent = VkExtent3D{std::max(extent.width >> mip, 1U),
                                          std::max(extent.height >> mip, 1U), 1};
 
+            uint32_t min_offset = 1;
+            if (format_compression == FormatCompression::BC) {
+                if (image.GetFormat() == VK_FORMAT_BC1_RGB_UNORM_BLOCK ||
+                    image.GetFormat() == VK_FORMAT_BC1_RGBA_SRGB_BLOCK ||
+                    image.GetFormat() == VK_FORMAT_BC1_RGBA_UNORM_BLOCK) {
+                    min_offset = 8;
+                } else {
+                    min_offset = 16;
+                }
+            }
+
             // We create staging buffers, then we copy the image from there
             BufferDesc staging_desc = {};
             staging_desc.size =
-                mip_extent.width * mip_extent.height * format_info.size;
+                std::max(min_offset,
+                         mip_extent.width * mip_extent.height * format_scale);
             staging_desc.storage = VMA_MEMORY_USAGE_CPU_TO_GPU;
             staging_desc.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 

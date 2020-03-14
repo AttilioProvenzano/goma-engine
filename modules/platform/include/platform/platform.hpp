@@ -20,14 +20,17 @@ class Platform {
 
     virtual InputState GetInputState() const = 0;
 
-    virtual result<std::string> ReadFileToString(
-        const char* filename) const = 0;
-
     virtual result<void> InitWindow(int width, int height) = 0;
     virtual result<VkSurfaceKHR> CreateVulkanSurface(
         VkInstance instance) const = 0;
 
     virtual void Sleep(uint32_t microseconds) = 0;
+
+    static result<std::string> ReadFile(const std::string& filename,
+                                        bool binary = false);
+
+    static result<void> WriteFile(const std::string& filename, size_t size,
+                                  const char* data, bool binary = false);
 };
 
 }  // namespace goma

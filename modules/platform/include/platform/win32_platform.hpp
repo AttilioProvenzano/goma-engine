@@ -19,9 +19,6 @@ class Win32Platform : public Platform {
 
     virtual InputState GetInputState() const override;
 
-    virtual result<std::string> ReadFileToString(
-        const char* filename) const override;
-
     virtual result<void> InitWindow(int width = 1280,
                                     int height = 800) override;
 
@@ -29,6 +26,12 @@ class Win32Platform : public Platform {
         VkInstance instance) const override;
 
     virtual void Sleep(uint32_t microseconds) override;
+
+    static result<std::string> ReadFile(const std::string& filename,
+                                        bool binary);
+
+    static result<void> WriteFile(const std::string& filename, size_t size,
+                                  const char* data, bool binary);
 
   private:
     GLFWwindow* window_{nullptr};

@@ -112,10 +112,11 @@ InputState Win32Platform::GetInputState() const {
     return state;
 }
 
-result<std::string> Win32Platform::ReadFileToString(
-    const char* filename) const {
-    std::ifstream t(filename);
-    if (t.rdstate() == std::ios::failbit) {
+result<std::string> Win32Platform::ReadFile(const std::string& filename,
+                                            bool binary) {
+    std::ifstream t(filename,
+                    std::ios_base::in | (binary ? std::ios_base::binary : 0));
+    if (!t.good()) {
         return Error::NotFound;
     }
 
@@ -126,6 +127,25 @@ result<std::string> Win32Platform::ReadFileToString(
     t.read(&buffer[0], size);
 
     return buffer;
+}
+
+result<void> Win32Platform::WriteFile(const std::string& filename, size_t size,
+                                      const char* data, bool binary) {
+    auto last = filename.find_last_of('/');
+
+    if (last != filename.npos) {
+        auto path = filename.substr(0, last);
+        CreateDirectory(path.c_str(), NULL);
+    }
+
+    std::ofstream f(filename,
+                    std::ios_base::out | (binary ? std::ios_base::binary : 0));
+    if (!f.good()) {
+        return Error::NotFound;
+    }
+
+    f.write(data, size);
+    return outcome::success();
 }
 
 void Win32Platform::Sleep(uint32_t microseconds) {

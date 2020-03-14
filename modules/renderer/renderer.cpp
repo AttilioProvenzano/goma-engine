@@ -95,14 +95,62 @@ result<void> UploadTextures(Device& device, UploadContext& ctx, Scene& scene) {
 
         auto desc = ImageDesc::TextureDesc;
         desc.size = {texture.width, texture.height, 1};
-        desc.mip_levels =
-            utils::ComputeMipLevels(texture.width, texture.height);
+        desc.mip_levels = texture.mip_levels;
+        desc.format = texture.format;
+
+        ImageMipData mip_data;
+
+        bool uncompressed = utils::GetFormatCompression(texture.format) ==
+                            FormatCompression::Uncompressed;
+        if (uncompressed) {
+            // In the uncompressed case we generate mipmaps
+            desc.mip_levels =
+                utils::ComputeMipLevels(texture.width, texture.height);
+
+            mip_data.push_back(texture.data.data());
+        } else {
+            // In the compressed case we fill mip_data with pointers to the
+            // preloaded mip levels
+            auto format_info = utils::GetFormatInfo(desc.format);
+            auto format_block_size = utils::GetFormatBlockSize(desc.format);
+            auto format_scale = format_info.size / (format_block_size.width *
+                                                    format_block_size.height);
+
+            uint32_t min_offset = 1;
+            if (utils::GetFormatCompression(desc.format) ==
+                FormatCompression::BC) {
+                if (desc.format == VK_FORMAT_BC1_RGB_UNORM_BLOCK ||
+                    desc.format == VK_FORMAT_BC1_RGBA_SRGB_BLOCK ||
+                    desc.format == VK_FORMAT_BC1_RGBA_UNORM_BLOCK) {
+                    min_offset = 8;
+                } else {
+                    min_offset = 16;
+                }
+            }
+
+            std::vector<size_t> offsets(desc.mip_levels);
+            std::iota(offsets.begin() + 1, offsets.end(), 0);
+            std::transform(offsets.begin() + 1, offsets.end(),
+                           offsets.begin() + 1,
+                           [&texture, format_scale, min_offset](size_t mip) {
+                               uint32_t size = (texture.width >> mip) *
+                                               (texture.height >> mip);
+                               return std::max(min_offset, size * format_scale);
+                           });
+            std::partial_sum(offsets.begin(), offsets.end(), offsets.begin());
+
+            std::transform(offsets.begin(), offsets.end(),
+                           std::back_inserter(mip_data),
+                           [&texture](size_t offset) {
+                               return texture.data.data() + offset;
+                           });
+        }
 
         OUTCOME_TRY(image, device.CreateImage(desc));
 
-        OUTCOME_TRY(ctx.UploadImage(*image, {texture.data.data()}));
+        OUTCOME_TRY(ctx.UploadImage(*image, std::move(mip_data)));
 
-        if (desc.mip_levels > 1) {
+        if (uncompressed && desc.mip_levels > 1) {
             ctx.GenerateMipmaps(*image);
         }
 

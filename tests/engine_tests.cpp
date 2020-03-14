@@ -13,8 +13,8 @@ SCENARIO("the renderer can render a model", "[engine][renderer]") {
     GIVEN("a valid engine and a model") {
         Engine e;
 
-        GOMA_TEST_TRYV(
-            e.LoadScene(GOMA_ASSETS_DIR "models/Lantern/glTF/Lantern.gltf"));
+        GOMA_TEST_TRYV(e.LoadScene(GOMA_ASSETS_DIR
+                                   "models/Lantern/glTF/Lantern_BC3.gltf"));
         REQUIRE(e.scene() != nullptr);
 
         THEN("the renderer can render the model") {
@@ -38,4 +38,5 @@ SCENARIO("the renderer can render a model", "[engine][renderer]") {
         }
     }
 }
+
 }  // namespace

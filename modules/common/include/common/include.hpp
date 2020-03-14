@@ -1,25 +1,7 @@
 #pragma once
 
-#include "spdlog/spdlog.h"
-
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define GLM_FORCE_LEFT_HANDED
-#define GLM_FORCE_XYZW_ONLY
-#define GLM_ENABLE_EXPERIMENTAL
-#include "glm/glm.hpp"
-#include "glm/gtc/matrix_inverse.hpp"
-#include "glm/gtc/quaternion.hpp"
-#include "glm/gtx/string_cast.hpp"
-#include "glm/gtx/transform.hpp"
-
-#include "outcome.hpp"
-namespace outcome = OUTCOME_V2_NAMESPACE;
-using outcome::result;
-
-#ifndef GOMA_CACHE_DIR
-#define GOMA_CACHE_DIR "goma-cache/"
-#endif
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 #include <algorithm>
 #include <array>
@@ -39,5 +21,25 @@ using outcome::result;
 #include <unordered_map>
 #include <vector>
 
-#define _USE_MATH_DEFINES
-#include <math.h>
+#include "spdlog/spdlog.h"
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_FORCE_LEFT_HANDED
+#define GLM_FORCE_XYZW_ONLY
+#define GLM_ENABLE_EXPERIMENTAL
+#include "glm/glm.hpp"
+#include "glm/gtc/matrix_inverse.hpp"
+#include "glm/gtc/quaternion.hpp"
+#include "glm/gtx/string_cast.hpp"
+#include "glm/gtx/transform.hpp"
+
+#include "outcome.hpp"
+namespace outcome = OUTCOME_V2_NAMESPACE;
+using outcome::result;
+
+#include "ctpl/ctpl_stl.h"
+
+#ifndef GOMA_CACHE_DIR
+#define GOMA_CACHE_DIR "goma-cache/"
+#endif

@@ -18,7 +18,7 @@ class AssimpLoader : public SceneLoader {
     const int kNumThreads = 8;
     ctpl::thread_pool thread_pool_{kNumThreads};
 
-    result<std::unique_ptr<Scene>> ConvertScene(const aiScene* ai_scene,
+    result<std::unique_ptr<Scene>> ConvertScene(const aiScene& ai_scene,
                                                 const std::string& base_path);
 };
 

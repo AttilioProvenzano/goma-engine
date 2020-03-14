@@ -328,16 +328,6 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         auto vtx_desc = ShaderDesc{vtx_path, VK_SHADER_STAGE_VERTEX_BIT, "",
                                    mesh.rhi.preamble};
 
-        auto vtx_shader = shader_map_.find(vtx_desc);
-        if (vtx_shader == shader_map_.end()) {
-            vtx_desc.source = ro.vtx_code;
-
-            OUTCOME_TRY(v, device_.CreateShader(vtx_desc));
-            shader_map_[vtx_desc] = v;
-
-            vtx_shader = shader_map_.find(vtx_desc);
-        }
-
         using MeshMaterialPair = std::pair<std::string, gen_id>;
 
         struct MeshMaterialHash {
@@ -367,18 +357,47 @@ result<void> Renderer::RenderMeshes(GraphicsContext& ctx, Scene& scene) {
         auto frag_desc = ShaderDesc{frag_path, VK_SHADER_STAGE_FRAGMENT_BIT, "",
                                     comb_preamble->second};
 
-        auto frag_shader = shader_map_.find(frag_desc);
-        if (frag_shader == shader_map_.end()) {
-            frag_desc.source = ro.frag_code;
+        auto create_shader_async = [this](int id,
+                                          const ShaderDesc& desc) -> Shader* {
+            auto v = device_.CreateShader(desc);
+            shader_map_[desc] = v.value();
+            return v.value();
+        };
 
-            OUTCOME_TRY(f, device_.CreateShader(frag_desc));
-            shader_map_[frag_desc] = f;
+        struct {
+            Shader* vtx = nullptr;
+            std::future<Shader*> vtx_fut;
 
-            frag_shader = shader_map_.find(frag_desc);
+            Shader* frag = nullptr;
+            std::future<Shader*> frag_fut;
+        } shaders;
+
+        auto vtx_it = shader_map_.find(vtx_desc);
+        if (vtx_it == shader_map_.end()) {
+            vtx_desc.source = ro.vtx_code;
+            shaders.vtx_fut = thread_pool_.push(create_shader_async, vtx_desc);
+        } else {
+            shaders.vtx = vtx_it->second;
         }
 
-        auto pipeline_desc = PipelineDesc{
-            {vtx_shader->second, frag_shader->second}, ctx.GetFramebuffer()};
+        auto frag_it = shader_map_.find(frag_desc);
+        if (frag_it == shader_map_.end()) {
+            frag_desc.source = ro.frag_code;
+            shaders.frag_fut =
+                thread_pool_.push(create_shader_async, frag_desc);
+        } else {
+            shaders.frag = frag_it->second;
+        }
+
+        if (!shaders.vtx) {
+            shaders.vtx = shaders.vtx_fut.get();
+        }
+        if (!shaders.frag) {
+            shaders.frag = shaders.frag_fut.get();
+        }
+
+        auto pipeline_desc =
+            PipelineDesc{{shaders.vtx, shaders.frag}, ctx.GetFramebuffer()};
         pipeline_desc.cull_mode = VK_CULL_MODE_BACK_BIT;
         pipeline_desc.depth_test = true;
 

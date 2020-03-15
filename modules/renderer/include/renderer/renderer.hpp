@@ -1,38 +1,13 @@
 #pragma once
 
-#include "rhi/device.hpp"
-
 #include "common/include.hpp"
 #include "common/hash.hpp"
-
-namespace std {
-
-template <>
-struct hash<goma::ShaderDesc> {
-    size_t operator()(const goma::ShaderDesc& desc) const {
-        size_t seed = 0;
-
-        // Hash either the path or the source, depending on what is present
-        if (!desc.name.empty()) {
-            goma::hash_combine(seed, goma::djb2_hash(desc.name.c_str()));
-        } else {
-            goma::hash_combine(seed, goma::djb2_hash(desc.source.c_str()));
-        }
-
-        goma::hash_combine(seed, goma::djb2_hash(desc.preamble.c_str()));
-        goma::hash_combine(seed, desc.stage);
-
-        return seed;
-    };
-};
-
-}  // namespace std
+#include "renderer/rendering_pipeline.hpp"
+#include "rhi/device.hpp"
 
 namespace goma {
 
 class Engine;
-class GraphicsContext;
-class Scene;
 
 class Renderer {
   public:
@@ -41,9 +16,19 @@ class Renderer {
 
     result<void> Render();
 
+    Engine& engine() { return engine_; }
+    Device& device() { return device_; }
+
+    uint32_t max_frames_in_flight() { return kMaxFramesInFlight; }
+    uint32_t frame_index() { return frame_index_; }
+    uint32_t current_frame() { return current_frame_; }
+
+    ctpl::thread_pool& thread_pool() { return thread_pool_; }
+
   private:
     Engine& engine_;
     Device device_;
+    std::unique_ptr<RenderingPipeline> rp_;
 
     GraphicsContext graphics_ctx_;
     UploadContext upload_ctx_;
@@ -57,13 +42,8 @@ class Renderer {
     using FrameReceipts = std::vector<ReceiptPtr>;
     std::vector<FrameReceipts> frame_receipts_;
 
-    using ShaderMap = std::unordered_map<ShaderDesc, Shader*>;
-    ShaderMap shader_map_;
-
     const int kNumThreads = 8;
     ctpl::thread_pool thread_pool_;
-
-    result<void> RenderMeshes(GraphicsContext& ctx, Scene& scene);
 };
 
 }  // namespace goma
